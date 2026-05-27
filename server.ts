@@ -1,8 +1,8 @@
+cat > server.ts << 'EOF'
 import express from "express";
 import path from "path";
 import dotenv from "dotenv";
 import { GoogleGenAI, Type } from "@google/genai";
-import { createServer as createViteServer } from "vite";
 import { 
   initDb,
   getParticipants,
@@ -39,21 +39,7 @@ const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
 
 app.use(express.json());
-
-// Добавляем парсер для данных из форм (нужен для MAX)
 app.use(express.urlencoded({ extended: true }));
-
-// Обработчик GET-запросов для проверки (MAX может проверять вебхук)
-app.get("/api/bot-respond", (req, res) => {
-  console.log("🔍 GET запрос к вебхуку получен");
-  res.status(200).send("OK");
-});
-
-// Логируем все POST-запросы, чтобы увидеть, что приходит от MAX
-app.post("/api/bot-respond", (req, res, next) => {
-  console.log("📨 Входящий POST запрос:", req.body);
-  next();
-});
 
 // Lazy-initialize Gemini SDK to prevent crashes if key is initially absent
 let aiClient: GoogleGenAI | null = null;
@@ -478,9 +464,14 @@ app.post("/api/admin/change-password", (req, res) => {
   return res.json({ success: true, message: "Пароль администратора успешно изменен!" });
 });
 
+// Проверка вебхука (MAX может отправлять GET-запрос)
+app.get("/api/bot-respond", (req, res) => {
+  console.log("🔍 GET-запрос на вебхук получен");
+  res.status(200).send("OK");
+});
+
 // МАКС Messenger Bot API is fully supported through the unified "/api/bot-respond" endpoint.
 // Corporate webhooks or chat platforms can trigger bot operations by requesting "/api/bot-respond" directly.
-
 
 // Fallback algorithm generating custom witty responses when Gemini is unconfigured or errors out
 function generateMockNegodyaiResponse(
@@ -793,25 +784,14 @@ function generateMockNegodyaiResponse(
   };
 }
 
-// Vite Server middleware integration for dev-mode or static build distribution of compiled files
-async function startServer() {
-  if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
-    });
-  }
+// Serve static files from the "dist" folder (built frontend)
+const distPath = path.join(process.cwd(), "dist");
+app.use(express.static(distPath));
+app.get("*", (req, res) => {
+  res.sendFile(path.join(distPath, "index.html"));
+});
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`[Negodyai MAX Server] Running on http://localhost:${PORT}`);
-  });
-}
-
-startServer();
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`[Negodyai MAX Server] Running on http://localhost:${PORT}`);
+});
+EOF
