@@ -299,8 +299,29 @@ ${todayBirthdaysMention}
 // API endpoint for generating bot responses
 app.post("/api/bot-respond", async (req, res) => {
   try {
-    const { message, senderName, senderNickname } = req.body;
-    if (!message || message.trim() === "") {
+    // Извлекаем текст сообщения и имя отправителя из структуры MAX или старого формата
+    let messageText = '';
+    let senderName = '';
+    let senderNickname = '';
+
+    // Пробуем формат MAX: { message: { body: { text: '...' }, sender: { name: '...' } } }
+    if (req.body.message && typeof req.body.message === 'object') {
+      messageText = req.body.message.body?.text || req.body.message.text || '';
+      senderName = req.body.message.sender?.name || '';
+      senderNickname = req.body.message.sender?.name || '';
+    } else {
+      // Старый формат (curl, старый клиент)
+      messageText = req.body.message || '';
+      senderName = req.body.senderName || '';
+      senderNickname = req.body.senderNickname || '';
+    }
+
+    // Если всё ещё пусто, пробуем другие возможные поля
+    if (!messageText && typeof req.body.text === 'string') messageText = req.body.text;
+    if (!senderName && req.body.senderName) senderName = req.body.senderName;
+
+    if (!messageText || messageText.trim() === "") {
+      console.error("No message text in request:", req.body);
       return res.status(400).json({ error: "Message is required" });
     }
 
@@ -351,7 +372,7 @@ app.post("/api/bot-respond", async (req, res) => {
       senderName: normSenderName,
       senderNickname: normSenderNickname,
       senderPsychotype: existingP.psychotype || "Весельчак-балагур",
-      text: message,
+      text: messageText,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       isBot: false
     };
@@ -359,6 +380,7 @@ app.post("/api/bot-respond", async (req, res) => {
 
     const payload = await generateBotResponseInternal({
       ...req.body,
+      message: messageText,
       senderName: normSenderName,
       senderNickname: normSenderNickname,
       senderPsychotype: existingP.psychotype,
