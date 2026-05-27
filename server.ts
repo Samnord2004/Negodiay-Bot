@@ -794,4 +794,3 @@ app.get("*", (req, res) => {
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`[Negodyai MAX Server] Running on http://localhost:${PORT}`);
 });
-EOF
