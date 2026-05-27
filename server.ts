@@ -733,16 +733,31 @@ app.get("/api/sync", (req, res) => {
 
 app.post("/api/sync", (req, res) => {
   try {
+    console.log("=== POST /api/sync ===");
+    console.log("Received body keys:", Object.keys(req.body));
     const { participants, excursions, tasks, menuItems, groceryItems, inventoryItems, botConfig, contests, messages } = req.body;
-    if (participants) saveParticipants(participants);
-    if (excursions) saveExcursions(excursions);
-    if (tasks) saveTasks(tasks);
+    
+    if (excursions) {
+      console.log(`Saving excursions: count=${excursions.length}`);
+      saveExcursions(excursions);
+      const afterSave = getExcursions();
+      console.log(`After save, excursions in DB: ${afterSave.length}`);
+    }
+    if (participants) {
+      console.log(`Saving participants: count=${participants.length}`);
+      saveParticipants(participants);
+    }
+    if (tasks) {
+      console.log(`Saving tasks: count=${tasks.length}`);
+      saveTasks(tasks);
+    }
     if (menuItems) saveMenuItems(menuItems);
     if (groceryItems) saveGroceryItems(groceryItems);
     if (inventoryItems) saveInventoryItems(inventoryItems);
     if (botConfig) saveBotConfig(botConfig);
     if (contests) saveContests(contests);
     if (messages) saveMessages(messages);
+    
     res.json({ success: true });
   } catch (err: any) {
     console.error("Error updating server sync:", err);
