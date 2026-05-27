@@ -40,6 +40,21 @@ const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
 
 app.use(express.json());
 
+// Добавляем парсер для данных из форм (нужен для MAX)
+app.use(express.urlencoded({ extended: true }));
+
+// Обработчик GET-запросов для проверки (MAX может проверять вебхук)
+app.get("/api/bot-respond", (req, res) => {
+  console.log("🔍 GET запрос к вебхуку получен");
+  res.status(200).send("OK");
+});
+
+// Логируем все POST-запросы, чтобы увидеть, что приходит от MAX
+app.post("/api/bot-respond", (req, res, next) => {
+  console.log("📨 Входящий POST запрос:", req.body);
+  next();
+});
+
 // Lazy-initialize Gemini SDK to prevent crashes if key is initially absent
 let aiClient: GoogleGenAI | null = null;
 function getGeminiClient(): GoogleGenAI | null {
