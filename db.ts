@@ -17,16 +17,28 @@ import { Participant, Excursion, TaskItem, MenuItem, GroceryItem, InventoryItem,
 const dataDir = process.env.DATA_DIR || "/app/data";
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
+  console.log(`[DB] Created data directory: ${dataDir}`);
+} else {
+  console.log(`[DB] Data directory already exists: ${dataDir}`);
 }
+
+// Проверка прав на запись
+try {
+  fs.accessSync(dataDir, fs.constants.W_OK);
+  console.log(`[DB] Directory ${dataDir} is writable`);
+} catch (err) {
+  console.error(`[DB] ERROR: Directory ${dataDir} is NOT writable!`, err);
+}
+
 const dbPath = path.join(dataDir, "data.db");
+console.log(`[DB] Database path: ${dbPath}`);
 const db = new Database(dbPath);
 
 // Enable WAL mode for better performance
 db.pragma("journal_mode = WAL");
 
-// Helper to initialize Tables
 export function initDb() {
-  // 1. participants Table
+  console.log("[DB] Initializing database tables...");
   db.exec(`
     CREATE TABLE IF NOT EXISTS participants (
       id TEXT PRIMARY KEY,
@@ -44,8 +56,6 @@ export function initDb() {
       gender TEXT NOT NULL
     )
   `);
-
-  // 2. excursions Table
   db.exec(`
     CREATE TABLE IF NOT EXISTS excursions (
       id TEXT PRIMARY KEY,
@@ -59,8 +69,6 @@ export function initDb() {
       isActive INTEGER NOT NULL
     )
   `);
-
-  // 3. tasks Table
   db.exec(`
     CREATE TABLE IF NOT EXISTS tasks (
       id TEXT PRIMARY KEY,
@@ -71,8 +79,6 @@ export function initDb() {
       isCompleted INTEGER NOT NULL
     )
   `);
-
-  // 4. menu_items Table
   db.exec(`
     CREATE TABLE IF NOT EXISTS menu_items (
       id TEXT PRIMARY KEY,
@@ -81,8 +87,6 @@ export function initDb() {
       description TEXT NOT NULL
     )
   `);
-
-  // 5. grocery_items Table
   db.exec(`
     CREATE TABLE IF NOT EXISTS grocery_items (
       id TEXT PRIMARY KEY,
@@ -92,8 +96,6 @@ export function initDb() {
       isBought INTEGER NOT NULL
     )
   `);
-
-  // 6. inventory_items Table
   db.exec(`
     CREATE TABLE IF NOT EXISTS inventory_items (
       id TEXT PRIMARY KEY,
@@ -102,8 +104,6 @@ export function initDb() {
       responsibleName TEXT NOT NULL
     )
   `);
-
-  // 7. bot_config Table (a single row)
   db.exec(`
     CREATE TABLE IF NOT EXISTS bot_config (
       id INTEGER PRIMARY KEY DEFAULT 1,
@@ -114,8 +114,6 @@ export function initDb() {
       foundingYear INTEGER NOT NULL
     )
   `);
-
-  // 8. contests Table
   db.exec(`
     CREATE TABLE IF NOT EXISTS contests (
       id TEXT PRIMARY KEY,
@@ -126,8 +124,6 @@ export function initDb() {
       place TEXT
     )
   `);
-
-  // 9. messages Table
   db.exec(`
     CREATE TABLE IF NOT EXISTS messages (
       id TEXT PRIMARY KEY,
@@ -141,8 +137,6 @@ export function initDb() {
       adapterStyleUsed TEXT
     )
   `);
-
-  // 10. admin_settings Table
   db.exec(`
     CREATE TABLE IF NOT EXISTS admin_settings (
       id INTEGER PRIMARY KEY DEFAULT 1,
@@ -150,23 +144,22 @@ export function initDb() {
     )
   `);
 
-  // Seed default admin password if not present
   const adminRow = db.prepare("SELECT * FROM admin_settings WHERE id = 1").get();
   if (!adminRow) {
     db.prepare("INSERT OR IGNORE INTO admin_settings (id, password) VALUES (1, 'admin')").run();
+    console.log("[DB] Default admin password set");
   }
 
-  // Sync initial mock data if tables are empty
   const countParticipants = db.prepare("SELECT count(*) as count FROM participants").get() as { count: number };
   if (countParticipants.count === 0) {
-    console.log("Seeding database with initial mock data...");
+    console.log("[DB] Seeding database with initial mock data...");
     seedInitialData();
   }
+  console.log("[DB] Database initialization complete");
 }
 
 function seedInitialData() {
   db.transaction(() => {
-    // Participants
     const insertParticipant = db.prepare(`
       INSERT INTO participants (id, name, nickname, psychotype, avatar, paidAmount, totalCost, debtAmount, joined, birthday, joinedYear, skippedYears, gender)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -178,7 +171,6 @@ function seedInitialData() {
       );
     }
 
-    // Excursions
     const insertExcursion = db.prepare(`
       INSERT INTO excursions (id, title, date, location, description, costPerPerson, costBoys, costGirls, isActive)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -187,7 +179,6 @@ function seedInitialData() {
       insertExcursion.run(e.id, e.title, e.date, e.location, e.description, e.costPerPerson, e.costBoys, e.costGirls, e.isActive ? 1 : 0);
     }
 
-    // Tasks
     const insertTask = db.prepare(`
       INSERT INTO tasks (id, title, assigneeId, assigneeName, deadline, isCompleted)
       VALUES (?, ?, ?, ?, ?, ?)
@@ -196,7 +187,6 @@ function seedInitialData() {
       insertTask.run(t.id, t.title, t.assigneeId, t.assigneeName, t.deadline, t.isCompleted ? 1 : 0);
     }
 
-    // Menu Items
     const insertMenuItem = db.prepare(`
       INSERT INTO menu_items (id, day, dishName, description)
       VALUES (?, ?, ?, ?)
@@ -205,7 +195,6 @@ function seedInitialData() {
       insertMenuItem.run(m.id, m.day, m.dishName, m.description);
     }
 
-    // Grocery Items
     const insertGroceryItem = db.prepare(`
       INSERT INTO grocery_items (id, name, quantity, category, isBought)
       VALUES (?, ?, ?, ?, ?)
@@ -214,7 +203,6 @@ function seedInitialData() {
       insertGroceryItem.run(g.id, g.name, g.quantity, g.category, g.isBought ? 1 : 0);
     }
 
-    // Inventory Items
     const insertInventoryItem = db.prepare(`
       INSERT INTO inventory_items (id, name, condition, responsibleName)
       VALUES (?, ?, ?, ?)
@@ -223,7 +211,6 @@ function seedInitialData() {
       insertInventoryItem.run(i.id, i.name, i.condition, i.responsibleName);
     }
 
-    // Bot Config
     const insertBotConfig = db.prepare(`
       REPLACE INTO bot_config (id, swearingLevel, autoDetectPsychotype, activePersonality, welcomeTemplate, foundingYear)
       VALUES (1, ?, ?, ?, ?, ?)
@@ -233,7 +220,6 @@ function seedInitialData() {
       initialBotConfig.activePersonality, initialBotConfig.welcomeTemplate, initialBotConfig.foundingYear
     );
 
-    // Contests
     const insertContest = db.prepare(`
       INSERT INTO contests (id, title, captainId, captainName, teamMemberIds, place)
       VALUES (?, ?, ?, ?, ?, ?)
@@ -242,7 +228,6 @@ function seedInitialData() {
       insertContest.run(c.id, c.title, c.captainId, c.captainName, JSON.stringify(c.teamMemberIds), c.place || "");
     }
 
-    // Messages
     const insertMessage = db.prepare(`
       INSERT INTO messages (id, senderName, senderNickname, senderPsychotype, text, timestamp, isBot, detectedPsychotypeExplanation, adapterStyleUsed)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -253,10 +238,10 @@ function seedInitialData() {
         m.isBot ? 1 : 0, m.detectedPsychotypeExplanation || "", m.adapterStyleUsed || ""
       );
     }
-  });
+  })();
+  console.log("[DB] Initial data seeded");
 }
 
-// Data fetching helper functions
 export function getParticipants(): Participant[] {
   const rows = db.prepare("SELECT * FROM participants").all() as any[];
   return rows.map(r => ({
@@ -277,6 +262,7 @@ export function getParticipants(): Participant[] {
 }
 
 export function saveParticipants(participants: Participant[]) {
+  console.log(`[DB] Saving ${participants.length} participants`);
   db.transaction(() => {
     db.prepare("DELETE FROM participants").run();
     const stmt = db.prepare(`
@@ -293,6 +279,7 @@ export function saveParticipants(participants: Participant[]) {
 }
 
 export function addOrUpdateParticipant(p: Participant) {
+  console.log(`[DB] Upsert participant ${p.name}`);
   const stmt = db.prepare(`
     INSERT OR REPLACE INTO participants (id, name, nickname, psychotype, avatar, paidAmount, totalCost, debtAmount, joined, birthday, joinedYear, skippedYears, gender)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -305,6 +292,7 @@ export function addOrUpdateParticipant(p: Participant) {
 
 export function getExcursions(): Excursion[] {
   const rows = db.prepare("SELECT * FROM excursions").all() as any[];
+  console.log(`[DB] getExcursions returning ${rows.length} excursions`);
   return rows.map(r => ({
     id: r.id,
     title: r.title,
@@ -319,6 +307,7 @@ export function getExcursions(): Excursion[] {
 }
 
 export function saveExcursions(excursions: Excursion[]) {
+  console.log(`[DB] saveExcursions called with ${excursions.length} excursions`);
   db.transaction(() => {
     db.prepare("DELETE FROM excursions").run();
     const stmt = db.prepare(`
@@ -329,6 +318,8 @@ export function saveExcursions(excursions: Excursion[]) {
       stmt.run(e.id, e.title, e.date, e.location, e.description, e.costPerPerson, e.costBoys, e.costGirls, e.isActive ? 1 : 0);
     }
   })();
+  const count = db.prepare("SELECT COUNT(*) as cnt FROM excursions").get() as any;
+  console.log(`[DB] After save, excursions count: ${count.cnt}`);
 }
 
 export function getTasks(): TaskItem[] {
@@ -344,6 +335,7 @@ export function getTasks(): TaskItem[] {
 }
 
 export function saveTasks(tasks: TaskItem[]) {
+  console.log(`[DB] Saving ${tasks.length} tasks`);
   db.transaction(() => {
     db.prepare("DELETE FROM tasks").run();
     const stmt = db.prepare(`
@@ -367,6 +359,7 @@ export function getMenuItems(): MenuItem[] {
 }
 
 export function saveMenuItems(items: MenuItem[]) {
+  console.log(`[DB] Saving ${items.length} menu items`);
   db.transaction(() => {
     db.prepare("DELETE FROM menu_items").run();
     const stmt = db.prepare(`
@@ -391,6 +384,7 @@ export function getGroceryItems(): GroceryItem[] {
 }
 
 export function saveGroceryItems(items: GroceryItem[]) {
+  console.log(`[DB] Saving ${items.length} grocery items`);
   db.transaction(() => {
     db.prepare("DELETE FROM grocery_items").run();
     const stmt = db.prepare(`
@@ -414,6 +408,7 @@ export function getInventoryItems(): InventoryItem[] {
 }
 
 export function saveInventoryItems(items: InventoryItem[]) {
+  console.log(`[DB] Saving ${items.length} inventory items`);
   db.transaction(() => {
     db.prepare("DELETE FROM inventory_items").run();
     const stmt = db.prepare(`
@@ -441,6 +436,7 @@ export function getBotConfig(): BotConfig {
 }
 
 export function saveBotConfig(config: BotConfig) {
+  console.log(`[DB] Saving bot config`);
   const stmt = db.prepare(`
     INSERT OR REPLACE INTO bot_config (id, swearingLevel, autoDetectPsychotype, activePersonality, welcomeTemplate, foundingYear)
     VALUES (1, ?, ?, ?, ?, ?)
@@ -461,6 +457,7 @@ export function getContests(): Contest[] {
 }
 
 export function saveContests(contests: Contest[]) {
+  console.log(`[DB] Saving ${contests.length} contests`);
   db.transaction(() => {
     db.prepare("DELETE FROM contests").run();
     const stmt = db.prepare(`
@@ -489,6 +486,7 @@ export function getMessages(): ChatMessage[] {
 }
 
 export function addMessage(m: ChatMessage) {
+  console.log(`[DB] Adding message from ${m.senderName}`);
   const stmt = db.prepare(`
     INSERT OR REPLACE INTO messages (id, senderName, senderNickname, senderPsychotype, text, timestamp, isBot, detectedPsychotypeExplanation, adapterStyleUsed)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -500,6 +498,7 @@ export function addMessage(m: ChatMessage) {
 }
 
 export function saveMessages(messages: ChatMessage[]) {
+  console.log(`[DB] Saving ${messages.length} messages`);
   db.transaction(() => {
     db.prepare("DELETE FROM messages").run();
     const stmt = db.prepare(`
@@ -521,6 +520,7 @@ export function getAdminPassword(): string {
 }
 
 export function saveAdminPassword(password: string) {
+  console.log(`[DB] Saving admin password`);
   const stmt = db.prepare(`
     INSERT OR REPLACE INTO admin_settings (id, password)
     VALUES (1, ?)
