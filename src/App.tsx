@@ -33,9 +33,10 @@ export default function App() {
   const [contests, setContests] = useState<Contest[]>(initialContests);
 
   // Logo customization states
-  const [customLogo, setCustomLogo] = useState<string | null>(() => {
-    return localStorage.getItem('negodyai_custom_logo') || null;
-  });
+  const customLogo = botConfig.customLogo || null;
+  const setCustomLogo = (logo: string | null) => {
+    setBotConfig(prev => ({ ...prev, customLogo: logo }));
+  };
   const [logoInputUrl, setLogoInputUrl] = useState('');
 
   // New forms submission states
@@ -73,6 +74,8 @@ export default function App() {
   // App states
   const [isTyping, setIsTyping] = useState(false);
   const [typingStatus, setTypingStatus] = useState('');
+  const [previewMediaUrl, setPreviewMediaUrl] = useState<string | null>(null);
+  const [previewMediaTitle, setPreviewMediaTitle] = useState<string>('');
   
   // Forms states
   const [showAddExcursion, setShowAddExcursion] = useState(false);
@@ -164,17 +167,6 @@ export default function App() {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
   }, [messages.length, isTyping]);
-
-  // Sync custom logo across storage adjustments
-  useEffect(() => {
-    const handleStorageChange = () => {
-      setCustomLogo(localStorage.getItem('negodyai_custom_logo') || null);
-    };
-    window.addEventListener('storage', handleStorageChange);
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-    };
-  }, []);
 
   // Poll state from server every 1.5 seconds to synchronize chat, participants, and contests
   useEffect(() => {
@@ -791,7 +783,8 @@ export default function App() {
           tasks,
           menuItems,
           groceryItems,
-          inventoryItems
+          inventoryItems,
+          contests
         })
       });
 
@@ -809,6 +802,8 @@ export default function App() {
           isBot: true,
           detectedPsychotypeExplanation: data.detectedPsychotypeExplanation || `Подстроился под общение.`,
           adapterStyleUsed: data.adapterStyleUsed || `Угарный походник`,
+          imageUrl: data.imageUrl,
+          attachments: data.attachments
         };
         
         // Auto-refresh psychotype of sender if detected in real-time
@@ -881,7 +876,6 @@ export default function App() {
                   className="h-12 w-16 bg-white border-2 border-red-500 rounded p-1 shadow-md shrink-0 object-contain transition-all group-hover:opacity-75 group-hover:border-dashed"
                   onError={() => {
                     setCustomLogo(null);
-                    localStorage.removeItem('negodyai_custom_logo');
                   }}
                   onClick={() => {
                     const fileInput = document.getElementById('header-logo-file-input');
@@ -914,7 +908,6 @@ export default function App() {
                     reader.onloadend = () => {
                       const base64String = reader.result as string;
                       setCustomLogo(base64String);
-                      localStorage.setItem('negodyai_custom_logo', base64String);
                       triggerSystemNotification("✨ Логотип успешно изменен!");
                     };
                     reader.readAsDataURL(file);
@@ -1169,7 +1162,6 @@ export default function App() {
                           onClick={() => {
                             if (logoInputUrl.trim()) {
                               setCustomLogo(logoInputUrl.trim());
-                              localStorage.setItem('negodyai_custom_logo', logoInputUrl.trim());
                               setLogoInputUrl('');
                               triggerSystemNotification("✨ Логотип успешно заменен по ссылке!");
                             }
@@ -1192,7 +1184,6 @@ export default function App() {
                                 reader.onloadend = () => {
                                   const base64String = reader.result as string;
                                   setCustomLogo(base64String);
-                                  localStorage.setItem('negodyai_custom_logo', base64String);
                                   triggerSystemNotification("✨ Собственный логотип успешно загружен!");
                                 };
                                 reader.readAsDataURL(file);
@@ -1206,7 +1197,6 @@ export default function App() {
                             type="button"
                             onClick={() => {
                               setCustomLogo(null);
-                              localStorage.removeItem('negodyai_custom_logo');
                               triggerSystemNotification("✨ Логотип возвращён к стандартному ⛺");
                             }}
                             className="text-rose-600 hover:text-rose-700 font-bold hover:underline text-[11px]"
@@ -2467,14 +2457,14 @@ export default function App() {
           <section className="lg:col-span-5 flex flex-col h-[550px] lg:h-[770px] bg-[#FEF3C7] border-4 border-red-500 rounded-3xl shadow-xl overflow-hidden relative" id="messenger-chat">
           
           {/* MESSENGER PHONE STATUS HEADER */}
-          <div className="bg-yellow-400 p-3 border-b-4 border-red-500 flex items-center justify-between shadow-md">
+          <div className="bg-yellow-400 p-2.5 sm:p-3 border-b-4 border-red-500 flex items-center justify-between shadow-md">
             <div className="flex items-center gap-2">
               <div className="relative">
                 <span className="text-2xl">🤘</span>
                 <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full" />
               </div>
               <div>
-                <h3 className="text-sm font-black text-red-700 uppercase tracking-tight leading-tight">
+                <h3 className="text-xs sm:text-sm font-black text-red-700 uppercase tracking-tight leading-tight">
                   МАКС ЧАТ: НЕГОДЯИ (5)
                 </h3>
                 <span className="text-[9px] font-black text-amber-800 uppercase flex items-center gap-1">
@@ -2483,14 +2473,47 @@ export default function App() {
               </div>
             </div>
 
-            <div className="text-right">
-              <span className="text-[10px] block font-black text-red-800 uppercase">Туры / Походы</span>
-              <span className="text-xs font-extrabold text-amber-950">Цель: {totalTargetFunds.toLocaleString()} ₽</span>
+            {/* SCROLL NAVIGATION & TARGET FUNDS */}
+            <div className="flex items-center gap-2 text-right">
+              <div className="flex items-center gap-1 bg-amber-200/80 border border-amber-400 p-1 rounded-xl">
+                <button
+                  type="button"
+                  title="Прокрутить чат в самое начало (наверх)"
+                  onClick={() => chatContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
+                  className="bg-white hover:bg-red-500 hover:text-white border border-amber-500 text-amber-950 font-black text-[10px] px-2 py-0.5 rounded-lg transition-colors shadow-xs uppercase flex items-center gap-0.5"
+                >
+                  ⬆️ Наверх
+                </button>
+                <button
+                  type="button"
+                  title="Прокрутить чат к свежим сообщениям (вниз)"
+                  onClick={() => chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'smooth' })}
+                  className="bg-red-600 hover:bg-red-700 text-yellow-300 font-black text-[10px] px-2 py-0.5 rounded-lg transition-colors shadow-xs uppercase flex items-center gap-0.5"
+                >
+                  ⬇️ Вниз
+                </button>
+              </div>
+
+              <div className="hidden sm:block">
+                <span className="text-[10px] block font-black text-red-800 uppercase">Туры / Походы</span>
+                <span className="text-xs font-extrabold text-amber-950">Цель: {totalTargetFunds.toLocaleString()} ₽</span>
+              </div>
             </div>
           </div>
 
           {/* CHAT CHRONICLE TIMELINE SCROLL CONTENT */}
-          <div ref={chatContainerRef} className="flex-grow overflow-y-auto p-4 space-y-4 bg-yellow-100/50 shadow-inner">
+          <div ref={chatContainerRef} className="flex-grow overflow-y-auto custom-chat-scrollbar p-4 space-y-4 bg-yellow-100/50 shadow-inner relative">
+            
+            {/* FLOATING QUICK SCROLL BUTTONS FOR MOBILE/TOUCH */}
+            <div className="sticky top-2 z-10 flex justify-end gap-1.5 pointer-events-none opacity-90">
+              <button
+                type="button"
+                onClick={() => chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'smooth' })}
+                className="pointer-events-auto bg-red-600 hover:bg-red-700 text-white font-black text-[10px] px-2.5 py-1 rounded-full shadow-md border border-amber-300 flex items-center gap-1 active:scale-95 transition-transform"
+              >
+                ⬇️ К свежим сообщениям
+              </button>
+            </div>
             
             {/* WELCOME PINNED POST */}
             <div className="bg-yellow-105 border-2 border-dashed border-amber-400 rounded-xl p-3 text-xs leading-snug">
@@ -2567,6 +2590,65 @@ export default function App() {
                     }`}
                   >
                     <p className="whitespace-pre-wrap">{msg.text}</p>
+
+                    {/* SINGLE ATTACHED IMAGE PREVIEW */}
+                    {msg.imageUrl && (
+                      <div className="mt-2 pt-2 border-t border-amber-200">
+                        <div 
+                          onClick={() => {
+                            setPreviewMediaUrl(msg.imageUrl || null);
+                            setPreviewMediaTitle("Вложение к сообщению");
+                          }}
+                          className="cursor-pointer group relative overflow-hidden rounded-xl border-2 border-amber-400 bg-white shadow-sm hover:border-red-500 transition-all"
+                        >
+                          <img 
+                            src={msg.imageUrl} 
+                            alt="Прикрепленный файл" 
+                            className="w-full max-h-52 object-contain bg-amber-50 group-hover:scale-102 transition-transform duration-200" 
+                          />
+                          <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-[10px] font-black uppercase gap-1">
+                            🔍 Нажмите для просмотра во весь экран
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* MULTIPLE ATTACHMENTS LIST */}
+                    {msg.attachments && msg.attachments.length > 0 && (
+                      <div className="mt-2.5 pt-2 border-t-2 border-dashed border-amber-300 space-y-2">
+                        <span className="text-[10px] font-black text-red-700 uppercase block">
+                          📁 Прикреплённые походные материалы ({msg.attachments.length}):
+                        </span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {msg.attachments.map(att => (
+                            <div 
+                              key={att.id}
+                              onClick={() => {
+                                setPreviewMediaUrl(att.url);
+                                setPreviewMediaTitle(att.title);
+                              }}
+                              className="cursor-pointer bg-white border-2 border-amber-350 hover:border-red-500 rounded-xl p-2 flex flex-col gap-1 transition-all shadow-xs group"
+                            >
+                              <div className="flex items-center justify-between text-[10px] font-black text-amber-955 border-b pb-1">
+                                <span className="truncate">
+                                  {att.type === 'knots' ? '🪢 ' : att.type === 'orienteering' ? '🧭 ' : att.type === 'schedule' ? '⏱️ ' : '📄 '}
+                                  {att.title}
+                                </span>
+                              </div>
+                              {att.url && (
+                                <div className="h-20 w-full overflow-hidden rounded bg-amber-50 flex items-center justify-center relative">
+                                  <img src={att.url} alt={att.title} className="h-full w-full object-contain" />
+                                  <div className="absolute inset-0 bg-red-600/20 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[9px] font-black uppercase">
+                                    Открыть
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     <span className="block text-right text-[9px] opacity-60 text-amber-900 font-mono mt-1">
                       {msg.timestamp}
                     </span>
@@ -2666,7 +2748,63 @@ export default function App() {
             
             {/* EASY QUICK MESSAGE CHIPS FOR THE CHOSEN SENDER */}
             <div className="flex gap-1.5 overflow-x-auto pt-1.5 scrollbar-thin">
-              <span className="text-[9px] uppercase font-black text-red-800 shrink-0 self-center">Вопросы боту:</span>
+              <span className="text-[9px] uppercase font-black text-red-800 shrink-0 self-center">Быстрый вызов:</span>
+              <button
+                type="button"
+                onClick={() => setCustomMessage("Бот, как гуляет негодяй?")}
+                className="bg-yellow-300 hover:bg-yellow-400 border border-yellow-500 text-[10px] font-black px-2 py-0.5 rounded text-amber-950 shrink-0 uppercase shadow-xs animate-bounce"
+              >
+                🔥 Как гуляет негодяй?
+              </button>
+              <button
+                type="button"
+                onClick={() => setCustomMessage("Бот, пизда на глаза!")}
+                className="bg-rose-200 hover:bg-rose-300 border border-rose-400 text-[10px] font-black px-2 py-0.5 rounded text-rose-950 shrink-0 uppercase"
+              >
+                👀 Пизда на глаза
+              </button>
+              <button
+                type="button"
+                onClick={() => setCustomMessage("Бот, записьдень!")}
+                className="bg-amber-200 hover:bg-amber-300 border border-amber-400 text-[10px] font-black px-2 py-0.5 rounded text-amber-950 shrink-0 uppercase"
+              >
+                📝 Записьдень
+              </button>
+              <button
+                type="button"
+                onClick={() => setCustomMessage("Бот, запись дубля!")}
+                className="bg-sky-200 hover:bg-sky-300 border border-sky-400 text-[10px] font-black px-2 py-0.5 rounded text-sky-950 shrink-0 uppercase"
+              >
+                🎬 Запись дубля
+              </button>
+              <button
+                type="button"
+                onClick={() => setCustomMessage("Бот, покажи способы вязать узлы и схемы")}
+                className="bg-emerald-200 hover:bg-emerald-300 border border-emerald-400 text-[10px] font-black px-2 py-0.5 rounded text-emerald-950 shrink-0 uppercase"
+              >
+                🪢 Схемы узлов
+              </button>
+              <button
+                type="button"
+                onClick={() => setCustomMessage("Бот, пришли фото знаков спортивного ориентирования")}
+                className="bg-indigo-200 hover:bg-indigo-300 border border-indigo-400 text-[10px] font-black px-2 py-0.5 rounded text-indigo-950 shrink-0 uppercase"
+              >
+                🧭 Знаки ориентирования
+              </button>
+              <button
+                type="button"
+                onClick={() => setCustomMessage("Бот, покажи график проведения соревнований")}
+                className="bg-fuchsia-200 hover:bg-fuchsia-300 border border-fuchsia-400 text-[10px] font-black px-2 py-0.5 rounded text-fuchsia-950 shrink-0 uppercase"
+              >
+                ⏱️ График соревнований
+              </button>
+              <button
+                type="button"
+                onClick={() => setCustomMessage("Бот, какие у нас конкурсы на слёте?")}
+                className="bg-purple-200 hover:bg-purple-300 border border-purple-400 text-[10px] font-black px-2 py-0.5 rounded text-purple-950 shrink-0 uppercase"
+              >
+                🏆 Все конкурсы
+              </button>
               <button
                 type="button"
                 onClick={() => setCustomMessage("Бот, покажи наше походное меню и продукты")}
@@ -2676,45 +2814,10 @@ export default function App() {
               </button>
               <button
                 type="button"
-                onClick={() => setCustomMessage("Бот, какие у нас походные задачи и дела?")}
-                className="bg-blue-100 hover:bg-blue-200 border border-blue-300 text-[10px] font-bold px-2 py-0.5 rounded text-blue-850 shrink-0 uppercase"
-              >
-                📋 Задачи команды
-              </button>
-              <button
-                type="button"
-                onClick={() => setCustomMessage("Бот, что там по инвентарю и снаряге? Какое состояние?")}
-                className="bg-amber-100 hover:bg-amber-200 border border-amber-300 text-[10px] font-bold px-2 py-0.5 rounded text-amber-850 shrink-0 uppercase"
-              >
-                📦 Инвентарь / Вещи
-              </button>
-              <button
-                type="button"
                 onClick={() => setCustomMessage("Бот, кто злостный халявщик и сколько денег висит долгами?")}
                 className="bg-red-100 hover:bg-red-200 border border-red-300 text-[10px] font-bold px-2 py-0.5 rounded text-red-850 shrink-0 uppercase"
               >
                 💸 Долги банды
-              </button>
-              <button
-                type="button"
-                onClick={() => setCustomMessage("Бот, зачитай отчет о наших сборах и планах")}
-                className="bg-cyan-100 hover:bg-cyan-200 border border-cyan-300 text-[10px] font-bold px-2 py-0.5 rounded text-cyan-850 shrink-0 uppercase"
-              >
-                📢 Экскурсии / Сборы
-              </button>
-              <button
-                type="button"
-                onClick={() => setCustomMessage("Бот, я замерзла, боюсь грозы и дикого кабана!")}
-                className="bg-purple-100 hover:bg-purple-200 border border-purple-300 text-[10px] font-bold px-2 py-0.5 rounded text-purple-850 shrink-0 uppercase"
-              >
-                🙀 Страх у костра
-              </button>
-              <button
-                type="button"
-                onClick={() => setCustomMessage("Бот, мы едем бунтовать, жечь покрышки и жарить сосиски!")}
-                className="bg-orange-100 hover:bg-orange-200 border border-orange-300 text-[10px] font-bold px-2 py-0.5 rounded text-orange-850 shrink-0 uppercase"
-              >
-                🤘 Раскачать чат
               </button>
             </div>
 
@@ -2729,6 +2832,46 @@ export default function App() {
       <footer className="max-w-7xl mx-auto w-full px-4 text-center mt-8 text-xs text-amber-700/80 font-semibold border-t-2 border-dashed border-amber-300 pt-4">
         Бот Максимка &laquo;Главный Негодяй&raquo; © 2026. Разработано специально для лесной туристической банды Негодяев. По коням!
       </footer>
+
+      {/* LIGHTBOX MEDIA MODAL FOR FULL SCREEN VIEWING */}
+      {previewMediaUrl && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex flex-col items-center justify-center p-4">
+          <div className="bg-yellow-400 border-4 border-red-600 rounded-2xl max-w-3xl w-full p-4 flex flex-col gap-3 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b-2 border-amber-950/20 pb-2">
+              <span className="font-black text-amber-950 uppercase text-xs sm:text-sm flex items-center gap-1.5">
+                📷 {previewMediaTitle || "Просмотр вложения"}
+              </span>
+              <button 
+                onClick={() => setPreviewMediaUrl(null)}
+                className="bg-red-600 hover:bg-red-700 text-yellow-300 font-black px-3 py-1 rounded-xl text-xs uppercase shadow transition-transform active:scale-95"
+              >
+                Закрыть ✕
+              </button>
+            </div>
+
+            <div className="bg-white rounded-xl border-2 border-amber-300 p-2 overflow-auto max-h-[75vh] flex items-center justify-center">
+              <img 
+                src={previewMediaUrl} 
+                alt={previewMediaTitle} 
+                className="max-w-full h-auto max-h-[70vh] object-contain rounded"
+              />
+            </div>
+
+            <div className="flex justify-between items-center text-[10px] text-amber-900 font-bold pt-1">
+              <span>Для приближения или сохранения нажмите правой кнопкой мыши по картинке.</span>
+              <a 
+                href={previewMediaUrl} 
+                download="attachment.svg" 
+                target="_blank" 
+                rel="noreferrer"
+                className="bg-amber-100 hover:bg-amber-200 border border-amber-400 px-2 py-1 rounded text-amber-950 uppercase font-black"
+              >
+                💾 Скачать файл
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

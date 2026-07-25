@@ -398,9 +398,203 @@ export const initialInventoryItems: InventoryItem[] = [
   { id: "inv7", name: "Портативная Bluetooth колонка с музлом", condition: "пробухали нахер всё", responsibleName: "Саня Запевала" }
 ];
 
+export const ORIENTEERING_SIGNS_SVG = `data:image/svg+xml,${encodeURIComponent(`
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="420" viewBox="0 0 600 420" style="background:#fef3c7; font-family:sans-serif;">
+  <rect width="600" height="420" fill="#fffbeb" rx="16" stroke="#d97706" stroke-width="4"/>
+  <rect x="0" y="0" width="600" height="55" fill="#d97706"/>
+  <text x="300" y="35" fill="#ffffff" font-size="18" font-weight="900" text-anchor="middle">🧭 ЗНАКИ И СИМВОЛЫ СПОРТИВНОГО ОРИЕНТИРОВАНИЯ</text>
+  
+  <g transform="translate(30, 75)">
+    <rect x="0" y="0" width="250" height="60" fill="#ffffff" stroke="#f59e0b" stroke-width="2" rx="8"/>
+    <circle cx="35" cy="30" r="18" fill="none" stroke="#dc2626" stroke-width="4"/>
+    <text x="35" y="35" fill="#dc2626" font-size="12" font-weight="bold" text-anchor="middle">КП 1</text>
+    <text x="70" y="28" fill="#1e293b" font-size="13" font-weight="bold">Контрольный Пункт (КП)</text>
+    <text x="70" y="45" fill="#64748b" font-size="11">Призма бел/красн + электронный чип</text>
+
+    <rect x="290" y="0" width="250" height="60" fill="#ffffff" stroke="#f59e0b" stroke-width="2" rx="8"/>
+    <rect x="305" y="12" width="36" height="36" fill="#bbf7d0" rx="4"/>
+    <text x="355" y="28" fill="#1e293b" font-size="13" font-weight="bold">Проходимый сосновый лес</text>
+    <text x="355" y="45" fill="#64748b" font-size="11">Зеленый цвет на топокарте</text>
+
+    <rect x="0" y="75" width="250" height="60" fill="#ffffff" stroke="#f59e0b" stroke-width="2" rx="8"/>
+    <line x1="15" y1="105" x2="55" y2="105" stroke="#000000" stroke-width="3" stroke-dasharray="6,4"/>
+    <text x="70" y="103" fill="#1e293b" font-size="13" font-weight="bold">Лесная тропинка</text>
+    <text x="70" y="120" fill="#64748b" font-size="11">Чёрная пунктирная линия</text>
+
+    <rect x="290" y="75" width="250" height="60" fill="#ffffff" stroke="#f59e0b" stroke-width="2" rx="8"/>
+    <path d="M 305 105 Q 323 85 341 105" fill="none" stroke="#92400e" stroke-width="3"/>
+    <text x="355" y="103" fill="#1e293b" font-size="13" font-weight="bold">Овраг / Вымоина</text>
+    <text x="355" y="120" fill="#64748b" font-size="11">Коричневый штрих рельефа</text>
+
+    <rect x="0" y="150" width="250" height="60" fill="#ffffff" stroke="#f59e0b" stroke-width="2" rx="8"/>
+    <circle cx="35" cy="180" r="10" fill="#0284c7"/>
+    <text x="70" y="178" fill="#1e293b" font-size="13" font-weight="bold">Родник / Источник</text>
+    <text x="70" y="195" fill="#64748b" font-size="11">Синий кружок (гидрография)</text>
+
+    <rect x="290" y="150" width="250" height="60" fill="#ffffff" stroke="#f59e0b" stroke-width="2" rx="8"/>
+    <rect x="305" y="162" width="36" height="36" fill="#fef08a" rx="4"/>
+    <text x="355" y="178" fill="#1e293b" font-size="13" font-weight="bold">Открытая поляна</text>
+    <text x="355" y="195" fill="#64748b" font-size="11">Жёлтый залитый контур</text>
+  </g>
+
+  <rect x="30" y="315" width="540" height="80" fill="#fef3c7" stroke="#d97706" stroke-width="2" rx="8"/>
+  <text x="40" y="338" fill="#78350F" font-size="12" font-weight="bold">📌 Памятка участникам ориентирования:</text>
+  <text x="40" y="358" fill="#92400e" font-size="11">1. Карта выдается за 1 минуту до старта. Отметка КП — чипом на старте и финише.</text>
+  <text x="40" y="375" fill="#92400e" font-size="11">2. Прохождение строго по порядку номеров (КП1 -> КП2 -> КП3 ... -> Финиш).</text>
+</svg>
+`)}`;
+
+export const KNOTS_DIAGRAM_SVG = `data:image/svg+xml,${encodeURIComponent(`
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="420" viewBox="0 0 600 420" style="background:#f8fafc; font-family:sans-serif;">
+  <rect width="600" height="420" fill="#f1f5f9" rx="16" stroke="#0284c7" stroke-width="4"/>
+  <rect x="0" y="0" width="600" height="55" fill="#0284c7"/>
+  <text x="300" y="35" fill="#ffffff" font-size="18" font-weight="900" text-anchor="middle">🪢 ТУРИСТИЧЕСКИЕ УЗЛЫ: СХЕМЫ И СПОСОБЫ ВЯЗКИ</text>
+
+  <g transform="translate(25, 70)">
+    <rect x="0" y="0" width="170" height="150" fill="#ffffff" stroke="#0284c7" stroke-width="2" rx="10"/>
+    <text x="85" y="25" fill="#0369a1" font-size="12" font-weight="bold" text-anchor="middle">1. Узел «Восьмёрка»</text>
+    <path d="M 40 95 C 40 55 130 55 130 95 C 130 125 40 125 40 85 C 40 55 130 55 130 65" fill="none" stroke="#dc2626" stroke-width="6" stroke-linecap="round"/>
+    <text x="85" y="135" fill="#475569" font-size="10" text-anchor="middle" font-weight="bold">Незатягивающаяся петля</text>
+
+    <rect x="190" y="0" width="170" height="150" fill="#ffffff" stroke="#0284c7" stroke-width="2" rx="10"/>
+    <text x="275" y="25" fill="#0369a1" font-size="12" font-weight="bold" text-anchor="middle">2. Узел «Булинь»</text>
+    <circle cx="275" cy="70" r="22" fill="none" stroke="#2563eb" stroke-width="5"/>
+    <path d="M 275 92 L 275 120 M 260 70 L 290 70" stroke="#16a34a" stroke-width="5" stroke-linecap="round"/>
+    <text x="275" y="135" fill="#475569" font-size="10" text-anchor="middle" font-weight="bold">Король узлов (обвязка)</text>
+
+    <rect x="380" y="0" width="170" height="150" fill="#ffffff" stroke="#0284c7" stroke-width="2" rx="10"/>
+    <text x="465" y="25" fill="#0369a1" font-size="12" font-weight="bold" text-anchor="middle">3. Прямой узел</text>
+    <path d="M 400 70 Q 430 50 465 70 T 530 70" fill="none" stroke="#d97706" stroke-width="6" stroke-linecap="round"/>
+    <path d="M 400 85 Q 430 105 465 85 T 530 85" fill="none" stroke="#0284c7" stroke-width="6" stroke-linecap="round"/>
+    <text x="465" y="135" fill="#475569" font-size="10" text-anchor="middle" font-weight="bold">Связывание 2 веревок</text>
+
+    <rect x="0" y="165" width="170" height="150" fill="#ffffff" stroke="#0284c7" stroke-width="2" rx="10"/>
+    <text x="85" y="190" fill="#0369a1" font-size="12" font-weight="bold" text-anchor="middle">4. Схватывающий (Прусик)</text>
+    <rect x="75" y="205" width="20" height="60" fill="#94a3b8" rx="3"/>
+    <path d="M 45 220 L 125 220 M 45 235 L 125 235 M 45 250 L 125 250" stroke="#dc2626" stroke-width="4"/>
+    <text x="85" y="295" fill="#475569" font-size="10" text-anchor="middle" font-weight="bold">Самостраховка на перилах</text>
+
+    <rect x="190" y="165" width="170" height="150" fill="#ffffff" stroke="#0284c7" stroke-width="2" rx="10"/>
+    <text x="275" y="190" fill="#0369a1" font-size="12" font-weight="bold" text-anchor="middle">5. Ткацкий узел</text>
+    <path d="M 210 235 C 240 210 270 260 310 235" fill="none" stroke="#16a34a" stroke-width="5"/>
+    <path d="M 230 245 C 260 270 290 220 330 245" fill="none" stroke="#ca8a04" stroke-width="5"/>
+    <text x="275" y="295" fill="#475569" font-size="10" text-anchor="middle" font-weight="bold">Для скользких веревок</text>
+
+    <rect x="380" y="165" width="170" height="150" fill="#ffffff" stroke="#0284c7" stroke-width="2" rx="10"/>
+    <text x="465" y="190" fill="#0369a1" font-size="12" font-weight="bold" text-anchor="middle">6. Выбленочный (Стремя)</text>
+    <circle cx="465" cy="235" r="20" fill="none" stroke="#64748b" stroke-width="8"/>
+    <path d="M 445 235 Q 465 210 485 235" fill="none" stroke="#dc2626" stroke-width="5"/>
+    <text x="465" y="295" fill="#475569" font-size="10" text-anchor="middle" font-weight="bold">Крепление к опорам</text>
+  </g>
+</svg>
+`)}`;
+
+export const CONTEST_SCHEDULE_SVG = `data:image/svg+xml,${encodeURIComponent(`
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400" viewBox="0 0 600 400" style="background:#f0fdf4; font-family:sans-serif;">
+  <rect width="600" height="400" fill="#f0fdf4" rx="16" stroke="#16a34a" stroke-width="4"/>
+  <rect x="0" y="0" width="600" height="55" fill="#16a34a"/>
+  <text x="300" y="35" fill="#ffffff" font-size="18" font-weight="900" text-anchor="middle">⏱️ ГРАФИК И РАСПИСАНИЕ ПРОВЕДЕНИЯ ЭТАПОВ</text>
+
+  <g transform="translate(40, 80)">
+    <rect x="0" y="0" width="520" height="60" fill="#ffffff" stroke="#22c55e" stroke-width="2" rx="8"/>
+    <rect x="10" y="10" width="90" height="40" fill="#dcfce7" rx="6"/>
+    <text x="55" y="35" fill="#15803d" font-size="14" font-weight="black" text-anchor="middle">14:00 - 14:30</text>
+    <text x="115" y="28" fill="#1e293b" font-size="14" font-weight="bold">Этап 1: Построение, инструктаж и выдача карт</text>
+    <text x="115" y="45" fill="#64748b" font-size="11">Главный судья: Лёха Навигатор. Главная поляна лагеря.</text>
+
+    <rect x="0" y="75" width="520" height="60" fill="#ffffff" stroke="#22c55e" stroke-width="2" rx="8"/>
+    <rect x="10" y="85" width="90" height="40" fill="#dcfce7" rx="6"/>
+    <text x="55" y="110" fill="#15803d" font-size="14" font-weight="black" text-anchor="middle">14:30 - 16:30</text>
+    <text x="115" y="103" fill="#1e293b" font-size="14" font-weight="bold">Этап 2: Массовый забег по КП и полоса препятствий</text>
+    <text x="115" y="120" fill="#64748b" font-size="11">Старт участников с интервалом в 2 минуты. Прохождение 8 КП.</text>
+
+    <rect x="0" y="150" width="520" height="60" fill="#ffffff" stroke="#22c55e" stroke-width="2" rx="8"/>
+    <rect x="10" y="160" width="90" height="40" fill="#dcfce7" rx="6"/>
+    <text x="55" y="185" fill="#15803d" font-size="14" font-weight="black" text-anchor="middle">16:30 - 17:30</text>
+    <text x="115" y="178" fill="#1e293b" font-size="14" font-weight="bold">Этап 3: Финишная сдача электронных чипов и узлы</text>
+    <text x="115" y="195" fill="#64748b" font-size="11">Проверка правильности считывания и доп. штрафные секунды.</text>
+
+    <rect x="0" y="225" width="520" height="60" fill="#ffffff" stroke="#22c55e" stroke-width="2" rx="8"/>
+    <rect x="10" y="235" width="90" height="40" fill="#fe2c55" rx="6"/>
+    <text x="55" y="260" fill="#ffffff" font-size="14" font-weight="black" text-anchor="middle">18:00</text>
+    <text x="115" y="253" fill="#1e293b" font-size="14" font-weight="bold">Награждение победителей и торжественное вручение медалей</text>
+    <text x="115" y="270" fill="#64748b" font-size="11">Вручение Главного Кубка Негодяев 🏆</text>
+  </g>
+</svg>
+`)}`;
+
 export const initialContests: Contest[] = [
-  { id: "c1", title: "Спортивное ориентирование", captainId: "3", captainName: "Лёха Навигатор", teamMemberIds: ["3", "1", "2"], place: "2-е место" },
-  { id: "c2", title: "Музыкальный баттл у костра", captainId: "2", captainName: "Саня Запевала", teamMemberIds: ["2", "7"], place: "1-е место" },
-  { id: "c3", title: "Кулинарный шедевр из тушняка", captainId: "6", captainName: "Юрец Мангальщик", teamMemberIds: ["6", "4", "5"], place: "" }
+  {
+    id: "c1",
+    title: "Спортивное ориентирование и знаки",
+    captainId: "3",
+    captainName: "Лёха Навигатор",
+    teamMemberIds: ["3", "1", "2"],
+    place: "2-е место",
+    description: "Прохождение лесного маршрута по спортивной карте с нахождением 8 контрольных пунктов (КП). Отметка производится электронными чипами. Засчитывается наименьшее время и точность.",
+    schedule: "Суббота, 14:00 - Регистрация и выдача карт; 14:30 - Старт участников по очереди каждые 2 мин; 17:00 - Финиш и подсчет результатов.",
+    imageUrl: ORIENTEERING_SIGNS_SVG,
+    attachments: [
+      {
+        id: "att_1_1",
+        title: "Знаки и символы ориентирования",
+        type: "orienteering",
+        url: ORIENTEERING_SIGNS_SVG
+      },
+      {
+        id: "att_1_2",
+        title: "График проведения ориент-забега",
+        type: "schedule",
+        url: CONTEST_SCHEDULE_SVG
+      }
+    ]
+  },
+  {
+    id: "c2",
+    title: "Туристические узлы и техника туризма",
+    captainId: "8",
+    captainName: "Данчик Кипиш",
+    teamMemberIds: ["8", "3", "1"],
+    place: "1-е место",
+    description: "Соревнование по правильной и скоростной вязке 6 ключевых туристических узлов (Восьмёрка, Булинь, Прямой, Прусик, Ткацкий, Выбленочный) и натягиванию навесной переправы.",
+    schedule: "Суббота, 17:30 - Проверка личной обвязки и карабинов; 18:00 - Скоростная вязка узлов 'вслепую' и под счет.",
+    imageUrl: KNOTS_DIAGRAM_SVG,
+    attachments: [
+      {
+        id: "att_2_1",
+        title: "Способы и схемы вязки узлов",
+        type: "knots",
+        url: KNOTS_DIAGRAM_SVG
+      },
+      {
+        id: "att_2_2",
+        title: "График соревнований по узлам",
+        type: "schedule",
+        url: CONTEST_SCHEDULE_SVG
+      }
+    ]
+  },
+  {
+    id: "c3",
+    title: "Музыкальный баттл у костра",
+    captainId: "2",
+    captainName: "Саня Запевала",
+    teamMemberIds: ["2", "7"],
+    place: "1-е место",
+    description: "Баттл костровых песен под гитару. Конкурсанты исполняют походные хиты, авторские частушки и лирику. Оценивается громкость, артистизм и эмоциональный отклик команды.",
+    schedule: "Суббота, 21:00 - Открытие музыкального ринга у большого ночного костра.",
+    attachments: []
+  },
+  {
+    id: "c4",
+    title: "Кулинарный шедевр из тушняка",
+    captainId: "6",
+    captainName: "Юрец Мангальщик",
+    teamMemberIds: ["6", "4", "5"],
+    place: "Призёр",
+    description: "Приготовление ресторанного блюда на костре из ограниченного набора продуктов: банка тушенки ГОСТ, крупа, овощи и костровые специи Юрца.",
+    schedule: "Воскресенье, 13:00 - Начало готовки у мангальной зоны.",
+    attachments: []
+  }
 ];
 

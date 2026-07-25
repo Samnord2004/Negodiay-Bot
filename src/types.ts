@@ -32,6 +32,7 @@ export interface BotConfig {
   activePersonality: string; // текущий тон ИИ
   welcomeTemplate: string;
   foundingYear: number; // год основания команды
+  customLogo?: string | null;
 }
 
 export interface ChatMessage {
@@ -44,6 +45,8 @@ export interface ChatMessage {
   isBot: boolean;
   detectedPsychotypeExplanation?: string; // ИИ анализ психотипа
   adapterStyleUsed?: string; // Какую манеру ИИ применил
+  imageUrl?: string; // Фото/картинка прикрепленная к сообщению
+  attachments?: ContestAttachment[]; // Прикрепленные файлы/материалы
 }
 
 export interface TaskItem {
@@ -79,6 +82,13 @@ export interface InventoryItem {
   responsibleName: string;
 }
 
+export interface ContestAttachment {
+  id: string;
+  title: string; // e.g. "Правила конкурса", "График проведения", "Знаки ориентирования", "Способы вязки узлов"
+  url: string; // base64 or URL
+  type?: 'rules' | 'schedule' | 'orienteering' | 'knots' | 'other' | string;
+}
+
 export interface Contest {
   id: string;
   title: string;
@@ -86,5 +96,9 @@ export interface Contest {
   captainName: string; // Participant Name
   teamMemberIds: string[]; // List of Participant IDs in the mini team
   place?: string; // командное место занятое в конкурсе, e.g., "1-е место", "Призёр", ""
+  description?: string; // Описание/правила конкурса
+  schedule?: string; // График проведения
+  imageUrl?: string; // Обложка/главное фото
+  attachments?: ContestAttachment[]; // Прикреплённые фото, карты, схемы узлов и знаков
 }
 

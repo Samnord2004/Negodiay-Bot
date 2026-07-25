@@ -2,6 +2,7 @@ import express from "express";
 import path from "path";
 import dotenv from "dotenv";
 import { GoogleGenAI, Type } from "@google/genai";
+import { createServer as createViteServer } from "vite";
 import { 
   initDb,
   getParticipants,
@@ -27,24 +28,17 @@ import {
   getAdminPassword,
   saveAdminPassword
 } from "./db";
+import { ORIENTEERING_SIGNS_SVG, KNOTS_DIAGRAM_SVG, CONTEST_SCHEDULE_SVG } from "./src/mockData";
 
+// Load environment variables
 dotenv.config();
-initDb();
 
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
 
-// ========== Middleware ==========
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
-// GET-обработчик для проверки вебхука MAX
-app.get("/api/bot-respond", (req, res) => {
-  console.log("🔍 GET-запрос на вебхук получен");
-  res.status(200).send("OK");
-});
-
-// ========== Gemini client ==========
+// Lazy-initialize Gemini SDK to prevent crashes if key is initially absent
 let aiClient: GoogleGenAI | null = null;
 function getGeminiClient(): GoogleGenAI | null {
   if (!aiClient) {
@@ -53,7 +47,9 @@ function getGeminiClient(): GoogleGenAI | null {
       aiClient = new GoogleGenAI({
         apiKey: key,
         httpOptions: {
-          headers: { 'User-Agent': 'aistudio-build' }
+          headers: {
+            'User-Agent': 'aistudio-build',
+          }
         }
       });
     }
@@ -61,7 +57,7 @@ function getGeminiClient(): GoogleGenAI | null {
   return aiClient;
 }
 
-// ========== Генерация ответа с ИИ (полная версия) ==========
+// Shared, robust bot response generator supporting both Web client and active Telegram Bot
 async function generateBotResponseInternal(body: any): Promise<any> {
   const {
     message,
@@ -77,6 +73,7 @@ async function generateBotResponseInternal(body: any): Promise<any> {
     groceryItems = [],
     inventoryItems = [],
     participants = [],
+    contests = getContests()
   } = body;
 
   const birthdayContext = (participants || []).map((p: any) => 
@@ -100,14 +97,81 @@ async function generateBotResponseInternal(body: any): Promise<any> {
     ? `ВНИМАНИЕ! Сегодня ДЕНЬ РОЖДЕНИЯ (ДР) у следующих участников: ${todayBirthdays.map((p: any) => `${p.name} (@${p.nickname})`).join(", ")}!!! Обязательно удели этому внимание и напиши эпичное, супер-веселое поздравление, если они написали или тебя попросили поздравить!`
     : "Сегодня ни у кого нет дня рождения.";
 
+  // Trim and strip the addressing prefix (e.g., "Бот, " or "Бот:") to analyze the actual core query
   let cleanMessage = message || "";
   const botPrefixRegex = /^(бот)\b[,:\s]*/i;
   if (botPrefixRegex.test(cleanMessage)) {
     cleanMessage = cleanMessage.replace(botPrefixRegex, "").trim();
   }
 
+  // Fast checks for specific requested expressions and media attachments
+  const msgLower = cleanMessage.toLowerCase();
+
+  // 1. "Как гуляет негодяй?"
+  if (msgLower.includes("как гуляет негодяй") || msgLower.includes("как гуляет") || msgLower.includes("как отдыхает негодяй") || msgLower.includes("как тусит негодяй")) {
+    let answerText = "🔥 Как гуляет негодяй?! — АХУЕННО!";
+    if (swearingLevel === "low") {
+      answerText = "🔥 Как гуляет негодяй?! — АФИГЕННО!";
+    }
+    return {
+      text: answerText,
+      detectedPsychotype: "Весельчак-балагур",
+      detectedPsychotypeExplanation: "Главный фирменный девиз Негодяев — емко и без лишней болтовни!",
+      adapterStyleUsed: "Фирменный Негодяйский Клич"
+    };
+  }
+
+  // 2. "Пизда на глаза"
+  if (msgLower.includes("пизда на глаза") || (msgLower.includes("глаза") && msgLower.includes("пизда"))) {
+    let answerText = "👀 ПИЗДА НА ГЛАЗА! 🤯 Удивление так удивление! Фирменный негодяйский ответ на все шоковые вопросы и крайнее изумление!";
+    if (swearingLevel === "low") {
+      answerText = "👀 Глаза на лоб вылезли! 🤯 Вот это удивление так удивление! Фирменная реакция на крайнее изумление!";
+    }
+    return {
+      text: answerText,
+      detectedPsychotype: "Алко-турист",
+      detectedPsychotypeExplanation: "Использовал фирменную реакцию на крайнее удивление 'Пизда на глаза'.",
+      adapterStyleUsed: "Шоковая реакция Негодяев"
+    };
+  }
+
+  // 3. "Записьдень"
+  if (msgLower.includes("записьдень") || msgLower.includes("запись день") || msgLower.includes("запиздень")) {
+    let answerText = "📝 Записьдень! (от слова Запиздень!) 🤬 Слишком много пиздишь, брат! Хватит языком чесать и заливать сказки, марш казан мыть!";
+    if (swearingLevel === "low") {
+      answerText = "📝 Записьдень! (от слова Запиздень!) 🛑 Слишком много пустословишь! Хватит языком чесать, иди за дело берись!";
+    }
+    return {
+      text: answerText,
+      detectedPsychotype: "Душнила-контролёр",
+      detectedPsychotypeExplanation: "Зафиксирован 'Запиздень' — кто-то в чате слишком много пиздит.",
+      adapterStyleUsed: "Затыкание балабола"
+    };
+  }
+
+  // 4. "Запись дубля"
+  if (msgLower.includes("запись дубля") || msgLower.includes("запись дубль") || msgLower.includes("за пизду бля")) {
+    let answerText = "🎬 Запись дубля! — ЗА ПИЗДУ БЛЯ! 🥂🍻 Фирменный негодяйский тост! Наливай полнее, осушаем до дна!";
+    if (swearingLevel === "low") {
+      answerText = "🎬 Запись дубля! — ЗА ПОХОД И ЗА ДРУЗЕЙ! 🥂🍻 Фирменный негодяйский тост! Поднимаем кружки и пьем до дна!";
+    }
+    return {
+      text: answerText,
+      detectedPsychotype: "Весельчак-балагур",
+      detectedPsychotypeExplanation: "Произнес культовый негодяйский тост 'Запись дубля' (За пизду бля)!",
+      adapterStyleUsed: "Фирменный костровой тост"
+    };
+  }
+
+  // Check for attachments query
+  const isKnotsQuery = msgLower.includes("узел") || msgLower.includes("узл") || msgLower.includes("вязать") || msgLower.includes("прусик") || msgLower.includes("восьмерк");
+  const isOrientQuery = msgLower.includes("ориентирован") || msgLower.includes("знаки") || msgLower.includes("карты") || msgLower.includes("кп");
+  const isScheduleQuery = msgLower.includes("график") || msgLower.includes("расписан") || msgLower.includes("этапы") || msgLower.includes("время соревнований");
+  const isContestsGeneralQuery = msgLower.includes("конкурс") || msgLower.includes("соревнован") || msgLower.includes("турнир");
+
   const ai = getGeminiClient();
 
+  // If Gemini API is not configured, fall back to our high-fidelity, hilarious local engine
   if (!ai) {
     console.warn("[AIS Build Core] GEMINI_API_KEY is not set. Running mock engine fallback.");
     const mockResult = generateMockNegodyaiResponse(
@@ -120,7 +184,8 @@ async function generateBotResponseInternal(body: any): Promise<any> {
       tasks,
       menuItems,
       groceryItems,
-      inventoryItems
+      inventoryItems,
+      contests
     );
     return {
       ...mockResult,
@@ -129,6 +194,7 @@ async function generateBotResponseInternal(body: any): Promise<any> {
     };
   }
 
+  // Build high-context reference tables for the AI
   const excursionsContext = excursions.map((e: any) => 
     `- Тур/Поход: "${e.title}" | Дата: ${e.date} | Место: ${e.location} | Цена с носа: ${e.costPerPerson} руб. | Статус: ${e.isActive ? "Активен" : "Архив"}`
   ).join("\n") || "Нет планируемых туров, сплавов или походов.";
@@ -193,16 +259,16 @@ ${birthdayContext}
 ${todayBirthdaysMention}
 
 === ИНСТРУКЦИИ ПО ТВОЕМУ ОТВЕТУ (ОБЯЗАТЕЛЬНО К ИСПОЛНЕНИЮ!) ===
-1. ОТВЕЧАЙ СТРОГО ТОМУ, КТО ЗАДАЛ ВОПРОС! В самом первом предложении твоего ответа ("text") ты обязан ЛИЧНО в дружеской, походной или подкольной форме обратиться к собеседнику \${senderName} (или по его никнейму @\${senderNickname}). Например: "Слышь, \${senderName}, по поводу...", "Эй, @\${senderNickname}, слушай сюда...", "\${senderName}, косячник походный, держи расклад...".
+1. ОТВЕЧАЙ СТРОГО ТОМУ, КТО ЗАДАЛ ВОПРОС! В самом первом предложении твоего ответа ("text") ты обязан ЛИЧНО в дружеской, походной или подкольной форме обратиться к собеседнику ${senderName} (или по его никнейму @${senderNickname}). Например: "Слышь, ${senderName}, по поводу...", "Эй, @${senderNickname}, слушай сюда...", "${senderName}, косячник походный, держи расклад...".
 2. ТЫ ОБЯЗАН ОТВЕЧАТЬ ПО СУЩЕСТВУ НА ВОПРОСЫ ПО СЛЕДУЮЩИМ ТЕМАМ ИЗ КОНТЕКСТА:
-   - Если спрашивают про деньги/долги/оплаты: зачитай список участников ведомости долгов \${debtsContext}, назови должников халявщиками или забывахами и назови их точные долги в рублях.
-   - Если спрашивают про походные задачи/дела/дежурства: перечисли невыполненные задачи из списка \${tasksContext}, назови дедлайны и ответственных.
-   - Если спрашивают про меню/еду/продукты/тушняк: зачитай костровое меню \${menuContext} и список продуктов, которые ОСТАЛОСЬ КУПИТЬ из списка \${groceryContext}.
-   - Если спрашивают про палатки/пилы/инвентарь/снарягу: зачитай список имущества из \${inventoryContext}, назови хранителей вещей и их состояние на данный момент.
-   - Если спрашивают про туры, сплавы, походы или куда едем: зачитай список туров, сплавов и походов \${excursionsContext}, назови даты, локации и стоимость.
+   - Если спрашивают про деньги/долги/оплаты: зачитай список участников ведомости долгов ${debtsContext}, назови должников халявщиками или забывахами и назови их точные долги в рублях.
+   - Если спрашивают про походные задачи/дела/дежурства: перечисли невыполненные задачи из списка ${tasksContext}, назови дедлайны и ответственных.
+   - Если спрашивают про меню/еду/продукты/тушняк: зачитай костровое меню ${menuContext} и список продуктов, которые ОСТАЛОСЬ КУПИТЬ из списка ${groceryContext}.
+   - Если спрашивают про палатки/пилы/инвентарь/снарягу: зачитай список имущества из ${inventoryContext}, назови хранителей вещей и их состояние на данный момент.
+   - Если спрашивают про туры, сплавы, походы или куда едем: зачитай список туров, сплавов и походов ${excursionsContext}, назови даты, локации и стоимость.
    - Если спрашивают про дни рождения, днюху, поздравления или у кого-то сегодня праздник: зачитай список дней рождения ${birthdayContext}, перечисли именинников сегодня, и выдай невероятное, эпичное Негодяйское походное поздравление (например: пожелай крепкой печени, чтоб палатка не текла, тушенка была чисто один кусковой говяжий сок, кабаны за три версты оббегали, а в спальнике всегда было сухо и тепло)! Подколи их психотип!
 
-В нашей банде ровно 15 угарных психотипов. Тебе нужно проанализировать последнее сообщение от \${senderName} (@\${senderNickname}) (его текущий заявленный тип: "\${senderPsychotype}") и тонко подстроиться под один из 15 психотипов:
+В нашей банде ровно 15 угарных психотипов. Тебе нужно проанализировать последнее сообщение от ${senderName} (@${senderNickname}) (его текущий заявленный тип: "${senderPsychotype}") и тонко подстроиться под один из 15 психотипов:
 1. "Весельчак-балагур" (Шутит, флудит, орет, обожает безумие)
 2. "Душнила-контролёр" (Сверяет списки, обожает Excel и правила занудства)
 3. "Паникёр-истерик" (Боится клещей, медведей, промокнуть, туч)
@@ -222,10 +288,10 @@ ${todayBirthdaysMention}
 Адаптируй свой ответ под особенности речи пользователя, подколи его за его слабости его психотипа сочно и уморительно!
 
 Предыдущие до 5 сообщений в чате для контекста:
-\${recentHistoryText}
+${recentHistoryText}
 
-Новое сообщение от \${senderName} (@\${senderNickname}) [Психотип: \${senderPsychotype}]:
-"\${cleanMessage}"
+Новое сообщение от ${senderName} (@${senderNickname}) [Психотип: ${senderPsychotype}]:
+"${cleanMessage}"
 
 Верни ответ СТРОГО в формате JSON со следующими полями:
 {
@@ -255,8 +321,10 @@ ${todayBirthdaysMention}
         }
       }
     });
+
     const parsedResponse = JSON.parse(response.text?.trim() || "{}");
     return parsedResponse;
+
   } catch (error: any) {
     console.error("Error communicating with Gemini:", error);
     const fallback = generateMockNegodyaiResponse(
@@ -278,26 +346,193 @@ ${todayBirthdaysMention}
   }
 }
 
-// ========== Резервный алгоритм (mock) ПОЛНАЯ ВЕРСИЯ ==========
+// API endpoint for generating bot responses
+app.post("/api/bot-respond", async (req, res) => {
+  try {
+    const { message, senderName, senderNickname } = req.body;
+    if (!message || message.trim() === "") {
+      return res.status(400).json({ error: "Message is required" });
+    }
+
+    const normSenderName = senderName || "Анонимный Негодяй";
+    const normSenderNickname = senderNickname || normSenderName.toLowerCase().replace(/\s+/g, "_");
+
+    // Check if participant is registered on the server, if not - add them (MAX dynamic synch)
+    const currentParticipants = getParticipants();
+    let existingP = currentParticipants.find(
+      (p: any) => p.name === normSenderName || p.nickname === normSenderNickname
+    );
+
+    if (!existingP) {
+      const isFemale =
+        normSenderName.endsWith("а") ||
+        normSenderName.endsWith("я") ||
+        normSenderName.endsWith("ка") ||
+        normSenderName.toLowerCase().includes("иришка") ||
+        normSenderName.toLowerCase().includes("булочка");
+
+      // Calculate totalCost based on active excursions
+      const currentExcursions = getExcursions();
+      const activeCost = currentExcursions
+        .filter((e: any) => e.isActive)
+        .reduce((acc: number, curr: any) => acc + (isFemale ? (curr.costGirls ?? curr.costPerPerson ?? 3500) : (curr.costBoys ?? curr.costPerPerson ?? 5000)), 0);
+
+      existingP = {
+        id: "p_" + Date.now(),
+        name: normSenderName,
+        nickname: normSenderNickname,
+        psychotype: "Весельчак-балагур",
+        avatar: isFemale ? "💁‍♀️" : "🏕️",
+        paidAmount: 0,
+        totalCost: activeCost,
+        debtAmount: activeCost,
+        joined: true,
+        birthday: "",
+        joinedYear: new Date().getFullYear(),
+        skippedYears: [],
+        gender: isFemale ? "female" : "male"
+      };
+      addOrUpdateParticipant(existingP);
+    }
+
+    // Capture incoming user message in serverMessages
+    const userMsg = {
+      id: "msg_" + Date.now() + "_user",
+      senderName: normSenderName,
+      senderNickname: normSenderNickname,
+      senderPsychotype: existingP.psychotype || "Весельчак-балагур",
+      text: message,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      isBot: false
+    };
+    addMessage(userMsg);
+
+    const payload = await generateBotResponseInternal({
+      ...req.body,
+      senderName: normSenderName,
+      senderNickname: normSenderNickname,
+      senderPsychotype: existingP.psychotype,
+      participants: getParticipants(),
+      excursions: getExcursions(),
+      tasks: getTasks(),
+      menuItems: getMenuItems(),
+      groceryItems: getGroceryItems(),
+      inventoryItems: getInventoryItems(),
+      debts: getParticipants().map((p: any) => ({
+        name: p.name,
+        nickname: p.nickname,
+        paidAmount: p.paidAmount,
+        totalCost: p.totalCost,
+        debtAmount: p.debtAmount
+      }))
+    });
+
+    // Capture outgoing bot response in serverMessages
+    const botMsg = {
+      id: "bot_" + Date.now() + "_res",
+      senderName: "Бот Максимка",
+      senderNickname: "negodyai_bot",
+      senderPsychotype: "ИИ Главный Негодяй",
+      text: payload.text || "А фиг его знает, бля, что ответить! Давай на сплав ехать!",
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      isBot: true,
+      detectedPsychotypeExplanation: payload.detectedPsychotypeExplanation || "Подстроился под общение.",
+      adapterStyleUsed: payload.adapterStyleUsed || "Угарный походник"
+    };
+    addMessage(botMsg);
+
+    // Auto detect sender psychotype if configured
+    const botConfig = getBotConfig();
+    if (botConfig.autoDetectPsychotype && payload.detectedPsychotype) {
+      existingP.psychotype = payload.detectedPsychotype;
+      addOrUpdateParticipant(existingP);
+    }
+
+    return res.json(payload);
+  } catch (error: any) {
+    console.error("Express API error:", error);
+    return res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+// Sync endpoints to preserve shared state between clients and the Telegram Bot
+app.get("/api/sync", (req, res) => {
+  res.json({
+    participants: getParticipants(),
+    excursions: getExcursions(),
+    tasks: getTasks(),
+    menuItems: getMenuItems(),
+    groceryItems: getGroceryItems(),
+    inventoryItems: getInventoryItems(),
+    botConfig: getBotConfig(),
+    contests: getContests(),
+    messages: getMessages()
+  });
+});
+
+app.post("/api/sync", (req, res) => {
+  try {
+    const { participants, excursions, tasks, menuItems, groceryItems, inventoryItems, botConfig, contests, messages } = req.body;
+    if (participants) saveParticipants(participants);
+    if (excursions) saveExcursions(excursions);
+    if (tasks) saveTasks(tasks);
+    if (menuItems) saveMenuItems(menuItems);
+    if (groceryItems) saveGroceryItems(groceryItems);
+    if (inventoryItems) saveInventoryItems(inventoryItems);
+    if (botConfig) saveBotConfig(botConfig);
+    if (contests) saveContests(contests);
+    if (messages) saveMessages(messages);
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Error updating server sync:", err);
+    res.status(500).json({ error: "Failed to update sync cache" });
+  }
+});
+
+app.post("/api/admin/login", (req, res) => {
+  const { username, password } = req.body;
+  if (username === "admin" && password === getAdminPassword()) {
+    return res.json({ success: true, message: "Вы вошли как администратор!" });
+  }
+  return res.status(401).json({ success: false, error: "Неправильный логин или пароль" });
+});
+
+app.post("/api/admin/change-password", (req, res) => {
+  const { newPassword } = req.body;
+  if (!newPassword || newPassword.trim() === "") {
+    return res.status(400).json({ success: false, error: "Пароль не может быть пустым" });
+  }
+  saveAdminPassword(newPassword);
+  return res.json({ success: true, message: "Пароль администратора успешно изменен!" });
+});
+
+// МАКС Messenger Bot API is fully supported through the unified "/api/bot-respond" endpoint.
+// Corporate webhooks or chat platforms can trigger bot operations by requesting "/api/bot-respond" directly.
+
+
+// Fallback algorithm generating custom witty responses when Gemini is unconfigured or errors out
 function generateMockNegodyaiResponse(
-  message: string,
-  senderName: string,
+  message: string, 
+  senderName: string, 
   senderPsychotype: string,
-  swearingLevel: string,
-  excursions: any[],
+  swearingLevel: string, 
+  excursions: any[], 
   debts: any[],
   tasks?: any[],
   menuItems?: any[],
   groceryItems?: any[],
-  inventoryItems?: any[]
+  inventoryItems?: any[],
+  contests?: any[]
 ) {
   const msgLower = message.toLowerCase();
   let text = "";
   let detectedPsychotype = senderPsychotype;
   let detectedPsychotypeExplanation = `Общается в своей классической манере "${senderPsychotype}".`;
   let adapterStyleUsed = "Негодяйский походный подкол";
+  let imageUrl: string | undefined = undefined;
+  let attachments: any[] | undefined = undefined;
 
-  // Дни рождения (поздравления)
+  // Check for birthday-related questions or trigger congrats!
   const isBirthdayQuery = msgLower.includes("днюх") || msgLower.includes("рожден") || msgLower.includes("поздрав");
   if (isBirthdayQuery) {
     adapterStyleUsed = "Днюшный походный разнос";
@@ -326,7 +561,7 @@ function generateMockNegodyaiResponse(
     };
   }
 
-  // Определение психотипа по ключевым словам (15 типов)
+  // Detailed detection rules based on 15 psychotypes
   if (msgLower.includes("excel") || msgLower.includes("таблиц") || msgLower.includes("список") || msgLower.includes("отчет") || msgLower.includes("руб") || msgLower.includes("смет")) {
     detectedPsychotype = "Душнила-контролёр";
     detectedPsychotypeExplanation = "Требует отчеты, сводки, цифры и обожает душность таблиц больше свободы.";
@@ -371,9 +606,16 @@ function generateMockNegodyaiResponse(
     detectedPsychotypeExplanation = "Медитирует на огонь костра и видит в треске веток тайный шифр вселенной.";
   }
 
-  // Обработка денег
+  // Handle Money, Excursion, Menu, Tasks or Inventory questions
   const hasMoneyKeywords = msgLower.includes("долг") || msgLower.includes("деньги") || msgLower.includes("бабл") || msgLower.includes("оплат") || msgLower.includes("скидывать") || msgLower.includes("задолж") || msgLower.includes("смет");
   const hasExcursionKeywords = msgLower.includes("сбор") || msgLower.includes("куда") || msgLower.includes("экскурс") || msgLower.includes("слет") || msgLower.includes("когда") || msgLower.includes("тур") || msgLower.includes("поход") || msgLower.includes("сплав");
+  const hasMenuKeywords = msgLower.includes("меню") || msgLower.includes("еда") || msgLower.includes("едят") || msgLower.includes("блюд") || msgLower.includes("пожрать") || msgLower.includes("закуп") || msgLower.includes("продукт") || msgLower.includes("тушняк") || msgLower.includes("кушать") || msgLower.includes("обед") || msgLower.includes("ужин") || msgLower.includes("завтрак") || msgLower.includes("повар") || msgLower.includes("жрат");
+  const hasTaskKeywords = msgLower.includes("задач") || msgLower.includes("дел") || msgLower.includes("дежур") || msgLower.includes("поручен") || msgLower.includes("сделать") || msgLower.includes("кто что") || msgLower.includes("дрова") || msgLower.includes("обязан");
+  const hasInventoryKeywords = msgLower.includes("инвентар") || msgLower.includes("имуществ") || msgLower.includes("палатк") || msgLower.includes("снаряг") || msgLower.includes("пила") || msgLower.includes("казан") || msgLower.includes("топор") || msgLower.includes("вещи");
+  const isKnotsQuery = msgLower.includes("узел") || msgLower.includes("узл") || msgLower.includes("вязать") || msgLower.includes("прусик") || msgLower.includes("восьмерк");
+  const isOrientQuery = msgLower.includes("ориентирован") || msgLower.includes("знаки") || msgLower.includes("карты") || msgLower.includes("кп");
+  const isScheduleQuery = msgLower.includes("график") || msgLower.includes("расписан") || msgLower.includes("этапы") || msgLower.includes("время соревнований");
+  const isContestQuery = msgLower.includes("конкурс") || msgLower.includes("соревнован") || msgLower.includes("турнир");
 
   const debtors = debts.filter(d => d.debtAmount > 0);
   const totalDebtors = debtors.map(d => `${d.name} (@${d.nickname} - ${d.debtAmount}р)`).join(", ");
@@ -410,8 +652,97 @@ function generateMockNegodyaiResponse(
     } else {
       text = `Активных туров нет. Сидим греем задницы у костра и ждем, когда админ добавит новый угарный маршрут!`;
     }
+  } else if (hasMenuKeywords) {
+    adapterStyleUsed = "Кулинарный расклад слёта";
+    const dishesList = (menuItems || []).map((m: any) => `"${m.dishName}" (${m.day})`).join(", ");
+    const groceriesNeeded = (groceryItems || []).filter((g: any) => !g.isBought).map((g: any) => `"${g.name}" (${g.quantity})`).join(", ");
+    
+    if (dishesList) {
+      if (swearingLevel === "high") {
+        text = `Слышь, ${senderName}! По меню у нас на слёте полный кайф и объедение, бля! Готовим: ${dishesList}. А из заготовок осталась докупить всякая херня: ${groceriesNeeded || "всё уже закуплено, красавчики"}! Готовь большую ложку и котелок, нахуй!`;
+      } else if (swearingLevel === "medium") {
+        text = `Эй, Негодяи! Вот наше походное меню на слёт, бля: ${dishesList}! Осталось затариться в магазе: ${groceriesNeeded || "все продукты уже в багажниках"}! Костровая кухня будет огонь!`;
+      } else {
+        text = `Привет, ${senderName}! Вот наше вкуснотища-меню на слёт: ${dishesList}. Не забудьте, что нужно еще докупить: ${groceriesNeeded || "все закупки закрыты"}! Ждем ароматного плова и ухи у костра!`;
+      }
+    } else {
+      text = `Пока меню на слёт пустует. Админ еще не внес фирменный плов и тушенку! Пора бы заполнить раздел еды!`;
+    }
+  } else if (hasTaskKeywords) {
+    adapterStyleUsed = "Раздача походных задач";
+    const openTasks = (tasks || []).filter((t: any) => !t.isCompleted);
+    const tasksList = openTasks.map((t: any) => `"${t.title}" (Ответственный: ${t.assigneeName}, до: ${t.deadline})`).join("; ");
+    
+    if (openTasks.length > 0) {
+      if (swearingLevel === "high") {
+        text = `Слышь, ${senderName}! По задачам слёта у нас висит нехилый завал, бля! Вот горе-дела, которые НАДО СДЕЛАТЬ: ${tasksList}. Быстро подхватили задницы и закрываем дедлайны нахуй, а то на слёте будете только дрова таскать!`;
+      } else if (swearingLevel === "medium") {
+        text = `Банда, по задачам слёта у нас тут есть невыполненные хвосты, бля: ${tasksList}! Давайте активнее включайтесь, помогайте ответственным, чтобы слёт прошёл на высоте!`;
+      } else {
+        text = `Привет, ${senderName}! Напоминаю список важных задач для слёта: ${tasksList}. Давайте дружно закроем их до выезда!`;
+      }
+    } else {
+      if (swearingLevel === "high") {
+        text = `Ахуеть, бля! Все задачи по слёту выполнены! Команда просто зверюги! Можно расслабиться и наливать чаёк у костра!`;
+      } else {
+        text = `Отличные новости! Все походные задачи команды успешно закрыты! Мы полностью готовы к слёту!`;
+      }
+    }
+  } else if (isKnotsQuery) {
+    adapterStyleUsed = "Инструктаж по узлам";
+    if (swearingLevel === "high") {
+      text = `Слышь, ${senderName}! Учись вязки узлов, бля! Вот тебе схема: Булинь, Прусик, Восьмерка и Стремя! Свяжи байдарку так, чтоб на волне не уплыла нахуй!`;
+    } else {
+      text = `Привет, ${senderName}! Держи наглядную схему вязки основных туристических узлов (Булинь, Прусик, Восьмерка, Грейпвайн) для слёта и похода!`;
+    }
+    imageUrl = KNOTS_DIAGRAM_SVG;
+    attachments = [{ id: "att_knots", title: "Схемы вязки туристических узлов", url: KNOTS_DIAGRAM_SVG, type: "knots" }];
+  } else if (isOrientQuery) {
+    adapterStyleUsed = "Ориентирование на местности";
+    if (swearingLevel === "high") {
+      text = `Слышь, ${senderName}! Держи карту и знаки спортивного ориентирования, бля! Внимательно смотри легенду КП, чтоб не уйти в соседнее болото нахуй!`;
+    } else {
+      text = `Эй, ${senderName}! Вот официальная условная таблица топографических знаков для спортивного ориентирования на слёте!`;
+    }
+    imageUrl = ORIENTEERING_SIGNS_SVG;
+    attachments = [{ id: "att_orient", title: "Знаки и символы спортивного ориентирования", url: ORIENTEERING_SIGNS_SVG, type: "orienteering" }];
+  } else if (isScheduleQuery) {
+    adapterStyleUsed = "График этапов слёта";
+    if (swearingLevel === "high") {
+      text = `Так, ${senderName}, вот тебе почасовой график соревнований на слёте, бля! Не проспи свой этап, а то команду дисквалифицируют нахуй!`;
+    } else {
+      text = `Привет, ${senderName}! Направляю расписание и график проведения соревновательных этапов нашего турслёта!`;
+    }
+    imageUrl = CONTEST_SCHEDULE_SVG;
+    attachments = [{ id: "att_sched", title: "График соревнований и этапов слёта", url: CONTEST_SCHEDULE_SVG, type: "schedule" }];
+  } else if (isContestQuery) {
+    adapterStyleUsed = "Конкурсная программа слёта";
+    const contestList = (contests || []).map((c: any) => `🏆 "${c.title}" (Капитан: ${c.captainName}, Место: ${c.place || "в процессе"})`).join("\n");
+    if (swearingLevel === "high") {
+      text = `Слышь, ${senderName}! Наш конкурсный список на слёте — огонь, бля:\n${contestList || "Пока конкурсы не внесены"}\nПрикрепляю схемы ориентирования, узлов и график соревнований! Порвём всех нахуй!`;
+    } else {
+      text = `Привет, ${senderName}! Вот программа конкурсов нашей команды на турслёте:\n${contestList || "Конкурсы готовятся"}\nВысылаю учебные схемы, карты и график этапов!`;
+    }
+    imageUrl = ORIENTEERING_SIGNS_SVG;
+    attachments = [
+      { id: "att_1", title: "Знаки спортивного ориентирования", url: ORIENTEERING_SIGNS_SVG, type: "orienteering" },
+      { id: "att_2", title: "Схемы туристических узлов", url: KNOTS_DIAGRAM_SVG, type: "knots" },
+      { id: "att_3", title: "График соревнований и этапов", url: CONTEST_SCHEDULE_SVG, type: "schedule" }
+    ];
+  } else if (hasInventoryKeywords) {
+    adapterStyleUsed = "Проверка снаряжения";
+    const invList = (inventoryItems || []).map((i: any) => `"${i.name}" [Состояние: ${i.condition}] (Хранитель: ${i.responsibleName})`).join("; ");
+    if (invList) {
+      if (swearingLevel === "high") {
+        text = `Так, ${senderName}, по шмоткам и снаряге расклад такой, бля: ${invList}! Хранители вечно где-то тусят, так что перед выездом проверьте дыры в палаточных тентах и не просрите пилы нахуй!`;
+      } else {
+        text = `Вот реестр нашего общекомандного имущества и снаряжения: ${invList}. Убедитесь, что всё сухое и готово к походу!`;
+      }
+    } else {
+      text = `Инвентарь пока пуст. Зарегистрируйте палатки, котлы и топоры в админке!`;
+    }
   } else {
-    // Реакция на психотип (15 вариантов)
+    // Highly tailored mock response for all 15 psychotypes
     switch (detectedPsychotype) {
       case "Душнила-контролёр":
         adapterStyleUsed = "Душное тушение";
@@ -423,6 +754,7 @@ function generateMockNegodyaiResponse(
           text = `Уважаемый финансовый аудитор ${senderName}! Ваш Excel-запрос принят, но мы тут у костра сидим — давай просто петь песни и жарить сосиски!`;
         }
         break;
+
       case "Паникёр-истерик":
         adapterStyleUsed = "Психотерапия пинком";
         if (swearingLevel === "high") {
@@ -433,6 +765,7 @@ function generateMockNegodyaiResponse(
           text = `Спокойствие! ${senderName}, паниковать в диком лесу вредно для нервов. Мы с вами, палатка прочная, костер горит — всё будет отлично!`;
         }
         break;
+
       case "Бунтарь-анархист":
         adapterStyleUsed = "Поддержка бунта";
         if (swearingLevel === "high") {
@@ -443,6 +776,7 @@ function generateMockNegodyaiResponse(
           text = `Наш человек! Правила созданы для того, чтобы их весело нарушать под треск сосновых веток. Поддерживаю протест!`;
         }
         break;
+
       case "Походный шеф-повар":
         adapterStyleUsed = "Поварской поклон";
         if (swearingLevel === "high") {
@@ -453,6 +787,7 @@ function generateMockNegodyaiResponse(
           text = `Шеф-повару уважение! На твоей стряпне держится весь моральный дух похода. Корми нас, кормилец, мы ценим твой труд!`;
         }
         break;
+
       case "Гитарист-романтик":
         adapterStyleUsed = "Подпевание в тон";
         if (swearingLevel === "high") {
@@ -463,6 +798,7 @@ function generateMockNegodyaiResponse(
           text = `Музыкальный вечер объявляется открытым! ${senderName}, сыграй нам что-нибудь душевное. Гитара у костра — лучшее в походе!`;
         }
         break;
+
       case "Ленивый лежебока":
         adapterStyleUsed = "Пинание сони";
         if (swearingLevel === "high") {
@@ -473,6 +809,7 @@ function generateMockNegodyaiResponse(
           text = `Соня на связи! ${senderName}, просыпайся, пора на свежий воздух. Утро давно началось, все дела уже ждут!`;
         }
         break;
+
       case "Инста-туристка":
         adapterStyleUsed = "Помощь в поиске кадра";
         if (swearingLevel === "high") {
@@ -483,6 +820,7 @@ function generateMockNegodyaiResponse(
           text = `Наш главный репортер на связи! ${senderName}, кадры получаются супер, но не забывай смотреть под ноги и дышать чистым воздухом!`;
         }
         break;
+
       case "Клещевой ипохондрик":
         adapterStyleUsed = "Репеллентный стеб";
         if (swearingLevel === "high") {
@@ -493,6 +831,7 @@ function generateMockNegodyaiResponse(
           text = `Безопасность прежде всего! ${senderName}, не волнуйся, мы тебя осмотрим вечером у костра. Все живы и здоровы будем!`;
         }
         break;
+
       case "Бывалый выживальщик":
         adapterStyleUsed = "Выживальческий юмор";
         if (swearingLevel === "high") {
@@ -503,6 +842,7 @@ function generateMockNegodyaiResponse(
           text = `Настоящий профи лесного дела! ${senderName}, твоя экипировка впечатляет. Помоги нам разжечь дрова, они сыроваты после дождя.`;
         }
         break;
+
       case "Спортивный темп-лидер":
         adapterStyleUsed = "Осаживание лося";
         if (swearingLevel === "high") {
@@ -513,6 +853,7 @@ function generateMockNegodyaiResponse(
           text = `Спортсмен, потише! Дай ребятам насладиться лесом, а не просто бежать марафон по болотам. Давай сделаем привал!`;
         }
         break;
+
       case "Алко-турист":
         adapterStyleUsed = "Алко-кореш";
         if (swearingLevel === "high") {
@@ -523,6 +864,7 @@ function generateMockNegodyaiResponse(
           text = `Ого, веселье идет полным ходом! Наш главный ценитель походных напитков на связи. Главное — держись ближе к палаточному городку!`;
         }
         break;
+
       case "Эко-защитник":
         adapterStyleUsed = "Зеленый привет";
         if (swearingLevel === "high") {
@@ -533,6 +875,7 @@ function generateMockNegodyaiResponse(
           text = `Уважение к природе — закон! ${senderName}, мы обязательно соберем весь мусор до единого фантика. Лес ответит нам взаимностью!`;
         }
         break;
+
       case "Халявщик-забываха":
         adapterStyleUsed = "Дружеский нагоняй";
         if (swearingLevel === "high") {
@@ -543,6 +886,7 @@ function generateMockNegodyaiResponse(
           text = `Ну ты даешь! Опять забыл всё снаряжение. Хорошо, что банда Негодяев своих в беде не бросает — поделимся и ложкой, и палаткой, заходи!`;
         }
         break;
+
       case "Весельчак-балагур":
         adapterStyleUsed = "Угарный перепал";
         if (swearingLevel === "high") {
@@ -553,7 +897,9 @@ function generateMockNegodyaiResponse(
           text = `Шутка огонь! ${senderName}, с тобой хоть в тайгу, хоть в горы. Всегда поднимешь настроение банде!`;
         }
         break;
-      default: // Тихий философ
+
+      case "Тихий философ":
+      default:
         adapterStyleUsed = "Дзенский угар";
         if (swearingLevel === "high") {
           text = `Уфф бля, ${senderName}, загнул глубоко! Жизнь — это просто вспышка спички у вечного костра, нахуй. Наливай чай, слушай треск сосны и лови космический дзен, пока тучи не разогнали наш шабаш!`;
@@ -571,225 +917,32 @@ function generateMockNegodyaiResponse(
     detectedPsychotype,
     detectedPsychotypeExplanation,
     adapterStyleUsed,
+    imageUrl,
+    attachments
   };
 }
 
-// ========== ОСНОВНОЙ ОБРАБОТЧИК ДЛЯ MAX (с проверкой) ==========
-app.post("/api/bot-respond", async (req, res) => {
-  try {
-    // Извлечение текста и имени из структуры MAX
-    let messageText = '';
-    let senderName = '';
-    let senderNickname = '';
+// Vite Server middleware integration for dev-mode or static build distribution of compiled files
+async function startServer() {
+  await initDb();
 
-    if (req.body.message && typeof req.body.message === 'object') {
-      messageText = req.body.message.body?.text || req.body.message.text || '';
-      senderName = req.body.message.sender?.name || '';
-      senderNickname = req.body.message.sender?.name || '';
-    } else {
-      messageText = req.body.message || '';
-      senderName = req.body.senderName || '';
-      senderNickname = req.body.senderNickname || '';
-    }
-
-    if (!messageText || messageText.trim() === "") {
-      console.error("No message text in request:", req.body);
-      return res.status(400).json({ error: "Message is required" });
-    }
-
-    // Проверка: отвечать только в личке или если сообщение начинается с "Бот"
-    const chatType = req.body.message?.recipient?.chat_type || 'dialog';
-    let shouldReply = false;
-    if (chatType === 'dialog') {
-      shouldReply = true;
-    } else {
-      const lowerMsg = messageText.toLowerCase();
-      if (lowerMsg.startsWith('бот')) {
-        shouldReply = true;
-      }
-    }
-
-    if (!shouldReply) {
-      console.log("🔇 Сообщение проигнорировано (не адресовано боту)");
-      return res.status(200).send('OK');
-    }
-
-    const normSenderName = senderName || "Анонимный Негодяй";
-    const normSenderNickname = senderNickname || normSenderName.toLowerCase().replace(/\s+/g, "_");
-
-    // Регистрация участника в БД, если новый
-    const currentParticipants = getParticipants();
-    let existingP = currentParticipants.find(
-      (p: any) => p.name === normSenderName || p.nickname === normSenderNickname
-    );
-
-    if (!existingP) {
-      const isFemale =
-        normSenderName.endsWith("а") ||
-        normSenderName.endsWith("я") ||
-        normSenderName.endsWith("ка") ||
-        normSenderName.toLowerCase().includes("иришка") ||
-        normSenderName.toLowerCase().includes("булочка");
-
-      const currentExcursions = getExcursions();
-      const activeCost = currentExcursions
-        .filter((e: any) => e.isActive)
-        .reduce((acc: number, curr: any) => acc + (isFemale ? (curr.costGirls ?? curr.costPerPerson ?? 3500) : (curr.costBoys ?? curr.costPerPerson ?? 5000)), 0);
-
-      existingP = {
-        id: "p_" + Date.now(),
-        name: normSenderName,
-        nickname: normSenderNickname,
-        psychotype: "Весельчак-балагур",
-        avatar: isFemale ? "💁‍♀️" : "🏕️",
-        paidAmount: 0,
-        totalCost: activeCost,
-        debtAmount: activeCost,
-        joined: true,
-        birthday: "",
-        joinedYear: new Date().getFullYear(),
-        skippedYears: [],
-        gender: isFemale ? "female" : "male"
-      };
-      addOrUpdateParticipant(existingP);
-    }
-
-    // Сохраняем сообщение пользователя в истории
-    const userMsg = {
-      id: "msg_" + Date.now() + "_user",
-      senderName: normSenderName,
-      senderNickname: normSenderNickname,
-      senderPsychotype: existingP.psychotype || "Весельчак-балагур",
-      text: messageText,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      isBot: false
-    };
-    addMessage(userMsg);
-
-    // Генерируем ответ бота
-    const payload = await generateBotResponseInternal({
-      ...req.body,
-      message: messageText,
-      senderName: normSenderName,
-      senderNickname: normSenderNickname,
-      senderPsychotype: existingP.psychotype,
-      participants: getParticipants(),
-      excursions: getExcursions(),
-      tasks: getTasks(),
-      menuItems: getMenuItems(),
-      groceryItems: getGroceryItems(),
-      inventoryItems: getInventoryItems(),
-      debts: getParticipants().map((p: any) => ({
-        name: p.name,
-        nickname: p.nickname,
-        paidAmount: p.paidAmount,
-        totalCost: p.totalCost,
-        debtAmount: p.debtAmount
-      }))
+  if (process.env.NODE_ENV !== "production") {
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: "spa",
     });
-
-    // Сохраняем ответ бота
-    const botMsg = {
-      id: "bot_" + Date.now() + "_res",
-      senderName: "Бот Максимка",
-      senderNickname: "negodyai_bot",
-      senderPsychotype: "ИИ Главный Негодяй",
-      text: payload.text || "А фиг его знает, бля, что ответить! Давай на сплав ехать!",
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      isBot: true,
-      detectedPsychotypeExplanation: payload.detectedPsychotypeExplanation || "Подстроился под общение.",
-      adapterStyleUsed: payload.adapterStyleUsed || "Угарный походник"
-    };
-    addMessage(botMsg);
-
-    // Автоопределение психотипа, если включено
-    const botConfig = getBotConfig();
-    if (botConfig.autoDetectPsychotype && payload.detectedPsychotype) {
-      existingP.psychotype = payload.detectedPsychotype;
-      addOrUpdateParticipant(existingP);
-    }
-
-    return res.json(payload);
-  } catch (error: any) {
-    console.error("Express API error:", error);
-    return res.status(500).json({ error: "Internal Server Error" });
+    app.use(vite.middlewares);
+  } else {
+    const distPath = path.join(process.cwd(), "dist");
+    app.use(express.static(distPath));
+    app.get("*", (req, res) => {
+      res.sendFile(path.join(distPath, "index.html"));
+    });
   }
-});
 
-// ========== API синхронизации и администрирования ==========
-app.get("/api/sync", (req, res) => {
-  res.json({
-    participants: getParticipants(),
-    excursions: getExcursions(),
-    tasks: getTasks(),
-    menuItems: getMenuItems(),
-    groceryItems: getGroceryItems(),
-    inventoryItems: getInventoryItems(),
-    botConfig: getBotConfig(),
-    contests: getContests(),
-    messages: getMessages()
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`[Negodyai MAX Server] Running on http://localhost:${PORT}`);
   });
-});
+}
 
-app.post("/api/sync", (req, res) => {
-  try {
-    console.log("=== POST /api/sync ===");
-    console.log("Received body keys:", Object.keys(req.body));
-    const { participants, excursions, tasks, menuItems, groceryItems, inventoryItems, botConfig, contests, messages } = req.body;
-    
-    if (excursions) {
-      console.log(`Saving excursions: count=${excursions.length}`);
-      saveExcursions(excursions);
-      const afterSave = getExcursions();
-      console.log(`After save, excursions in DB: ${afterSave.length}`);
-    }
-    if (participants) {
-      console.log(`Saving participants: count=${participants.length}`);
-      saveParticipants(participants);
-    }
-    if (tasks) {
-      console.log(`Saving tasks: count=${tasks.length}`);
-      saveTasks(tasks);
-    }
-    if (menuItems) saveMenuItems(menuItems);
-    if (groceryItems) saveGroceryItems(groceryItems);
-    if (inventoryItems) saveInventoryItems(inventoryItems);
-    if (botConfig) saveBotConfig(botConfig);
-    if (contests) saveContests(contests);
-    if (messages) saveMessages(messages);
-    
-    res.json({ success: true });
-  } catch (err: any) {
-    console.error("Error updating server sync:", err);
-    res.status(500).json({ error: "Failed to update sync cache" });
-  }
-});
-
-app.post("/api/admin/login", (req, res) => {
-  const { username, password } = req.body;
-  if (username === "admin" && password === getAdminPassword()) {
-    return res.json({ success: true, message: "Вы вошли как администратор!" });
-  }
-  return res.status(401).json({ success: false, error: "Неправильный логин или пароль" });
-});
-
-app.post("/api/admin/change-password", (req, res) => {
-  const { newPassword } = req.body;
-  if (!newPassword || newPassword.trim() === "") {
-    return res.status(400).json({ success: false, error: "Пароль не может быть пустым" });
-  }
-  saveAdminPassword(newPassword);
-  return res.json({ success: true, message: "Пароль администратора успешно изменен!" });
-});
-
-// ========== РАЗДАЧА СТАТИКИ ==========
-const distPath = path.join(process.cwd(), "dist");
-app.use(express.static(distPath));
-app.get("*", (req, res) => {
-  res.sendFile(path.join(distPath, "index.html"));
-});
-
-// ========== ЗАПУСК СЕРВЕРА ==========
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`[Negodyai MAX Server] Running on http://localhost:${PORT}`);
-});
+startServer();

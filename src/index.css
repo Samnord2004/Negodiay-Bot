@@ -1,1 +1,28 @@
 @import "tailwindcss";
+
+/* Custom prominent visible scrollbars for chat and scrolling panels */
+.custom-chat-scrollbar::-webkit-scrollbar {
+  width: 12px;
+}
+
+.custom-chat-scrollbar::-webkit-scrollbar-track {
+  background: #fde68a; /* amber-200 */
+  border-radius: 8px;
+  border: 1px solid #f59e0b;
+}
+
+.custom-chat-scrollbar::-webkit-scrollbar-thumb {
+  background: #dc2626; /* red-600 */
+  border-radius: 8px;
+  border: 2px solid #fde68a;
+}
+
+.custom-chat-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #991b1b; /* red-800 */
+}
+
+/* Firefox */
+.custom-chat-scrollbar {
+  scrollbar-width: auto;
+  scrollbar-color: #dc2626 #fde68a;
+}
