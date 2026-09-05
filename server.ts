@@ -8,6 +8,12 @@ import {
   getParticipants,
   saveParticipants,
   addOrUpdateParticipant,
+  approveParticipant,
+  rejectParticipant,
+  updateParticipantRole,
+  updateParticipantPassword,
+  updateParticipantBiometrics,
+  registerNewParticipant,
   getExcursions,
   saveExcursions,
   getTasks,
@@ -26,7 +32,27 @@ import {
   addMessage,
   saveMessages,
   getAdminPassword,
-  saveAdminPassword
+  saveAdminPassword,
+  getPhotos,
+  addPhoto,
+  deletePhoto,
+  togglePhotoLike,
+  getTeamDocuments,
+  addTeamDocument,
+  deleteTeamDocument,
+  getFundRecords,
+  saveFundRecords,
+  updateFundRecord,
+  getCreativityIdeas,
+  addCreativityIdea,
+  updateCreativityIdea,
+  toggleIdeaVote,
+  addIdeaComment,
+  getStories,
+  addStory,
+  updateStory,
+  deleteStory,
+  saveStories
 } from "./db";
 import { ORIENTEERING_SIGNS_SVG, KNOTS_DIAGRAM_SVG, CONTEST_SCHEDULE_SVG } from "./src/mockData";
 
@@ -36,7 +62,9 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
 
-app.use(express.json());
+// High body limits to allow lossless photo archives without file size limits as requested
+app.use(express.json({ limit: "100mb" }));
+app.use(express.urlencoded({ limit: "100mb", extended: true }));
 
 // Lazy-initialize Gemini SDK to prevent crashes if key is initially absent
 let aiClient: GoogleGenAI | null = null;
@@ -185,7 +213,8 @@ async function generateBotResponseInternal(body: any): Promise<any> {
       menuItems,
       groceryItems,
       inventoryItems,
-      contests
+      contests,
+      participants
     );
     return {
       ...mockResult,
@@ -257,6 +286,12 @@ ${inventoryContext}
 === ДНИ РОЖДЕНИЯ НАШЕЙ БАНДЫ ===
 ${birthdayContext}
 ${todayBirthdaysMention}
+
+=== ФИРМЕННЫЕ КРЫЛАТЫЕ ВЫРАЖЕНИЯ И ДЕВИЗЫ БАНДЫ НЕГОДЯЕВ (СТРОГО СОБЛЮДАЙ!) ===
+1. Если спрашивают "Как гуляет негодяй?" (или вариации этого вопроса) — твой ответ СТРОГО И ЕДИНСТВЕННО: "Ахуенно!" (БЕЗ ВСЯКИХ КОММЕНТАРИЕВ, СЛОВ ИЛИ СМАЙЛОВ ПОСЛЕ СЛОВА "Ахуенно!").
+2. "Пизда на глаза" — фирменный ответ на многие вопросы или сильное удивление.
+3. "Записьдень" (от слова "запиздень") — использовать когда кто-то слишком много пиздит или занудствует.
+4. "Запись дубля" — фирменный тост: "За пизду бля!". Отвечай "За пизду бля!".
 
 === ИНСТРУКЦИИ ПО ТВОЕМУ ОТВЕТУ (ОБЯЗАТЕЛЬНО К ИСПОЛНЕНИЮ!) ===
 1. ОТВЕЧАЙ СТРОГО ТОМУ, КТО ЗАДАЛ ВОПРОС! В самом первом предложении твоего ответа ("text") ты обязан ЛИЧНО в дружеской, походной или подкольной форме обратиться к собеседнику ${senderName} (или по его никнейму @${senderNickname}). Например: "Слышь, ${senderName}, по поводу...", "Эй, @${senderNickname}, слушай сюда...", "${senderName}, косячник походный, держи расклад...".
@@ -455,7 +490,7 @@ app.post("/api/bot-respond", async (req, res) => {
   }
 });
 
-// Sync endpoints to preserve shared state between clients and the Telegram Bot
+// Sync endpoints to preserve shared state backed by PostgreSQL
 app.get("/api/sync", (req, res) => {
   res.json({
     participants: getParticipants(),
@@ -466,13 +501,30 @@ app.get("/api/sync", (req, res) => {
     inventoryItems: getInventoryItems(),
     botConfig: getBotConfig(),
     contests: getContests(),
-    messages: getMessages()
+    messages: getMessages(),
+    photos: getPhotos(),
+    documents: getTeamDocuments(),
+    fundRecords: getFundRecords(),
+    creativityIdeas: getCreativityIdeas(),
+    stories: getStories()
   });
 });
 
 app.post("/api/sync", (req, res) => {
   try {
-    const { participants, excursions, tasks, menuItems, groceryItems, inventoryItems, botConfig, contests, messages } = req.body;
+    const { 
+      participants, 
+      excursions, 
+      tasks, 
+      menuItems, 
+      groceryItems, 
+      inventoryItems, 
+      botConfig, 
+      contests, 
+      messages,
+      fundRecords,
+      stories 
+    } = req.body;
     if (participants) saveParticipants(participants);
     if (excursions) saveExcursions(excursions);
     if (tasks) saveTasks(tasks);
@@ -482,11 +534,187 @@ app.post("/api/sync", (req, res) => {
     if (botConfig) saveBotConfig(botConfig);
     if (contests) saveContests(contests);
     if (messages) saveMessages(messages);
+    if (fundRecords) saveFundRecords(fundRecords);
+    if (stories) saveStories(stories);
     res.json({ success: true });
   } catch (err: any) {
     console.error("Error updating server sync:", err);
     res.status(500).json({ error: "Failed to update sync cache" });
   }
+});
+
+// Auth & Registration
+app.post("/api/auth/register", (req, res) => {
+  const { name, nickname, email, phone, password, verificationMethod, verificationCode, biometricEnabled, avatar } = req.body;
+  if (!name || !nickname) {
+    return res.status(400).json({ success: false, error: "Укажите имя и позывной" });
+  }
+  
+  if (verificationCode && verificationCode.length !== 4 && verificationCode !== "1234") {
+    return res.status(400).json({ success: false, error: "Неверный код подтверждения" });
+  }
+
+  const newId = "user_" + Date.now();
+  const newParticipant = {
+    id: newId,
+    name,
+    nickname,
+    psychotype: "Новичок-энтузиаст",
+    avatar: avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(nickname)}`,
+    paidAmount: 0,
+    totalCost: 15000,
+    debtAmount: 15000,
+    joined: false,
+    joinedYear: new Date().getFullYear(),
+    skippedYears: [],
+    gender: "male" as const,
+    role: "member" as const,
+    email: email || "",
+    phone: phone || "",
+    password: password || "123",
+    accountStatus: "pending" as const, // Requires admin approval!
+    biometricEnabled: Boolean(biometricEnabled)
+  };
+
+  registerNewParticipant(newParticipant);
+  res.json({
+    success: true,
+    message: "Заявка на регистрацию принята! Ожидайте подтверждения от администратора команды.",
+    user: newParticipant
+  });
+});
+
+app.post("/api/auth/login", (req, res) => {
+  const { identifier, password, useBiometrics } = req.body;
+  const participants = getParticipants();
+
+  // Admin special login check
+  if ((identifier === "admin" || identifier === "admin@negodyai.club") && password === getAdminPassword()) {
+    const adminUser = participants.find(p => p.role === "admin") || {
+      id: "admin_user",
+      name: "Главный Администратор",
+      nickname: "Admin",
+      role: "admin",
+      accountStatus: "active",
+      avatar: "https://api.dicebear.com/7.x/bottts/svg?seed=Admin",
+      biometricEnabled: true,
+      psychotype: "Генералиссимус-стратег"
+    };
+    return res.json({
+      success: true,
+      user: { ...adminUser, role: "admin" }
+    });
+  }
+
+  const user = participants.find(p => 
+    p.nickname.toLowerCase() === identifier?.toLowerCase() ||
+    p.name.toLowerCase() === identifier?.toLowerCase() ||
+    (p.email && p.email.toLowerCase() === identifier?.toLowerCase()) ||
+    (p.phone && p.phone === identifier)
+  );
+
+  if (!user) {
+    return res.status(401).json({ success: false, error: "Пользователь не найден. Проверьте позывной, email или телефон." });
+  }
+
+  if (user.accountStatus === "pending") {
+    return res.status(403).json({ success: false, error: "Ваша регистрация ожидает подтверждения администратором команды." });
+  }
+
+  if (user.accountStatus === "rejected") {
+    return res.status(403).json({ success: false, error: "Ваша регистрация была отклонена администратором." });
+  }
+
+  if (useBiometrics) {
+    if (!user.biometricEnabled) {
+      return res.status(400).json({ success: false, error: "Биометрия (Touch/Face ID) не подключена для этого аккаунта" });
+    }
+    return res.json({ success: true, user });
+  }
+
+  if (user.password && user.password !== password) {
+    return res.status(401).json({ success: false, error: "Неверный пароль" });
+  }
+
+  return res.json({ success: true, user });
+});
+
+app.post("/api/auth/change-password", (req, res) => {
+  const { userId, oldPassword, newPassword } = req.body;
+  if (!newPassword || newPassword.trim() === "") {
+    return res.status(400).json({ success: false, error: "Новый пароль не может быть пустым" });
+  }
+  if (userId === "admin_user" || userId === "admin") {
+    saveAdminPassword(newPassword);
+    return res.json({ success: true, message: "Пароль администратора изменен" });
+  }
+  const user = getParticipants().find(p => p.id === userId);
+  if (!user) {
+    return res.status(404).json({ success: false, error: "Пользователь не найден" });
+  }
+  if (oldPassword && user.password && user.password !== oldPassword) {
+    return res.status(400).json({ success: false, error: "Текущий пароль указан неверно" });
+  }
+  updateParticipantPassword(userId, newPassword);
+  return res.json({ success: true, message: "Пароль успешно обновлен" });
+});
+
+app.post("/api/auth/toggle-biometrics", (req, res) => {
+  const { userId, enabled } = req.body;
+  updateParticipantBiometrics(userId, Boolean(enabled));
+  res.json({ success: true, enabled: Boolean(enabled) });
+});
+
+// Update personal user profile
+app.post("/api/user/update-profile", (req, res) => {
+  const { userId, name, nickname, email, phone, avatar, birthday, joinedYear, psychotype, gender } = req.body;
+  if (!userId) {
+    return res.status(400).json({ success: false, error: "userId обязателен" });
+  }
+  const participants = getParticipants();
+  const existing = participants.find(p => p.id === userId);
+  if (!existing) {
+    return res.status(404).json({ success: false, error: "Пользователь не найден" });
+  }
+
+  const updated = {
+    ...existing,
+    name: name !== undefined && name.trim() !== "" ? name.trim() : existing.name,
+    nickname: nickname !== undefined && nickname.trim() !== "" ? nickname.trim().replace(/^@/, '') : existing.nickname,
+    email: email !== undefined ? email.trim() : existing.email,
+    phone: phone !== undefined ? phone.trim() : existing.phone,
+    avatar: avatar !== undefined && avatar.trim() !== "" ? avatar : existing.avatar,
+    birthday: birthday !== undefined ? birthday : existing.birthday,
+    joinedYear: joinedYear !== undefined && !isNaN(Number(joinedYear)) ? Number(joinedYear) : existing.joinedYear,
+    psychotype: psychotype !== undefined ? psychotype : existing.psychotype,
+    gender: gender === "female" ? ("female" as const) : ("male" as const)
+  };
+
+  addOrUpdateParticipant(updated);
+  res.json({ success: true, message: "Профиль успешно обновлен", user: updated });
+});
+
+// Admin Moderation
+app.post("/api/admin/approve-user", (req, res) => {
+  const { userId } = req.body;
+  approveParticipant(userId);
+  res.json({ success: true, message: "Участник успешно одобрен!" });
+});
+
+app.post("/api/admin/reject-user", (req, res) => {
+  const { userId } = req.body;
+  rejectParticipant(userId);
+  res.json({ success: true, message: "Заявка участника отклонена" });
+});
+
+app.post("/api/admin/set-role", (req, res) => {
+  const { userId, role } = req.body;
+  const validRoles = ["admin", "treasurer", "foreman", "designer", "assistant_captain", "keeper", "chef", "member"];
+  if (!validRoles.includes(role)) {
+    return res.status(400).json({ success: false, error: "Недопустимая роль" });
+  }
+  updateParticipantRole(userId, role);
+  res.json({ success: true, message: `Роль успешно изменена на ${role}` });
 });
 
 app.post("/api/admin/login", (req, res) => {
@@ -506,9 +734,277 @@ app.post("/api/admin/change-password", (req, res) => {
   return res.json({ success: true, message: "Пароль администратора успешно изменен!" });
 });
 
-// МАКС Messenger Bot API is fully supported through the unified "/api/bot-respond" endpoint.
-// Corporate webhooks or chat platforms can trigger bot operations by requesting "/api/bot-respond" directly.
+// Gallery Photos
+app.get("/api/photos", (req, res) => {
+  res.json(getPhotos());
+});
 
+app.post("/api/photos", (req, res) => {
+  const { year, title, description, imageUrl, uploadedBy } = req.body;
+  if (!imageUrl || !title) {
+    return res.status(400).json({ success: false, error: "Заголовок и фото обязательны" });
+  }
+  const newPhoto = {
+    id: "photo_" + Date.now(),
+    year: parseInt(year, 10) || new Date().getFullYear(),
+    title,
+    description: description || "",
+    imageUrl,
+    uploadedBy: uploadedBy || "Негодяй",
+    uploadedAt: new Date().toISOString().split("T")[0],
+    likes: 0,
+    likedUserIds: []
+  };
+  addPhoto(newPhoto);
+  res.json({ success: true, photo: newPhoto });
+});
+
+app.delete("/api/photos/:id", (req, res) => {
+  deletePhoto(req.params.id);
+  res.json({ success: true });
+});
+
+app.post("/api/photos/:id/like", (req, res) => {
+  const { userId } = req.body;
+  if (!userId) return res.status(400).json({ error: "userId required" });
+  togglePhotoLike(req.params.id, userId);
+  res.json({ success: true, photos: getPhotos() });
+});
+
+// Documents
+app.get("/api/documents", (req, res) => {
+  res.json(getTeamDocuments());
+});
+
+app.post("/api/documents", (req, res) => {
+  const { category, title, description, fileUrl, fileName, fileType, content, uploadedBy } = req.body;
+  if (!title || !category) {
+    return res.status(400).json({ success: false, error: "Заполните название и раздел" });
+  }
+  const newDoc = {
+    id: "doc_" + Date.now(),
+    category,
+    title,
+    description: description || "",
+    fileUrl: fileUrl || undefined,
+    fileName: fileName || title + ".pdf",
+    fileType: fileType || "pdf",
+    content: content || undefined,
+    uploadedBy: uploadedBy || "Администратор",
+    uploadedAt: new Date().toISOString().split("T")[0]
+  };
+  addTeamDocument(newDoc);
+  res.json({ success: true, document: newDoc });
+});
+
+app.delete("/api/documents/:id", (req, res) => {
+  deleteTeamDocument(req.params.id);
+  res.json({ success: true });
+});
+
+// Fund Management
+app.get("/api/fund", (req, res) => {
+  res.json(getFundRecords());
+});
+
+app.post("/api/fund/update", (req, res) => {
+  const { id, isPaid, note, paidAt, amount } = req.body;
+  updateFundRecord(id, {
+    isPaid: Boolean(isPaid),
+    paidAt: isPaid ? (paidAt || new Date().toISOString().split("T")[0]) : undefined,
+    note: note || "",
+    amount: amount ? Number(amount) : undefined
+  });
+  res.json({ success: true, fundRecords: getFundRecords() });
+});
+
+// Creativity & Ideas
+app.get("/api/creativity", (req, res) => {
+  res.json(getCreativityIdeas());
+});
+
+app.post("/api/creativity", (req, res) => {
+  const { category, title, description, authorId, authorName, imageUrl, materialsBudget } = req.body;
+  if (!title || !category || !description) {
+    return res.status(400).json({ success: false, error: "Заполните категорию, название и описание идеи" });
+  }
+  const newIdea = {
+    id: "idea_" + Date.now(),
+    category,
+    title,
+    description,
+    authorId: authorId || "1",
+    authorName: authorName || "Негодяй",
+    imageUrl: imageUrl || undefined,
+    materialsBudget: materialsBudget || "",
+    status: "idea" as const,
+    votes: 1,
+    votedUserIds: [authorId || "1"],
+    comments: [],
+    createdAt: new Date().toISOString().split("T")[0]
+  };
+  addCreativityIdea(newIdea);
+  res.json({ success: true, idea: newIdea });
+});
+
+app.post("/api/creativity/:id/vote", (req, res) => {
+  const { userId } = req.body;
+  toggleIdeaVote(req.params.id, userId);
+  res.json({ success: true, ideas: getCreativityIdeas() });
+});
+
+app.post("/api/creativity/:id/comment", (req, res) => {
+  const { authorId, authorName, text } = req.body;
+  if (!text) return res.status(400).json({ error: "Text required" });
+  addIdeaComment(req.params.id, {
+    id: "cmt_" + Date.now(),
+    authorId,
+    authorName,
+    text,
+    createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ", " + new Date().toLocaleDateString()
+  });
+  res.json({ success: true, ideas: getCreativityIdeas() });
+});
+
+app.post("/api/creativity/:id/status", (req, res) => {
+  const { status } = req.body;
+  updateCreativityIdea(req.params.id, { status });
+  res.json({ success: true, ideas: getCreativityIdeas() });
+});
+
+// Team Stories & History endpoints
+app.get("/api/stories", (req, res) => {
+  res.json(getStories());
+});
+
+app.post("/api/stories", (req, res) => {
+  const { category, categoryTitle, title, content, photos, videos, authorName, year } = req.body;
+  if (!title || !content) {
+    return res.status(400).json({ error: "Title and content are required" });
+  }
+  const newStory = {
+    id: "story_" + Date.now(),
+    category: category || "custom",
+    categoryTitle: categoryTitle || "История команды",
+    title,
+    content,
+    photos: photos || [],
+    videos: videos || [],
+    authorName: authorName || "Негодяй",
+    year: year ? parseInt(year) : new Date().getFullYear(),
+    createdAt: new Date().toISOString().split("T")[0]
+  };
+  addStory(newStory);
+  res.json({ success: true, story: newStory, stories: getStories() });
+});
+
+app.put("/api/stories/:id", (req, res) => {
+  updateStory(req.params.id, req.body);
+  res.json({ success: true, stories: getStories() });
+});
+
+app.delete("/api/stories/:id", (req, res) => {
+  deleteStory(req.params.id);
+  res.json({ success: true, stories: getStories() });
+});
+
+// Participant internal chat message (with integrated Bot Maximka support)
+app.post("/api/chat/send", async (req, res) => {
+  const { senderName, senderNickname, senderPsychotype, text, imageUrl, attachments, triggerBot } = req.body;
+  if (!text && !imageUrl) {
+    return res.status(400).json({ error: "Message cannot be empty" });
+  }
+  const newMsg = {
+    id: "msg_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6),
+    senderName: senderName || "Участник",
+    senderNickname: senderNickname || "member",
+    senderPsychotype: senderPsychotype || "Негодяй",
+    text: text || "",
+    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    isBot: false,
+    imageUrl: imageUrl || undefined,
+    attachments: attachments || undefined
+  };
+  addMessage(newMsg);
+
+  // Check if bot should reply
+  const textLower = (text || "").toLowerCase();
+  const shouldBotAnswer = triggerBot ||
+    textLower.includes("бот") ||
+    textLower.includes("максимк") ||
+    textLower.includes("негодяй") ||
+    textLower.includes("как гуляет") ||
+    textLower.includes("днюх") ||
+    textLower.includes("рожден") ||
+    textLower.includes("именин") ||
+    textLower.includes("поздрав") ||
+    textLower.includes("задач") ||
+    textLower.includes("меню") ||
+    textLower.includes("продукт") ||
+    textLower.includes("еда") ||
+    textLower.includes("жрат") ||
+    textLower.includes("пожрать") ||
+    textLower.includes("конкурс") ||
+    textLower.includes("соревнован") ||
+    textLower.includes("турнир") ||
+    textLower.includes("долг") ||
+    textLower.includes("деньг") ||
+    textLower.includes("бабл") ||
+    textLower.includes("взнос") ||
+    textLower.includes("смет") ||
+    textLower.includes("инвентар") ||
+    textLower.includes("снаряг") ||
+    textLower.includes("палатк") ||
+    textLower.includes("тост") ||
+    textLower.includes("запись") ||
+    textLower.includes("?") ||
+    textLower.startsWith("/");
+
+  let botMessage = null;
+  if (shouldBotAnswer) {
+    try {
+      const payload = await generateBotResponseInternal({
+        message: text,
+        senderName: newMsg.senderName,
+        senderNickname: newMsg.senderNickname,
+        senderPsychotype: newMsg.senderPsychotype,
+        participants: getParticipants(),
+        excursions: getExcursions(),
+        tasks: getTasks(),
+        menuItems: getMenuItems(),
+        groceryItems: getGroceryItems(),
+        inventoryItems: getInventoryItems(),
+        contests: getContests(),
+        debts: getParticipants().map((p: any) => ({
+          name: p.name,
+          nickname: p.nickname,
+          paidAmount: p.paidAmount,
+          totalCost: p.totalCost,
+          debtAmount: p.debtAmount
+        }))
+      });
+
+      botMessage = {
+        id: "bot_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6),
+        senderName: "Бот Максимка",
+        senderNickname: "negodyai_bot",
+        senderPsychotype: "ИИ Главный Негодяй",
+        text: payload.text || "А фиг его знает, бля, что ответить! Собираемся на слёт!",
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        isBot: true,
+        detectedPsychotypeExplanation: payload.detectedPsychotypeExplanation || "Ответил в походном стиле.",
+        adapterStyleUsed: payload.adapterStyleUsed || "Угарный Негодяй",
+        imageUrl: payload.imageUrl,
+        attachments: payload.attachments
+      };
+      addMessage(botMessage);
+    } catch (e) {
+      console.error("Error auto-generating bot reply:", e);
+    }
+  }
+
+  res.json({ success: true, message: newMsg, botMessage });
+});
 
 // Fallback algorithm generating custom witty responses when Gemini is unconfigured or errors out
 function generateMockNegodyaiResponse(
@@ -522,7 +1018,8 @@ function generateMockNegodyaiResponse(
   menuItems?: any[],
   groceryItems?: any[],
   inventoryItems?: any[],
-  contests?: any[]
+  contests?: any[],
+  participants?: any[]
 ) {
   const msgLower = message.toLowerCase();
   let text = "";
@@ -532,31 +1029,98 @@ function generateMockNegodyaiResponse(
   let imageUrl: string | undefined = undefined;
   let attachments: any[] | undefined = undefined;
 
+  // Signature Negodyai Mottos and catchphrases
+  if (msgLower.includes("как гуляет негодяй") || msgLower.includes("как гуляет")) {
+    return {
+      text: "Ахуенно!",
+      detectedPsychotype: "Весельчак-балагур",
+      detectedPsychotypeExplanation: "Фирменный девиз команды Негодяи!",
+      adapterStyleUsed: "Фирменный девиз"
+    };
+  }
+
+  if (msgLower.includes("записьдень") || msgLower.includes("запиздень")) {
+    return {
+      text: "Записьдень!",
+      detectedPsychotype: "Душнила-контролёр",
+      detectedPsychotypeExplanation: "Кто-то слишком много пиздит — чистый записьдень!",
+      adapterStyleUsed: "Фирменное осаживание"
+    };
+  }
+
+  if (msgLower.includes("запись дубля") || msgLower.includes("дубль")) {
+    return {
+      text: "За пизду бля!",
+      detectedPsychotype: "Весельчак-балагур",
+      detectedPsychotypeExplanation: "Фирменный негодяйский тост!",
+      adapterStyleUsed: "Командный тост"
+    };
+  }
+
+  if (msgLower.includes("пизда на глаза")) {
+    return {
+      text: "Пизда на глаза!",
+      detectedPsychotype: "Весельчак-балагур",
+      detectedPsychotypeExplanation: "Фирменный ответ на вопросы или сильное удивление!",
+      adapterStyleUsed: "Фирменное удивление"
+    };
+  }
+
   // Check for birthday-related questions or trigger congrats!
-  const isBirthdayQuery = msgLower.includes("днюх") || msgLower.includes("рожден") || msgLower.includes("поздрав");
+  const isBirthdayQuery = msgLower.includes("днюх") || msgLower.includes("рожден") || msgLower.includes("именин") || msgLower.includes("поздрав");
   if (isBirthdayQuery) {
     adapterStyleUsed = "Днюшный походный разнос";
-    let targetName = senderName;
-    if (msgLower.includes("саня") || msgLower.includes("запева")) targetName = "Саня Запевала";
-    else if (msgLower.includes("хорек") || msgLower.includes("андрюх")) targetName = "Андрюха Хорёк";
-    else if (msgLower.includes("лех") || msgLower.includes("навига")) targetName = "Лёха Навигатор";
-    else if (msgLower.includes("ириш") || msgLower.includes("бул")) targetName = "Иришка Булочка";
-    else if (msgLower.includes("михалыч") || msgLower.includes("лесни")) targetName = "Михалыч Лесник";
-    else if (msgLower.includes("юр") || msgLower.includes("манг")) targetName = "Юрец Мангальщик";
-    else if (msgLower.includes("серег") || msgLower.includes("аккорд")) targetName = "Серёга Три-Аккорда";
-    else if (msgLower.includes("данчик") || msgLower.includes("кипиш") || msgLower.includes("выжив")) targetName = "Данчик Кипиш";
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1;
+    const currentDay = now.getDate();
 
-    if (swearingLevel === "high") {
-      text = `🎉 Ёбаный карась! У ${targetName} сегодня днюха, народ! Желаю тебе, чтоб печень не отказывала после походного спирта, бля! Чтоб палатка стояла железобетонно, кабаны за три версты оббегали, а тушенка всегда была чисто один кусковой жирнейший говяжий сок, нахуй! С праздником, Негодяй! 🍻🎂`;
-    } else if (swearingLevel === "medium") {
-      text = `🎉 Ух ты, у нас у ${targetName} днюха сегодня, бля! Поздравляю от всей души Негодяя! Желаю крепчайшего здоровья, сухой палатки, сочного плова в казане на костре и чтобы байдарки никогда нахуй не переворачивались! Ура команде! 🍲🥂`;
+    // Check today's birthdays
+    const todayList = (participants || []).filter((p: any) => {
+      if (!p.birthday) return false;
+      const parts = p.birthday.split('-');
+      if (parts.length < 3) return false;
+      return parseInt(parts[1], 10) === currentMonth && parseInt(parts[2], 10) === currentDay;
+    });
+
+    const upcomingList = (participants || [])
+      .filter((p: any) => p.birthday)
+      .map((p: any) => {
+        const parts = p.birthday.split('-');
+        return `${p.name} (${parts[2]}.${parts[1]})`;
+      })
+      .slice(0, 5)
+      .join(", ");
+
+    if (todayList.length > 0) {
+      const bdayPerson = todayList[0].name;
+      if (swearingLevel === "high") {
+        text = `🎉 Ёбаный карась! У ${bdayPerson} СЕГОДНЯ ДЕНЬ РОЖДЕНИЯ, банда! От лица всех Негодяев желаю: крепчайшей титановой печени, чтоб палатка стояла железобетонно, костер горел в любой ливень, а тушенка была чисто один кусковой говяжий сок, нахуй! С праздником, братуха! Наливай полнее! 🍻🎂🎈`;
+      } else if (swearingLevel === "medium") {
+        text = `🎉 Братва, внимание! Сегодня ДЕНЬ РОЖДЕНИЯ у нашего негодяя: ${bdayPerson}, бля! От всей команды поздравляем! Желаем здоровья, сочного плова в казане, сухих спальников и чтобы байдарки никогда нахуй не переворачивались! Ура имениннику! 🍲🥂🎂`;
+      } else {
+        text = `🎉 Внимание команде! Сегодня празднует ДЕНЬ РОЖДЕНИЯ наш соратник: ${bdayPerson}! Желаем отличных маршрутов, душевных песен у костра, крепкого здоровья и закрытия всех сборов! С Днём Рождения! 🎈⛺✨`;
+      }
     } else {
-      text = `🎉 Поздравляем нашего дорогого Негодяя ${targetName} с Днем Рождения! Желаем отличных походов, верных друзей у костра, теплого спальника и чтобы все сборы закрывались легко и позитивно! С Днём Рождения! 🎈⛺`;
+      let targetName = senderName;
+      if (msgLower.includes("саня") || msgLower.includes("запева")) targetName = "Саня Запевала";
+      else if (msgLower.includes("хорек") || msgLower.includes("андрюх")) targetName = "Андрюха Хорёк";
+      else if (msgLower.includes("лех") || msgLower.includes("навига")) targetName = "Лёха Навигатор";
+      else if (msgLower.includes("ириш") || msgLower.includes("бул")) targetName = "Иришка Булочка";
+      else if (msgLower.includes("михалыч") || msgLower.includes("лесни")) targetName = "Михалыч Лесник";
+      else if (msgLower.includes("юр") || msgLower.includes("манг")) targetName = "Юрец Мангальщик";
+      else if (msgLower.includes("данчик") || msgLower.includes("кипиш")) targetName = "Данчик Кипиш";
+
+      if (swearingLevel === "high") {
+        text = `🎂 Слышь, ${senderName}! Сегодня прямо сейчас никто не проставился, но вот походный календарь днюх банды: ${upcomingList}! А для ${targetName} желаю, чтоб жизнь была огонь, а в рюкзаке всегда звенело то, что надо, бля! 🍻`;
+      } else {
+        text = `🎂 Привет, ${senderName}! Я слежу за всеми днями рождения нашей команды! Ближайшие даты негодяев: ${upcomingList}. Готовим кружки и поздравления!`;
+      }
     }
+
     return {
       text,
       detectedPsychotype: "Весельчак-балагур",
-      detectedPsychotypeExplanation: "Поздравляет товарища с днюхой в самом лучшем куражном настроении!",
+      detectedPsychotypeExplanation: "Следит за днями рождениями и заряжает походное поздравление!",
       adapterStyleUsed
     };
   }

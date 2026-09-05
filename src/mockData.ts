@@ -1,4 +1,18 @@
-import { Participant, Excursion, ChatMessage, BotConfig, TaskItem, MenuItem, GroceryItem, InventoryItem, Contest } from './types';
+import { 
+  Participant, 
+  Excursion, 
+  ChatMessage, 
+  BotConfig, 
+  TaskItem, 
+  MenuItem, 
+  GroceryItem, 
+  InventoryItem, 
+  Contest,
+  GalleryPhoto,
+  TeamDocument,
+  FundRecord,
+  CreativityIdea
+} from './types';
 
 export interface PsychotypeMeta {
   name: string;
@@ -114,7 +128,13 @@ export const initialParticipants: Participant[] = [
     birthday: "1995-10-12",
     joinedYear: 2018,
     skippedYears: [2020, 2022],
-    gender: "male"
+    gender: "male",
+    role: "member",
+    email: "horek@negodyai.club",
+    phone: "+7 913 555-11-22",
+    accountStatus: "active",
+    biometricEnabled: true,
+    password: "123"
   },
   {
     id: "2",
@@ -126,10 +146,16 @@ export const initialParticipants: Participant[] = [
     totalCost: 8500,
     debtAmount: 0,
     joined: true,
-    birthday: "1994-05-22", // May 22 - Today!
+    birthday: "1994-09-04", // TODAY!
     joinedYear: 2019,
     skippedYears: [],
-    gender: "male"
+    gender: "male",
+    role: "member",
+    email: "sanya@negodyai.club",
+    phone: "+7 923 444-33-22",
+    accountStatus: "active",
+    biometricEnabled: true,
+    password: "123"
   },
   {
     id: "3",
@@ -141,10 +167,16 @@ export const initialParticipants: Participant[] = [
     totalCost: 8500,
     debtAmount: 2500,
     joined: true,
-    birthday: "1989-08-24",
+    birthday: "1989-09-09", // Upcoming in 5 days!
     joinedYear: 2018,
     skippedYears: [2021],
-    gender: "male"
+    gender: "male",
+    role: "admin",
+    email: "admin@negodyai.club",
+    phone: "+7 999 123-45-67",
+    accountStatus: "active",
+    biometricEnabled: true,
+    password: "admin"
   },
   {
     id: "4",
@@ -159,7 +191,13 @@ export const initialParticipants: Participant[] = [
     birthday: "1997-03-15",
     joinedYear: 2021,
     skippedYears: [],
-    gender: "female"
+    gender: "female",
+    role: "treasurer",
+    email: "treasurer@negodyai.club",
+    phone: "+7 905 777-88-99",
+    accountStatus: "active",
+    biometricEnabled: true,
+    password: "123"
   },
   {
     id: "5",
@@ -174,7 +212,13 @@ export const initialParticipants: Participant[] = [
     birthday: "1965-11-30",
     joinedYear: 2018,
     skippedYears: [],
-    gender: "male"
+    gender: "male",
+    role: "member",
+    email: "forest@negodyai.club",
+    phone: "+7 902 333-22-11",
+    accountStatus: "active",
+    biometricEnabled: false,
+    password: "123"
   },
   {
     id: "6",
@@ -189,7 +233,13 @@ export const initialParticipants: Participant[] = [
     birthday: "1986-05-25",
     joinedYear: 2020,
     skippedYears: [2023],
-    gender: "male"
+    gender: "male",
+    role: "member",
+    email: "yura@negodyai.club",
+    phone: "+7 912 666-55-44",
+    accountStatus: "active",
+    biometricEnabled: false,
+    password: "123"
   },
   {
     id: "7",
@@ -204,7 +254,13 @@ export const initialParticipants: Participant[] = [
     birthday: "1992-06-12",
     joinedYear: 2021,
     skippedYears: [2024],
-    gender: "male"
+    gender: "male",
+    role: "member",
+    email: "guitar@negodyai.club",
+    phone: "+7 918 888-99-00",
+    accountStatus: "active",
+    biometricEnabled: false,
+    password: "123"
   },
   {
     id: "8",
@@ -219,7 +275,34 @@ export const initialParticipants: Participant[] = [
     birthday: "1990-07-04",
     joinedYear: 2022,
     skippedYears: [],
-    gender: "male"
+    gender: "male",
+    role: "member",
+    email: "dan@negodyai.club",
+    phone: "+7 999 555-44-33",
+    accountStatus: "active",
+    biometricEnabled: false,
+    password: "123"
+  },
+  {
+    id: "9",
+    name: "Колян Новобранец",
+    nickname: "kolyan_new",
+    psychotype: "Весельчак-балагур",
+    avatar: "⛺",
+    paidAmount: 0,
+    totalCost: 8500,
+    debtAmount: 8500,
+    joined: false,
+    birthday: "1998-12-05",
+    joinedYear: 2026,
+    skippedYears: [],
+    gender: "male",
+    role: "member",
+    email: "kolyan@gmail.com",
+    phone: "+7 950 111-22-33",
+    accountStatus: "pending",
+    biometricEnabled: true,
+    password: "123"
   }
 ];
 
@@ -595,6 +678,389 @@ export const initialContests: Contest[] = [
     description: "Приготовление ресторанного блюда на костре из ограниченного набора продуктов: банка тушенки ГОСТ, крупа, овощи и костровые специи Юрца.",
     schedule: "Воскресенье, 13:00 - Начало готовки у мангальной зоны.",
     attachments: []
+  }
+];
+
+// Sample SVG photo representations for initial gallery
+export const PHOTO_CAMP_2026 = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="100%" height="100%"><rect width="800" height="500" fill="%230f172a"/><circle cx="680" cy="100" r="40" fill="%23fef08a" opacity="0.8"/><polygon points="0,500 250,220 500,500" fill="%231e293b"/><polygon points="300,500 550,260 800,500" fill="%23334155"/><rect y="420" width="800" height="80" fill="%2314532d"/><polygon points="180,440 240,320 300,440" fill="%23ea580c"/><polygon points="210,440 240,350 270,440" fill="%23facc15"/><circle cx="500" cy="410" r="35" fill="%23e11d48"/><path d="M470,430 Q500,340 530,430 Z" fill="%23fbbf24"/><text x="40" y="70" fill="%23f8fafc" font-size="28" font-weight="900" font-family="sans-serif">СЛЁТ НЕГОДЯЕВ 2026</text><text x="40" y="105" fill="%23f59e0b" font-size="16" font-family="sans-serif">Таёжная поляна • Подготовка лагеря и костров</text></svg>`;
+
+export const PHOTO_RAFT_2025 = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="100%" height="100%"><rect width="800" height="500" fill="%230284c7"/><path d="M0,280 Q200,240 400,280 T800,280 L800,500 L0,500 Z" fill="%230369a1"/><polygon points="200,320 600,320 550,380 250,380" fill="%23ca8a04"/><circle cx="320" cy="270" r="22" fill="%23ea580c"/><circle cx="480" cy="270" r="22" fill="%23e11d48"/><circle cx="400" cy="260" r="24" fill="%2316a34a"/><line x1="280" y1="280" x2="240" y2="370" stroke="%23f8fafc" stroke-width="8"/><line x1="520" y1="280" x2="560" y2="370" stroke="%23f8fafc" stroke-width="8"/><text x="40" y="70" fill="%23f8fafc" font-size="28" font-weight="900" font-family="sans-serif">СПЛАВ И ПОХОД 2025</text><text x="40" y="105" fill="%23fed7aa" font-size="16" font-family="sans-serif">Речные пороги и командный рафтинг</text></svg>`;
+
+export const PHOTO_BONFIRE_2024 = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="100%" height="100%"><rect width="800" height="500" fill="%2318181b"/><circle cx="400" cy="350" r="180" fill="%23ea580c" opacity="0.3"/><path d="M350,420 Q400,200 450,420 Q400,340 350,420 Z" fill="%23f97316"/><path d="M375,420 Q400,260 425,420 Z" fill="%23fde047"/><rect x="300" y="415" width="200" height="30" rx="10" fill="%23713f12"/><circle cx="240" cy="380" r="25" fill="%23f43f5e"/><circle cx="560" cy="380" r="25" fill="%233b82f6"/><text x="40" y="70" fill="%23f8fafc" font-size="28" font-weight="900" font-family="sans-serif">НОЧНОЙ КОСТЁР 2024</text><text x="40" y="105" fill="%23f59e0b" font-size="16" font-family="sans-serif">Песни до утра под гитару и костровой чай</text></svg>`;
+
+export const PHOTO_CARNIVAL_2023 = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="100%" height="100%"><rect width="800" height="500" fill="%234c0519"/><rect y="380" width="800" height="120" fill="%231c1917"/><polygon points="250,220 300,140 350,220" fill="%23e11d48"/><circle cx="300" cy="270" r="50" fill="%23fbbf24"/><circle cx="500" cy="270" r="50" fill="%2338bdf8"/><polygon points="450,220 500,140 550,220" fill="%2310b981"/><text x="40" y="70" fill="%23f8fafc" font-size="28" font-weight="900" font-family="sans-serif">КОНКУРС КАРНАВАЛА 2023</text><text x="40" y="105" fill="%23fbcfe8" font-size="16" font-family="sans-serif">Пираты сибирской тайги • 1-е место команды</text></svg>`;
+
+export const PHOTO_FIRST_RALLY_2022 = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="100%" height="100%"><rect width="800" height="500" fill="%23064e3b"/><circle cx="400" cy="180" r="110" fill="%23fef08a" opacity="0.6"/><polygon points="100,500 200,240 300,500" fill="%23022c22"/><polygon points="300,500 400,220 500,500" fill="%23065f46"/><polygon points="500,500 600,260 700,500" fill="%23022c22"/><text x="40" y="70" fill="%23f8fafc" font-size="28" font-weight="900" font-family="sans-serif">ПЕРВЫЙ СЛЁТ В БОРУ 2022</text><text x="40" y="105" fill="%236ee7b7" font-size="16" font-family="sans-serif">Историческое основание лагеря на Синих Скалах</text></svg>`;
+
+export const initialPhotos: GalleryPhoto[] = [
+  {
+    id: "photo_1",
+    year: 2026,
+    title: "Палаточный городок Негодяев 2026",
+    description: "Разбивка лагеря на Большой поляне у реки. Установка штабной палатки и кострового очага.",
+    imageUrl: PHOTO_CAMP_2026,
+    uploadedBy: "Лёха Навигатор",
+    uploadedAt: "2026-08-15",
+    likes: 18,
+    likedUserIds: ["1", "2", "3", "4"]
+  },
+  {
+    id: "photo_2",
+    year: 2025,
+    title: "Командный сплав по речным перекатам",
+    description: "Преодолели пороги 2-й категории сложности без переворотов. Все в восторге!",
+    imageUrl: PHOTO_RAFT_2025,
+    uploadedBy: "Андрюха Хорёк",
+    uploadedAt: "2025-07-20",
+    likes: 24,
+    likedUserIds: ["1", "2", "5", "6", "7"]
+  },
+  {
+    id: "photo_3",
+    year: 2024,
+    title: "Большой ночной костер и гитара",
+    description: "Саня Запевала исполнил всю дискографию Короля и Шута. Душевная костровая атмосфера.",
+    imageUrl: PHOTO_BONFIRE_2024,
+    uploadedBy: "Саня Запевала",
+    uploadedAt: "2024-06-28",
+    likes: 31,
+    likedUserIds: ["2", "3", "4", "7", "8"]
+  },
+  {
+    id: "photo_4",
+    year: 2023,
+    title: "Карнавальные костюмы 'Пираты тайги'",
+    description: "Взяли гран-при на слёте за лучшие образы и театрализованное представление лагеря.",
+    imageUrl: PHOTO_CARNIVAL_2023,
+    uploadedBy: "Иришка Булочка",
+    uploadedAt: "2023-08-10",
+    likes: 29,
+    likedUserIds: ["1", "4", "6"]
+  },
+  {
+    id: "photo_5",
+    year: 2022,
+    title: "Основание лагеря на Синих Скалах",
+    description: "Первый большой командный выезд в сосновый бор. С этого началась история нашего братства.",
+    imageUrl: PHOTO_FIRST_RALLY_2022,
+    uploadedBy: "Михалыч Лесник",
+    uploadedAt: "2022-07-05",
+    likes: 42,
+    likedUserIds: ["1", "2", "3", "4", "5", "6", "7", "8"]
+  }
+];
+
+export const initialDocuments: TeamDocument[] = [
+  // 1. Документы слёта
+  {
+    id: "doc_rally_1",
+    category: "rally",
+    title: "Положение о XXIII Традиционном турслёте команд",
+    description: "Официальный регламент слёта: правила безопасности, условия прохождения этапов полосы препятствий, судейские штрафы и порядок начисления баллов.",
+    fileType: "pdf",
+    fileName: "Polozhenie_Slet_2026.pdf",
+    uploadedBy: "Лёха Навигатор",
+    uploadedAt: "2026-08-01",
+    content: "ПОЛОЖЕНИЕ О ТУРСЛЁТЕ 2026:\n1. Общие положения: Слёт проводится на поляне 'Кедровая' с 12 по 14 августа.\n2. Участники обязаны соблюдать правила пожарной безопасности и экологический кодекс.\n3. Конкурсная программа включает: ориентирование, технику водного туризма, туристические узлы, карнавальное дефиле и конкурс походных поваров.\n4. Комендантский час: 02:00."
+  },
+  {
+    id: "doc_rally_2",
+    category: "rally",
+    title: "Карта полигона и схема зонирования лагеря",
+    description: "Топографическая схема размещения палаток команды, кухни, костровища, санитарной зоны и маршрутов экстренной эвакуации.",
+    fileType: "image",
+    fileName: "Karta_Poligona_Zony.png",
+    uploadedBy: "Лёха Навигатор",
+    uploadedAt: "2026-08-02",
+    content: "СХЕМА ЛАГЕРЯ:\n- Сектор А: Штабная палатка и флагшток банды 'Негодяи'.\n- Сектор Б: Жилые палатки участников (расстояние между палатками не менее 1.5 м).\n- Сектор В: Костровая зона с навесом и столовой.\n- Сектор Г: Техническая зона, дрова, пилы, огнетушители."
+  },
+  {
+    id: "doc_rally_3",
+    category: "rally",
+    title: "График судейских стартов и тайминг этапов",
+    description: "Почасовое расписание всех стартов, сдачи походных блюд на дегустацию и выступления команд на сцене слёта.",
+    fileType: "guide",
+    fileName: "Raspisanie_Startov_2026.txt",
+    uploadedBy: "Данчик Кипиш",
+    uploadedAt: "2026-08-05",
+    content: "ТАЙМИНГ СЛЁТА:\n- Пятница 18:00 — Заезд и обустройство лагеря.\n- Пятница 21:00 — Открытие слёта, жеребьёвка капитанов.\n- Суббота 10:00 — Полоса препятствий и ориентирование.\n- Суббота 14:00 — Конкурс вязки узлов.\n- Суббота 17:00 — Кулинарный баттл.\n- Суббота 20:30 — Карнавал и визитка.\n- Воскресенье 12:00 — Подведение итогов, награждение."
+  },
+
+  // 2. Уставные документы
+  {
+    id: "doc_stat_1",
+    category: "statutory",
+    title: "Устав туристического клуба «Негодяи»",
+    description: "Главный закон команды: цели, принципы братства, порядок принятия решений советом команды и традиция взаимопомощи.",
+    fileType: "doc",
+    fileName: "Ustav_Klub_Negodyai.doc",
+    uploadedBy: "Михалыч Лесник",
+    uploadedAt: "2018-05-10",
+    content: "УСТАВ ТУРИСТИЧЕСКОГО КЛУБА 'НЕГОДЯИ':\nСтатья 1. Клуб создан ради искренней дружбы, походной романтики, преодоления трудностей и веселья.\nСтатья 2. В лагере Негодяев все равны. Чужой труд уважается, костер поддерживается сообща.\nСтатья 3. Своих в лесу не бросают ни при каких обстоятельствах.\nСтатья 4. Главный девиз на вопрос 'Как гуляет негодяй?!' звучит громко и единогласно: 'АХУЕННО!'."
+  },
+  {
+    id: "doc_stat_2",
+    category: "statutory",
+    title: "Кодекс чести Негодяя и правила лагеря",
+    description: "Неписаные законы костра, сухой закон при дежурстве на кухне, правила бережного отношения к снаряжению и природе.",
+    fileType: "doc",
+    fileName: "Kodeks_Chesti_Negodyaya.pdf",
+    uploadedBy: "Лёха Навигатор",
+    uploadedAt: "2020-04-12",
+    content: "КОДЕКС ЧЕСТИ НЕГОДЯЯ:\n1. Забыл ложку — выстругай щепку или заслужи право пользоваться поварёшкой.\n2. Мусор за собой убирается под ноль — тайга должна остаться чище, чем была.\n3. У костра запрещены ссоры и политические споры — только песни, юмор и тосты.\n4. Посуду за собой моет каждый сам, казан моет дежурный экипаж."
+  },
+  {
+    id: "doc_stat_3",
+    category: "statutory",
+    title: "Положение о Негодяйском Фонде и Казначействе",
+    description: "Регламент сбора ежемесячной абонентской платы 500 рублей, права и полномочия Казначея команды, целевое использование средств.",
+    fileType: "pdf",
+    fileName: "Polozhenie_O_Fonde_500r.pdf",
+    uploadedBy: "Иришка Булочка",
+    uploadedAt: "2024-01-10",
+    content: "ПОЛОЖЕНИЕ О НЕГОДЯЙСКОМ ФОНДЕ:\n1. Размер взноса: Каждый зарегистрированный участник ежемесячно сдаёт 500 рублей в фонд.\n2. Назначение фонда: Ремонт и закупка общекомандного снаряжения (шатры, генератор, пилы, казан), флаги, форма и призы.\n3. Управление фондом: Фондом единолично распоряжается Казначей, назначаемый Администратором.\n4. Должники получают автоматические уведомления и публикуются в общем чате команды."
+  },
+
+  // 3. Помощь при сборах и подготовке к конкурсам
+  {
+    id: "doc_prep_1",
+    category: "prep",
+    title: "Полный чек-лист снаряжения: личное и групповое",
+    description: "Исчерпывающий список: палатка, спальник по температуре, пенка, КЛМН, аптечка, фонарик, дождевик, сменная обувь и репелленты.",
+    fileType: "guide",
+    fileName: "Cheklist_Snaryazheniya_2026.pdf",
+    uploadedBy: "Данчик Кипиш",
+    uploadedAt: "2026-07-25",
+    content: "ЧЕК-ЛИСТ СНАРЯЖЕНИЯ:\nЛИЧНОЕ:\n[ ] Рюкзак 70-90л с непромокаемым чехлом\n[ ] Спальник (комфорт +5°C)\n[ ] Коврик туристический (пенка / самонадувайка)\n[ ] КЛМН (Кружка, Ложка, Миска, Нож)\n[ ] Налобный фонарь с запасными батарейками\n[ ] Аптечка (пластырь, антисептик, обезбол, сорбенты)\n[ ] Мембранная куртка / дождевик\n[ ] Две пары треккинговых носков и обуви\nГРУППОВОЕ:\n[ ] Палатки на всех участников\n[ ] Казан чугунный 15л + тренога\n[ ] Топор Fiskars + двуручная пила\n[ ] Тент лагерный 4х6 м\n[ ] Генератор + гирлянда лагеря"
+  },
+  {
+    id: "doc_prep_2",
+    category: "prep",
+    title: "Методичка по туристическим узлам с иллюстрациями",
+    description: "Схемы завязывания узлов: Прямой, Ткацкий, Академический, Восьмёрка, Булинь, Стремя, Прусик и Схватывающий с описанием назначения.",
+    fileType: "guide",
+    fileName: "Metodichka_Uzly_Shemy.pdf",
+    uploadedBy: "Данчик Кипиш",
+    uploadedAt: "2026-08-01",
+    content: "ТУРИСТИЧЕСКИЕ УЗЛЫ:\n1. ПРЯМОЙ / РИФОВЫЙ — для связывания веревок одинаковой толщины с обязательными контрольными узлами.\n2. БУЛИНЬ (Беседочный) — 'король узлов', незатягивающаяся петля для страховки и крепления веревки к опоре.\n3. ВОСЬМЕРКА — универсальная петля на конце веревки, не скользит и легко развязывается после нагрузки.\n4. ПРУСИК (Схватывающий) — перемещается рукой по основной веревке, но мгновенно затягивается при срыве."
+  },
+  {
+    id: "doc_prep_3",
+    category: "prep",
+    title: "Справочник знаков спортивного ориентирования",
+    description: "Международные символы карт IOF: формы рельефа, гидрография, проходимость леса, искусственные объекты и легенды КП.",
+    fileType: "guide",
+    fileName: "Znaki_Orientirovaniya_IOF.pdf",
+    uploadedBy: "Лёха Навигатор",
+    uploadedAt: "2026-08-03",
+    content: "ЗНАКИ СПОРТИВНОГО ОРИЕНТИРОВАНИЯ:\n- Коричневый: Горизонтали, холмы, ямы, овраги.\n- Синий: Озера, реки, ручьи, болота.\n- Черный: Скалы, камни, тропы, дороги, постройки.\n- Желтый: Открытые поляны, луга.\n- Белый: Чистый легкопроходимый лес.\n- Зеленый: Заросли, густой подлесок (чем темнее, тем труднее бежать)."
+  }
+];
+
+export const initialFundRecords: FundRecord[] = [
+  // 2026 records for participants
+  { id: "fund_1_1", participantId: "1", participantName: "Андрюха Хорёк", participantNickname: "hoorek", year: 2026, month: 1, amount: 500, isPaid: true, paidAt: "2026-01-12", note: "Перевод на Сбер" },
+  { id: "fund_1_2", participantId: "1", participantName: "Андрюха Хорёк", participantNickname: "hoorek", year: 2026, month: 2, amount: 500, isPaid: true, paidAt: "2026-02-10", note: "Наличными на сборе" },
+  { id: "fund_1_3", participantId: "1", participantName: "Андрюха Хорёк", participantNickname: "hoorek", year: 2026, month: 3, amount: 500, isPaid: false, note: "Долг" },
+  { id: "fund_1_4", participantId: "1", participantName: "Андрюха Хорёк", participantNickname: "hoorek", year: 2026, month: 4, amount: 500, isPaid: false, note: "Долг" },
+  { id: "fund_1_5", participantId: "1", participantName: "Андрюха Хорёк", participantNickname: "hoorek", year: 2026, month: 5, amount: 500, isPaid: false, note: "Долг" },
+
+  { id: "fund_2_1", participantId: "2", participantName: "Саня Запевала", participantNickname: "singing_sanya", year: 2026, month: 1, amount: 500, isPaid: true, paidAt: "2026-01-05", note: "СБП Т-Банк" },
+  { id: "fund_2_2", participantId: "2", participantName: "Саня Запевала", participantNickname: "singing_sanya", year: 2026, month: 2, amount: 500, isPaid: true, paidAt: "2026-02-05", note: "СБП Т-Банк" },
+  { id: "fund_2_3", participantId: "2", participantName: "Саня Запевала", participantNickname: "singing_sanya", year: 2026, month: 3, amount: 500, isPaid: true, paidAt: "2026-03-05", note: "СБП Т-Банк" },
+  { id: "fund_2_4", participantId: "2", participantName: "Саня Запевала", participantNickname: "singing_sanya", year: 2026, month: 4, amount: 500, isPaid: true, paidAt: "2026-04-05", note: "СБП Т-Банк" },
+  { id: "fund_2_5", participantId: "2", participantName: "Саня Запевала", participantNickname: "singing_sanya", year: 2026, month: 5, amount: 500, isPaid: true, paidAt: "2026-05-05", note: "СБП Т-Банк" },
+
+  { id: "fund_3_1", participantId: "3", participantName: "Лёха Навигатор", participantNickname: "navigator_alex", year: 2026, month: 1, amount: 500, isPaid: true, paidAt: "2026-01-01", note: "Годовой аванс" },
+  { id: "fund_3_2", participantId: "3", participantName: "Лёха Навигатор", participantNickname: "navigator_alex", year: 2026, month: 2, amount: 500, isPaid: true, paidAt: "2026-01-01", note: "Годовой аванс" },
+  { id: "fund_3_3", participantId: "3", participantName: "Лёха Навигатор", participantNickname: "navigator_alex", year: 2026, month: 3, amount: 500, isPaid: true, paidAt: "2026-01-01", note: "Годовой аванс" },
+  { id: "fund_3_4", participantId: "3", participantName: "Лёха Навигатор", participantNickname: "navigator_alex", year: 2026, month: 4, amount: 500, isPaid: true, paidAt: "2026-01-01", note: "Годовой аванс" },
+  { id: "fund_3_5", participantId: "3", participantName: "Лёха Навигатор", participantNickname: "navigator_alex", year: 2026, month: 5, amount: 500, isPaid: true, paidAt: "2026-01-01", note: "Годовой аванс" },
+
+  { id: "fund_4_1", participantId: "4", participantName: "Иришка Булочка", participantNickname: "irishka_baker", year: 2026, month: 1, amount: 500, isPaid: true, paidAt: "2026-01-10", note: "Казначей оплатил" },
+  { id: "fund_4_2", participantId: "4", participantName: "Иришка Булочка", participantNickname: "irishka_baker", year: 2026, month: 2, amount: 500, isPaid: true, paidAt: "2026-02-10", note: "Казначей оплатил" },
+  { id: "fund_4_3", participantId: "4", participantName: "Иришка Булочка", participantNickname: "irishka_baker", year: 2026, month: 3, amount: 500, isPaid: true, paidAt: "2026-03-10", note: "Казначей оплатил" },
+  { id: "fund_4_4", participantId: "4", participantName: "Иришка Булочка", participantNickname: "irishka_baker", year: 2026, month: 4, amount: 500, isPaid: true, paidAt: "2026-04-10", note: "Казначей оплатил" },
+  { id: "fund_4_5", participantId: "4", participantName: "Иришка Булочка", participantNickname: "irishka_baker", year: 2026, month: 5, amount: 500, isPaid: true, paidAt: "2026-05-10", note: "Казначей оплатил" },
+
+  { id: "fund_5_1", participantId: "5", participantName: "Михалыч Лесник", participantNickname: "forest_boss", year: 2026, month: 1, amount: 500, isPaid: true, paidAt: "2026-01-15", note: "Наличными" },
+  { id: "fund_5_2", participantId: "5", participantName: "Михалыч Лесник", participantNickname: "forest_boss", year: 2026, month: 2, amount: 500, isPaid: true, paidAt: "2026-02-15", note: "Наличными" },
+  { id: "fund_5_3", participantId: "5", participantName: "Михалыч Лесник", participantNickname: "forest_boss", year: 2026, month: 3, amount: 500, isPaid: true, paidAt: "2026-03-15", note: "Наличными" },
+  { id: "fund_5_4", participantId: "5", participantName: "Михалыч Лесник", participantNickname: "forest_boss", year: 2026, month: 4, amount: 500, isPaid: true, paidAt: "2026-04-15", note: "Наличными" },
+  { id: "fund_5_5", participantId: "5", participantName: "Михалыч Лесник", participantNickname: "forest_boss", year: 2026, month: 5, amount: 500, isPaid: false, note: "Долг" },
+
+  { id: "fund_8_1", participantId: "8", participantName: "Данчик Кипиш", participantNickname: "dan_survivor", year: 2026, month: 1, amount: 500, isPaid: false, note: "Долг" },
+  { id: "fund_8_2", participantId: "8", participantName: "Данчик Кипиш", participantNickname: "dan_survivor", year: 2026, month: 2, amount: 500, isPaid: false, note: "Долг" },
+  { id: "fund_8_3", participantId: "8", participantName: "Данчик Кипиш", participantNickname: "dan_survivor", year: 2026, month: 3, amount: 500, isPaid: false, note: "Долг" },
+  { id: "fund_8_4", participantId: "8", participantName: "Данчик Кипиш", participantNickname: "dan_survivor", year: 2026, month: 4, amount: 500, isPaid: false, note: "Долг" },
+  { id: "fund_8_5", participantId: "8", participantName: "Данчик Кипиш", participantNickname: "dan_survivor", year: 2026, month: 5, amount: 500, isPaid: false, note: "Долг" }
+];
+
+export const initialCreativityIdeas: CreativityIdea[] = [
+  {
+    id: "idea_1",
+    category: "camp_design",
+    title: "Входные ворота 'Форпост Негодяев' со смотровой вышкой",
+    description: "Собрать массивную входную арку из сухих бревен с выжженным логотипом команды, резными черепами и смотровой площадкой для дежурного с сигнальным горном.",
+    authorId: "3",
+    authorName: "Лёха Навигатор",
+    materialsBudget: "Бревна сухостоя, джутовая веревка 50м, брезент, светодиодная лента на аккумуляторе 12В. Бюджет: ~3 500 ₽",
+    status: "approved",
+    votes: 14,
+    votedUserIds: ["1", "2", "3", "4", "5", "6"],
+    comments: [
+      { id: "c_1", authorName: "Михалыч Лесник", text: "Одобряю, бензопилу и тросы я возьму. Главное не рубить живые деревья!", createdAt: "2026-08-10 14:20" },
+      { id: "c_2", authorName: "Андрюха Хорёк", text: "Сделаем подсветку красными диодами, ночью будет выглядеть эпично!", createdAt: "2026-08-10 15:05" }
+    ],
+    createdAt: "2026-08-10"
+  },
+  {
+    id: "idea_2",
+    category: "carnival_costumes",
+    title: "Костюмы 'Лесные шаманы и таёжные духи'",
+    description: "Образы для конкурса карнавальности: накидки из мешковины, оленьи и сосновые рога, боевая раскраска глиной и углём, бубны из бересты и посохи с колокольчиками.",
+    authorId: "4",
+    authorName: "Иришка Булочка",
+    materialsBudget: "Мешковина 20м, перья, аквагрим походный, колокольчики, джут. Бюджет: ~2 200 ₽",
+    status: "in_progress",
+    votes: 19,
+    votedUserIds: ["1", "2", "4", "7", "8"],
+    comments: [
+      { id: "c_3", authorName: "Саня Запевала", text: "Я напишу шаманский ритуальный гимн с горловым пением под варган!", createdAt: "2026-08-12 18:40" }
+    ],
+    createdAt: "2026-08-12"
+  },
+  {
+    id: "idea_3",
+    category: "camp_contests",
+    title: "Ночной турнир по распилу бревен двуручной пилой 'Дружба'",
+    description: "Внутрилагерный чемпионат в темноте при свете факелов: пары соревнуются на скорость распила соснового бревна 30 см на аккуратные чурбаки. Победителям — фирменная кружка.",
+    authorId: "1",
+    authorName: "Андрюха Хорёк",
+    materialsBudget: "2 пилы 'Дружба', напильники для разводки зубьев, чурбаки, призовой фонд. Бюджет: ~1 000 ₽",
+    status: "discussing",
+    votes: 11,
+    votedUserIds: ["1", "3", "5", "8"],
+    comments: [
+      { id: "c_4", authorName: "Данчик Кипиш", text: "Только в очках и кожаных перчатках, безопасность превыше всего!", createdAt: "2026-08-14 11:15" }
+    ],
+    createdAt: "2026-08-14"
+  },
+  {
+    id: "idea_4",
+    category: "posm_merch",
+    title: "Виниловые влагостойкие стикерпаки и эмалированные пины",
+    description: "Выпуск набора походных стикеров для котелков, термосов и машин: фразы 'Как гуляет негодяй?! — АХУЕННО!', 'Запись дубля', 'Пизда на глаза' + металлический значок с лисом/хорьком.",
+    authorId: "2",
+    authorName: "Саня Запевала",
+    materialsBudget: "Типография: 100 стикерпаков + 50 значков. Бюджет: ~6 500 ₽ из Негодяйского Фонда",
+    status: "approved",
+    votes: 23,
+    votedUserIds: ["1", "2", "3", "4", "5", "6", "7", "8"],
+    comments: [
+      { id: "c_5", authorName: "Иришка Булочка", text: "Казначейство одобрило бюджет! Макеты уже в печати!", createdAt: "2026-08-16 09:30" }
+    ],
+    createdAt: "2026-08-15"
+  },
+  {
+    id: "idea_5",
+    category: "team_clothing",
+    title: "Худи оверсайз из плотного футера с начесом 'Банда Негодяев'",
+    description: "Тёплые черные и оливковые худи с глубоким капюшоном от ветра. Спереди минималистичный шеврон, на спине большая шелкография с картой тайги и датой основания 2018.",
+    authorId: "6",
+    authorName: "Юрец Мангальщик",
+    materialsBudget: "Пошив партии 25 шт с термотрансферным нанесением. Стоимость ~2 800 ₽/шт под заказ участников.",
+    status: "in_progress",
+    votes: 17,
+    votedUserIds: ["2", "3", "4", "6", "7"],
+    comments: [
+      { id: "c_6", authorName: "Лёха Навигатор", text: "Размерную сетку закинул в документы, пишите свои размеры в чат!", createdAt: "2026-08-17 19:00" }
+    ],
+    createdAt: "2026-08-17"
+  }
+];
+
+export const INITIAL_STORIES: any[] = [
+  {
+    id: "story_1",
+    category: "logo",
+    categoryTitle: "История создания логотипа",
+    title: "Как родился символ Негодяев: пламя костра, походные топоры и череп в бандане",
+    year: 2018,
+    authorName: "Саня Запевала & Михалыч",
+    content: `В июле 2018 года на третью ночь первого большого слёта мы сидели у догорающего костра на берегу реки. Была поставлена задача: нам нужен свой герб, который никто не спутает с академическими турклубами или скучными спортсекциями.\n\nПервый набросок был сделан углем прямо на березовом полене! Основой стал дерзкий символ свободы: череп в походной ветрозащитной бандане, два скрещенных колуна Fiskars, компас, указывающий строго на лесную глушь, и костровой язык пламени.\n\nЧерно-красно-золотая гамма символизирует костровую сажу, жар углей и неиссякаемый задор команды. Позже макет оцифровали, вышили на шевронах, нанесли на клубный флаг и выгравировали на наградных топорах лучших участников слётов.`,
+    photos: [
+      "https://images.unsplash.com/photo-1510312305653-8ed496efae75?auto=format&fit=crop&w=1000&q=80",
+      "https://images.unsplash.com/photo-1517824806704-9040b037703b?auto=format&fit=crop&w=1000&q=80",
+      "https://images.unsplash.com/photo-1478131143081-80f7f84ca84d?auto=format&fit=crop&w=1000&q=80"
+    ],
+    videos: [
+      "https://www.youtube.com/embed/fEErySYqKmI"
+    ],
+    createdAt: "2026-05-10"
+  },
+  {
+    id: "story_2",
+    category: "origin",
+    categoryTitle: "История образования команды",
+    title: "Первый слёт 2018 года: как мы стали бандой единомышленников",
+    year: 2018,
+    authorName: "Основатели команды",
+    content: `Всё началось со спонтанного побега из душного города в мае 2018 года. Шестеро друзей погрузили в старый внедорожник две брезентовые палатки, закопчённый армейский казан и гитару. Место выбрали наугад по спутниковой карте — глухой мыс у излучины быстрой лесной реки.\n\nВ ту ночь зарядил проливной штормовой дождь. В лагерях соседних тургрупп началась паника, а мы натянули тент между вековыми соснами, растопили жаркий костер березовым сушняком, сварили легендарный суп из тушенки с черемшой и пели песни под гитару до рассвета.\n\nКогда утром солнце пробилось сквозь сосны, соседние туристы с улыбкой сказали: «Ну вы и негодяи, в такой потоп так весело куражиться!». Слово прижилось мгновенно. Так родилась туристическая команда «Негодяи» — сообщество людей, готовых пройти сквозь любой ливень, ветер и бурелом с песней и поддержкой надежного плеча.`,
+    photos: [
+      "https://images.unsplash.com/photo-1504280390367-361c6d9f38f4?auto=format&fit=crop&w=1000&q=80",
+      "https://images.unsplash.com/photo-1470246973918-29a93221c455?auto=format&fit=crop&w=1000&q=80"
+    ],
+    videos: [
+      "https://www.youtube.com/embed/2OEL4P1Rz04"
+    ],
+    createdAt: "2026-05-15"
+  },
+  {
+    id: "story_3",
+    category: "sports",
+    categoryTitle: "Спортивные достижения команды",
+    title: "Триумфы на лесных трассах: кубки, перетягивание каната и полоса препятствий",
+    year: 2024,
+    authorName: "Лёха Навигатор",
+    content: `«Негодяи» — это не просто душевные посиделки у огня, но и железная спортивная выправка! С 2019 года команда участвует в межклубных туристических слетах и спартакиадах.\n\nНаши главные командные рекорды:\n• 1-е место в ночном спортивном ориентировании по контрольным пунктам (2022, 2024)\n• Абсолютные чемпионы по перетягиванию каната через грязевой брод (три года подряд без единого поражения!)\n• Скоростная сборка байдарки «Таймень-3» за 8 минут 40 секунд\n• Лучшее прохождение полосы препятствий «Тропа спецназа» (переправа по натянутому тросу через каньон, преодоление гати, транспортировка условно пострадавшего)\n\nГлавный кубок слёта 2024 года с гордостью хранится в нашем базовом лагере!`,
+    photos: [
+      "https://images.unsplash.com/photo-1533240332313-0db49b459ad6?auto=format&fit=crop&w=1000&q=80",
+      "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1000&q=80",
+      "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1000&q=80"
+    ],
+    videos: [],
+    createdAt: "2026-06-01"
+  },
+  {
+    id: "story_4",
+    category: "heroes",
+    categoryTitle: "Особо отличившиеся негодяи",
+    title: "Зал славы команды: герои костра, штурманы и хранители традиций",
+    year: 2025,
+    authorName: "Совет Негодяев",
+    content: `Каждый Негодяй уникален, но подвиги этих соратников навсегда вписаны золотыми буквами в историю братства:\n\n🔥 Саня Запевала — абсолютный рекордсмен: 9 часов непрерывной игры на гитаре у ночного костра. Знает наизусть больше 300 походных и рок-баллад, не охрип ни разу.\n\n🍲 Юрец Мангальщик — повар высшего разряда. Во время урагана на озере удержал шатер плечом и одновременно приготовил 45 порций плова в 30-литровом казане.\n\n🧭 Лёха Навигатор — вывел команду из заболоченной глуши при севших фонарях и разряженных GPS-навигаторах, ориентируясь по рельефу берега и полярной звезде.\n\n🌲 Михалыч Лесник — за 20 минут в темноте заготовил сухой валежник на всю ночь для 6 палаток, используя один только колун и ручную цепную пилу.\n\n💼 Иришка Булочка — бессменный и неподкупный казначей команды. Сохранила общую казну сборов, разрулила все сметы и не потеряла ни единого рубля даже при перевороте байдарки!`,
+    photos: [
+      "https://images.unsplash.com/photo-1501555088652-021faa106b9b?auto=format&fit=crop&w=1000&q=80",
+      "https://images.unsplash.com/photo-1526772662000-3f88f10405ff?auto=format&fit=crop&w=1000&q=80"
+    ],
+    videos: [],
+    createdAt: "2026-06-10"
+  },
+  {
+    id: "story_5",
+    category: "traditions",
+    categoryTitle: "Традиции и ритуалы Негодяев",
+    title: "Посвящение в команду, костровой круг и коронные тосты",
+    year: 2023,
+    authorName: "Команда",
+    content: `Наши традиции священны и передаются каждому новичку:\n\n1. «Посвящение Негодяя» — новичок, прошедший свой первый 15-километровый маршрут или ночевку в палатке, выпивает из кружки с родниковой водой каплю походного отвара, целует лезвие лагерного топора и произносит клятву верности костру и друзьям.\n\n2. Коронный клич: на вопрос «Как гуляет негодяй?!» весь лагерь хором отвечает громогласным: «АХУЕННО!», разносящимся эхом по всей реке.\n\n3. Костровой круг: в полночь гитары затихают на 10 минут, каждый передает по кругу медную кружку и говорит одно слово благодарности уходящему дню и верным соратникам.\n\n4. Закон тайги: в лагере Негодяев никто не бросает товарища, за костром нет чужих, а посуда моется сразу без напоминаний!`,
+    photos: [
+      "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1000&q=80",
+      "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=1000&q=80"
+    ],
+    videos: [],
+    createdAt: "2026-06-15"
   }
 ];
 
