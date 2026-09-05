@@ -213,9 +213,9 @@ export default function ContestsTab({
       {/* Contests List */}
       <div className="space-y-4">
         {contests.map((c) => {
-          const isExpanded = expandedContestId === c.id;
-          const memberCount = c.teamMemberIds?.length || 0;
-          const isCurrentUserInTeam = currentUser && c.teamMemberIds?.includes(currentUser.id);
+          const participatingMembers = participants.filter(p => c.teamMemberIds?.includes(p.id) && p.id !== c.captainId);
+          const isCurrentUserInTeam = currentUser && (c.teamMemberIds?.includes(currentUser.id) || c.captainId === currentUser.id);
+          const totalParticipantsCount = (c.captainId ? 1 : 0) + participatingMembers.length;
 
           return (
             <div
@@ -253,45 +253,95 @@ export default function ContestsTab({
                     <option value="Призёр">Призёр</option>
                   </select>
 
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteContest(c.id)}
-                    className="p-2 text-stone-400 hover:text-red-600 rounded-xl transition-colors"
-                    title="Удалить конкурс"
-                  >
-                    <Trash size={16} />
-                  </button>
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteContest(c.id)}
+                      className="p-2 text-stone-400 hover:text-red-600 rounded-xl transition-colors"
+                      title="Удалить конкурс"
+                    >
+                      <Trash size={16} />
+                    </button>
+                  )}
                 </div>
               </div>
 
-              {/* Contest details */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs font-bold text-amber-950">
-                <div className="bg-amber-50 p-3 rounded-2xl border border-amber-200 space-y-1">
-                  <span className="text-[10px] uppercase font-black text-amber-800 block">Капитан команды:</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xl">👑</span>
-                    <span className="font-black text-stone-900 text-sm">{c.captainName}</span>
-                  </div>
-                </div>
-
-                <div className="bg-amber-50 p-3 rounded-2xl border border-amber-200 space-y-1 flex flex-col justify-between">
-                  <div>
-                    <span className="text-[10px] uppercase font-black text-amber-800 block">Состав бойцов:</span>
-                    <span className="font-black text-stone-900">{memberCount} человек(а) записано</span>
-                  </div>
+              {/* Full Participants & Captain Roster */}
+              <div className="bg-amber-50/80 p-4 rounded-2xl border-2 border-amber-200 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <span className="text-xs font-black uppercase text-amber-950 flex items-center gap-1.5">
+                    <Users size={16} className="text-red-600" />
+                    Состав участников на конкурсе ({totalParticipantsCount} чел.):
+                  </span>
                   
-                  {currentUser && (
+                  {currentUser && c.captainId !== currentUser.id && (
                     <button
                       type="button"
                       onClick={() => handleToggleMyParticipation(c.id)}
-                      className={`mt-2 py-1.5 px-3 rounded-xl text-xs font-black uppercase transition-all shadow-sm ${
+                      className={`py-1.5 px-3 rounded-xl text-xs font-black uppercase transition-all shadow-sm ${
                         isCurrentUserInTeam
-                          ? 'bg-emerald-600 text-white'
-                          : 'bg-red-600 text-yellow-300 hover:bg-red-700'
+                          ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                          : 'bg-red-600 hover:bg-red-700 text-yellow-300'
                       }`}
                     >
-                      {isCurrentUserInTeam ? '✓ Я в составе команды' : '+ Вступить в команду'}
+                      {isCurrentUserInTeam ? '✓ Я в команде (Выйти)' : '+ Записаться в команду'}
                     </button>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* Captain Badge */}
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-200 border-2 border-amber-400 rounded-xl shadow-2xs">
+                    <span className="text-base">👑</span>
+                    <div>
+                      <div className="text-xs font-black text-amber-950 leading-tight flex items-center gap-1.5">
+                        <span>{c.captainName}</span>
+                        <span className="bg-red-600 text-yellow-300 text-[9px] font-black uppercase px-1.5 py-0.2 rounded">
+                          Капитан конкурса
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Participating Members */}
+                  {participatingMembers.map((m) => (
+                    <div
+                      key={m.id}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-white border-2 border-amber-300 rounded-xl shadow-2xs"
+                    >
+                      <img
+                        src={m.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=80&q=80'}
+                        alt={m.name}
+                        className="w-6 h-6 rounded-full object-cover border border-amber-400 shrink-0"
+                      />
+                      <div>
+                        <div className="text-xs font-bold text-amber-950 leading-tight">
+                          {m.name}
+                        </div>
+                        <div className="text-[10px] text-red-600 font-semibold">
+                          @{m.nickname}
+                        </div>
+                      </div>
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updated = (c.teamMemberIds || []).filter(id => id !== m.id);
+                            onUpdateContests(contests.map(item => item.id === c.id ? { ...item, teamMemberIds: updated } : item));
+                          }}
+                          className="text-stone-400 hover:text-red-600 ml-1 text-xs"
+                          title="Исключить"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  ))}
+
+                  {participatingMembers.length === 0 && (
+                    <span className="text-xs text-stone-500 italic py-1">
+                      (Пока только капитан. Другие участники команды могут записаться выше!)
+                    </span>
                   )}
                 </div>
               </div>

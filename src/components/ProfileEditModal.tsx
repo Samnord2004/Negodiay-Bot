@@ -42,7 +42,9 @@ export default function ProfileEditModal({
       setJoinedYear(currentUser.joinedYear || 2018);
       setGender(currentUser.gender || 'male');
       setPsychotype(currentUser.psychotype || PSYCHOTYPES[0]?.name || 'Весельчак-балагур');
-      setAvatar(currentUser.avatar || '');
+      // Purge any legacy dicebear bot avatar
+      const cleanAvatar = currentUser.avatar && currentUser.avatar.includes('dicebear.com/7.x/bottts') ? '' : (currentUser.avatar || '');
+      setAvatar(cleanAvatar);
       setError('');
       setSuccessMsg('');
     }
@@ -66,11 +68,6 @@ export default function ProfileEditModal({
       };
       reader.readAsDataURL(file);
     }
-  };
-
-  const handleGenerateAvatar = () => {
-    const seed = (nickname.trim() || name.trim() || 'negodyai') + '_' + Math.floor(Math.random() * 9999);
-    setAvatar(`https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(seed)}`);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -176,7 +173,7 @@ export default function ProfileEditModal({
               <div className="flex items-center gap-2">
                 <span className="text-2xl">{roleMeta.icon}</span>
                 <div>
-                  <div className="text-[11px] text-stone-500 font-bold uppercase">Назначенная роль в банде</div>
+                  <div className="text-[11px] text-stone-500 font-bold uppercase">Назначенная роль в команде</div>
                   <div className="text-xs font-black text-amber-950">{roleMeta.title}</div>
                 </div>
               </div>
@@ -192,12 +189,19 @@ export default function ProfileEditModal({
               Аватарка / Фото профиля
             </label>
             <div className="flex flex-col sm:flex-row items-center gap-3">
-              <div className="relative">
-                <img
-                  src={avatar || 'https://api.dicebear.com/7.x/bottts/svg?seed=Negodyai'}
-                  alt="Avatar preview"
-                  className="w-20 h-20 rounded-2xl border-2 border-amber-500 object-cover bg-amber-100 shadow"
-                />
+              <div className="relative shrink-0">
+                {avatar && (avatar.startsWith('http') || avatar.startsWith('data:image/')) && !avatar.includes('dicebear.com/7.x/bottts') ? (
+                  <img
+                    src={avatar}
+                    alt="Avatar preview"
+                    className="w-20 h-20 rounded-2xl border-2 border-amber-500 object-cover bg-amber-100 shadow"
+                    onError={() => setAvatar('')}
+                  />
+                ) : (
+                  <div className="w-20 h-20 rounded-2xl border-2 border-amber-500 bg-amber-200 flex flex-col items-center justify-center text-amber-950 font-black shadow text-2xl">
+                    {name.trim() ? name.trim().charAt(0).toUpperCase() : <User size={32} className="text-amber-800" />}
+                  </div>
+                )}
               </div>
 
               <div className="flex-1 space-y-2 w-full">
@@ -212,15 +216,17 @@ export default function ProfileEditModal({
                       className="hidden"
                     />
                   </label>
-                  <button
-                    type="button"
-                    onClick={handleGenerateAvatar}
-                    className="px-3 py-2 bg-yellow-300 hover:bg-yellow-400 border border-amber-500 rounded-xl text-xs font-black text-amber-950 uppercase flex items-center justify-center gap-1.5 transition-colors shadow-2xs"
-                    title="Сгенерировать случайного бота"
-                  >
-                    <RefreshCw size={14} />
-                    <span>Бот-арт</span>
-                  </button>
+                  {avatar ? (
+                    <button
+                      type="button"
+                      onClick={() => setAvatar('')}
+                      className="px-3 py-2 bg-stone-200 hover:bg-stone-300 border border-stone-400 rounded-xl text-xs font-black text-stone-700 uppercase flex items-center justify-center gap-1 transition-colors shadow-2xs"
+                      title="Удалить аватар"
+                    >
+                      <X size={14} />
+                      <span>Удалить</span>
+                    </button>
+                  ) : null}
                 </div>
                 <input
                   type="text"
@@ -254,7 +260,7 @@ export default function ProfileEditModal({
 
             <div>
               <label className="block text-xs font-black uppercase text-amber-950 mb-1">
-                Позывной в банде *
+                Позывной в команде *
               </label>
               <div className="relative">
                 <span className="absolute left-2.5 top-2 font-black text-xs text-red-600">@</span>
@@ -325,7 +331,7 @@ export default function ProfileEditModal({
 
             <div>
               <label className="block text-xs font-black uppercase text-amber-950 mb-1">
-                Год вступления в банду
+                Год вступления в команду
               </label>
               <input
                 type="number"

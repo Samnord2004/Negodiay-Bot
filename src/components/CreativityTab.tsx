@@ -26,7 +26,7 @@ const CATEGORIES: { key: CreativityCategory; label: string; icon: React.ReactNod
 const STATUS_LABELS: Record<CreativityIdea['status'], { label: string; color: string }> = {
   idea: { label: 'Идея', color: 'bg-gray-100 text-gray-700' },
   discussing: { label: 'Обсуждение', color: 'bg-yellow-100 text-amber-800' },
-  approved: { label: 'Одобрено бандой', color: 'bg-emerald-100 text-emerald-800 font-bold' },
+  approved: { label: 'Одобрено командой', color: 'bg-emerald-100 text-emerald-800 font-bold' },
   in_progress: { label: 'В производстве', color: 'bg-blue-100 text-blue-800 font-bold' },
   done: { label: 'Готово к слёту', color: 'bg-red-600 text-yellow-300 font-black' },
 };

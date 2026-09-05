@@ -2,11 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { 
   Users, Calendar, MapPin, Coins, AlertCircle, 
   CheckCircle, Plus, Send, ChevronDown, ChevronUp, Sparkles, MessageSquare,
-  CheckSquare, Coffee, Tent
+  CheckSquare, Coffee, Tent, Trophy, Palette
 } from 'lucide-react';
-import { Participant, Excursion, TaskItem, MenuItem, GroceryItem } from '../types';
+import { Participant, Excursion, TaskItem, MenuItem, GroceryItem, Contest, CreativityIdea } from '../types';
 import TasksTab from './TasksTab';
 import MenuGroceriesTab from './MenuGroceriesTab';
+import ContestsTab from './ContestsTab';
+import CreativityTab from './CreativityTab';
+
+export type HomeRallySubTab = 'overview' | 'tasks' | 'menu' | 'contests' | 'creativity';
 
 interface HomeRallyTabProps {
   participants: Participant[];
@@ -22,10 +26,17 @@ interface HomeRallyTabProps {
   groceryItems?: GroceryItem[];
   onUpdateMenu?: (items: MenuItem[]) => void;
   onUpdateGroceries?: (items: GroceryItem[]) => void;
+  contests?: Contest[];
+  onUpdateContests?: (contests: Contest[]) => void;
+  creativityIdeas?: CreativityIdea[];
+  onIdeaAdded?: (idea: CreativityIdea) => void;
+  onIdeaVoted?: (ideaId: string) => void;
+  onCommentAdded?: (ideaId: string, text: string) => void;
+  onStatusChanged?: (ideaId: string, status: CreativityIdea['status']) => void;
   currentUser: Participant | null;
   isAdmin: boolean;
-  activeSubTab?: 'overview' | 'tasks' | 'menu';
-  onSubTabChange?: (tab: 'overview' | 'tasks' | 'menu') => void;
+  activeSubTab?: HomeRallySubTab;
+  onSubTabChange?: (tab: HomeRallySubTab) => void;
 }
 
 export default function HomeRallyTab({
@@ -40,12 +51,19 @@ export default function HomeRallyTab({
   groceryItems = [],
   onUpdateMenu = () => {},
   onUpdateGroceries = () => {},
+  contests = [],
+  onUpdateContests = () => {},
+  creativityIdeas = [],
+  onIdeaAdded = () => {},
+  onIdeaVoted = () => {},
+  onCommentAdded = () => {},
+  onStatusChanged = () => {},
   currentUser,
   isAdmin,
   activeSubTab = 'overview',
   onSubTabChange
 }: HomeRallyTabProps) {
-  const [internalSubTab, setInternalSubTab] = useState<'overview' | 'tasks' | 'menu'>(activeSubTab);
+  const [internalSubTab, setInternalSubTab] = useState<HomeRallySubTab>(activeSubTab);
   const [expandedParticipantId, setExpandedParticipantId] = useState<string | null>(null);
   const [paymentAmount, setPaymentAmount] = useState<number>(1000);
   const [selectedForPay, setSelectedForPay] = useState<string | null>(null);
@@ -56,7 +74,7 @@ export default function HomeRallyTab({
     }
   }, [activeSubTab]);
 
-  const handleSubTabSwitch = (tab: 'overview' | 'tasks' | 'menu') => {
+  const handleSubTabSwitch = (tab: HomeRallySubTab) => {
     setInternalSubTab(tab);
     if (onSubTabChange) {
       onSubTabChange(tab);
@@ -161,6 +179,42 @@ export default function HomeRallyTab({
             )}
           </button>
 
+          <button
+            type="button"
+            onClick={() => handleSubTabSwitch('contests')}
+            className={`flex-1 min-w-[140px] py-2.5 px-3 rounded-xl font-black text-xs uppercase flex items-center justify-center gap-2 transition-all border-2 ${
+              internalSubTab === 'contests'
+                ? 'bg-red-600 text-yellow-300 border-amber-950 shadow-md transform scale-[1.02]'
+                : 'bg-white/80 hover:bg-white text-amber-950 border-amber-300'
+            }`}
+          >
+            <Trophy size={16} className={internalSubTab === 'contests' ? 'text-yellow-300' : 'text-red-600'} />
+            <span>Конкурсы</span>
+            {contests.length > 0 && (
+              <span className="bg-amber-950 text-yellow-300 text-[10px] font-black px-1.5 py-0.2 rounded-full border border-yellow-300">
+                {contests.length}
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleSubTabSwitch('creativity')}
+            className={`flex-1 min-w-[140px] py-2.5 px-3 rounded-xl font-black text-xs uppercase flex items-center justify-center gap-2 transition-all border-2 ${
+              internalSubTab === 'creativity'
+                ? 'bg-red-600 text-yellow-300 border-amber-950 shadow-md transform scale-[1.02]'
+                : 'bg-white/80 hover:bg-white text-amber-950 border-amber-300'
+            }`}
+          >
+            <Palette size={16} className={internalSubTab === 'creativity' ? 'text-yellow-300' : 'text-red-600'} />
+            <span>Творчество</span>
+            {creativityIdeas.length > 0 && (
+              <span className="bg-amber-950 text-yellow-300 text-[10px] font-black px-1.5 py-0.2 rounded-full border border-yellow-300">
+                {creativityIdeas.length}
+              </span>
+            )}
+          </button>
+
         </div>
       </div>
 
@@ -190,7 +244,7 @@ export default function HomeRallyTab({
                   <span className="text-base sm:text-xl font-black text-emerald-600">{totalPaidFunds.toLocaleString()} ₽</span>
                 </div>
                 <div className="text-center px-1 border-x-2 border-amber-300">
-                  <span className="block text-[10px] uppercase font-black text-amber-900">Долг банды</span>
+                  <span className="block text-[10px] uppercase font-black text-amber-900">Долг команды</span>
                   <span className="text-base sm:text-xl font-black text-red-600">{totalDebt.toLocaleString()} ₽</span>
                 </div>
                 <div className="text-center px-1">
@@ -263,7 +317,7 @@ export default function HomeRallyTab({
                   Реестр Негодяев команды ({participants.length})
                 </h3>
                 <p className="text-xs font-bold text-amber-900 mt-0.5">
-                  Учет взносов на текущий слёт, стаж в банде и дни рождения
+                  Учет взносов на текущий слёт, стаж в команде и дни рождения
                 </p>
               </div>
             </div>
@@ -437,6 +491,34 @@ export default function HomeRallyTab({
             participants={participants}
             currentUser={currentUser}
             isAdmin={isAdmin}
+          />
+        </div>
+      )}
+
+      {/* SUBTAB 4: CONTESTS TAB */}
+      {internalSubTab === 'contests' && (
+        <div className="animate-in fade-in duration-200">
+          <ContestsTab
+            contests={contests}
+            onUpdateContests={onUpdateContests}
+            participants={participants}
+            currentUser={currentUser}
+            isAdmin={isAdmin}
+          />
+        </div>
+      )}
+
+      {/* SUBTAB 5: CREATIVITY TAB */}
+      {internalSubTab === 'creativity' && (
+        <div className="animate-in fade-in duration-200">
+          <CreativityTab
+            ideas={creativityIdeas}
+            currentUser={currentUser}
+            isAdmin={isAdmin}
+            onIdeaAdded={onIdeaAdded}
+            onIdeaVoted={onIdeaVoted}
+            onCommentAdded={onCommentAdded}
+            onStatusChanged={onStatusChanged}
           />
         </div>
       )}

@@ -116,60 +116,18 @@ export const PSYCHOTYPES: PsychotypeMeta[] = [
 
 export const initialParticipants: Participant[] = [
   {
-    id: "1",
-    name: "Андрюха Хорёк",
-    nickname: "hoorek",
-    psychotype: "Бунтарь-анархист",
-    avatar: "🦡",
-    paidAmount: 5000,
-    totalCost: 8500,
-    debtAmount: 3500,
-    joined: true,
-    birthday: "1995-10-12",
-    joinedYear: 2018,
-    skippedYears: [2020, 2022],
-    gender: "male",
-    role: "member",
-    email: "horek@negodyai.club",
-    phone: "+7 913 555-11-22",
-    accountStatus: "active",
-    biometricEnabled: true,
-    password: "123"
-  },
-  {
-    id: "2",
-    name: "Саня Запевала",
-    nickname: "singing_sanya",
-    psychotype: "Весельчак-балагур",
-    avatar: "🎸",
-    paidAmount: 8500,
-    totalCost: 8500,
-    debtAmount: 0,
-    joined: true,
-    birthday: "1994-09-04", // TODAY!
-    joinedYear: 2019,
-    skippedYears: [],
-    gender: "male",
-    role: "member",
-    email: "sanya@negodyai.club",
-    phone: "+7 923 444-33-22",
-    accountStatus: "active",
-    biometricEnabled: true,
-    password: "123"
-  },
-  {
     id: "3",
     name: "Лёха Навигатор",
     nickname: "navigator_alex",
     psychotype: "Душнила-контролёр",
     avatar: "📐",
-    paidAmount: 6000,
+    paidAmount: 8500,
     totalCost: 8500,
-    debtAmount: 2500,
+    debtAmount: 0,
     joined: true,
-    birthday: "1989-09-09", // Upcoming in 5 days!
+    birthday: "1989-09-09",
     joinedYear: 2018,
-    skippedYears: [2021],
+    skippedYears: [],
     gender: "male",
     role: "admin",
     email: "admin@negodyai.club",
@@ -177,132 +135,6 @@ export const initialParticipants: Participant[] = [
     accountStatus: "active",
     biometricEnabled: true,
     password: "admin"
-  },
-  {
-    id: "4",
-    name: "Иришка Булочка",
-    nickname: "irishka_baker",
-    psychotype: "Паникёр-истерик",
-    avatar: "🧁",
-    paidAmount: 1500,
-    totalCost: 6000,
-    debtAmount: 4500,
-    joined: false,
-    birthday: "1997-03-15",
-    joinedYear: 2021,
-    skippedYears: [],
-    gender: "female",
-    role: "treasurer",
-    email: "treasurer@negodyai.club",
-    phone: "+7 905 777-88-99",
-    accountStatus: "active",
-    biometricEnabled: true,
-    password: "123"
-  },
-  {
-    id: "5",
-    name: "Михалыч Лесник",
-    nickname: "forest_boss",
-    psychotype: "Тихий философ",
-    avatar: "🌲",
-    paidAmount: 8500,
-    totalCost: 8500,
-    debtAmount: 0,
-    joined: true,
-    birthday: "1965-11-30",
-    joinedYear: 2018,
-    skippedYears: [],
-    gender: "male",
-    role: "member",
-    email: "forest@negodyai.club",
-    phone: "+7 902 333-22-11",
-    accountStatus: "active",
-    biometricEnabled: false,
-    password: "123"
-  },
-  {
-    id: "6",
-    name: "Юрец Мангальщик",
-    nickname: "yura_chef",
-    psychotype: "Походный шеф-повар",
-    avatar: "🍲",
-    paidAmount: 8500,
-    totalCost: 8500,
-    debtAmount: 0,
-    joined: true,
-    birthday: "1986-05-25",
-    joinedYear: 2020,
-    skippedYears: [2023],
-    gender: "male",
-    role: "member",
-    email: "yura@negodyai.club",
-    phone: "+7 912 666-55-44",
-    accountStatus: "active",
-    biometricEnabled: false,
-    password: "123"
-  },
-  {
-    id: "7",
-    name: "Серёга Три-Аккорда",
-    nickname: "guitar_serega",
-    psychotype: "Гитарист-романтик",
-    avatar: "🎶",
-    paidAmount: 4000,
-    totalCost: 8500,
-    debtAmount: 4500,
-    joined: true,
-    birthday: "1992-06-12",
-    joinedYear: 2021,
-    skippedYears: [2024],
-    gender: "male",
-    role: "member",
-    email: "guitar@negodyai.club",
-    phone: "+7 918 888-99-00",
-    accountStatus: "active",
-    biometricEnabled: false,
-    password: "123"
-  },
-  {
-    id: "8",
-    name: "Данчик Кипиш",
-    nickname: "dan_survivor",
-    psychotype: "Бывалый выживальщик",
-    avatar: "🔪",
-    paidAmount: 0,
-    totalCost: 8500,
-    debtAmount: 8500,
-    joined: false,
-    birthday: "1990-07-04",
-    joinedYear: 2022,
-    skippedYears: [],
-    gender: "male",
-    role: "member",
-    email: "dan@negodyai.club",
-    phone: "+7 999 555-44-33",
-    accountStatus: "active",
-    biometricEnabled: false,
-    password: "123"
-  },
-  {
-    id: "9",
-    name: "Колян Новобранец",
-    nickname: "kolyan_new",
-    psychotype: "Весельчак-балагур",
-    avatar: "⛺",
-    paidAmount: 0,
-    totalCost: 8500,
-    debtAmount: 8500,
-    joined: false,
-    birthday: "1998-12-05",
-    joinedYear: 2026,
-    skippedYears: [],
-    gender: "male",
-    role: "member",
-    email: "kolyan@gmail.com",
-    phone: "+7 950 111-22-33",
-    accountStatus: "pending",
-    biometricEnabled: true,
-    password: "123"
   }
 ];
 
@@ -348,44 +180,8 @@ export const initialMessages: ChatMessage[] = [
     senderName: "Лёха Навигатор",
     senderNickname: "navigator_alex",
     senderPsychotype: "Душнила-контролёр",
-    text: "Привет всем! Я детально свёл Excel-таблицу нашей сметы на летние сборы. Ежегодный турслет (5000р) плюс сплав (3500р). Итого с каждого ровно 8500р. Оплату жду до конца недели, дебет с кредитом не бьётся!",
+    text: "Привет, команда! Я сверил смету на предстоящий слёт. Все зарегистрировавшиеся бойцы — проверяйте снарягу, дежурства и взносы. Дебет с кредитом должен сходиться!",
     timestamp: "10:15",
-    isBot: false
-  },
-  {
-    id: "m2",
-    senderName: "Андрюха Хорёк",
-    senderNickname: "hoorek",
-    senderPsychotype: "Бунтарь-анархист",
-    text: "Алексей, задолбал со своими ячейками и формулами! Нафиг правила, главное — взять 5 мешков угля и большой казан, а там разберёмся! Бунт анархистов на Киржаче!",
-    timestamp: "10:18",
-    isBot: false
-  },
-  {
-    id: "m3",
-    senderName: "Иришка Булочка",
-    senderNickname: "irishka_baker",
-    senderPsychotype: "Паникёр-истерик",
-    text: "Мамочки мои, вы прогноз погоды видели?! Там тучи чернющие! А если байдарки перевернутся посреди реки?! И я читала, что в тех лесах водятся голодные медведи-шатуны... Мы же промокнем и замёрзнем!",
-    timestamp: "10:22",
-    isBot: false
-  },
-  {
-    id: "m4",
-    senderName: "Михалыч Лесник",
-    senderNickname: "forest_boss",
-    senderPsychotype: "Тихий философ",
-    text: "Тише, Иришка. Посмотри, как тихо падает листва. Мы лишь гости в этом зелёном храме. А медведи... они тоже ищут покой. Главное — поймать космический дзен у ночного костра под треск сосновых веток.",
-    timestamp: "10:25",
-    isBot: false
-  },
-  {
-    id: "m5",
-    senderName: "Саня Запевала",
-    senderNickname: "singing_sanya",
-    senderPsychotype: "Весельчак-балагур",
-    text: "Да ладно вам ныть и философствовать! Будет угарно! Будем пить чай, жарить тушняк и петь орные песни под гитару! Бот Максимка, ну-ка зажги, скажи своё веское слово за бабки и за сборы!",
-    timestamp: "10:30",
     isBot: false
   }
 ];
@@ -402,8 +198,8 @@ export const initialTasks: TaskItem[] = [
   {
     id: "t1",
     title: "Починить генератор (дым валит чёрный, походу надо менять свечу и слить старый бензин)",
-    assigneeId: "1",
-    assigneeName: "Андрюха Хорёк",
+    assigneeId: "3",
+    assigneeName: "Лёха Навигатор",
     deadline: "2026-06-10",
     isCompleted: false
   },
@@ -418,16 +214,16 @@ export const initialTasks: TaskItem[] = [
   {
     id: "t3",
     title: "Закупить сочный курдюк, баранину и хорошую зиру на коронный лесной плов",
-    assigneeId: "6",
-    assigneeName: "Юрец Мангальщик",
+    assigneeId: "3",
+    assigneeName: "Лёха Навигатор",
     deadline: "2026-06-12",
     isCompleted: false
   },
   {
     id: "t4",
-    title: "Брызгалки от клещей купить (самые зверские, 20 штук, а то Иришка Булочка изноется)",
-    assigneeId: "8",
-    assigneeName: "Данчик Кипиш",
+    title: "Брызгалки от клещей купить (самые зверские, 20 штук)",
+    assigneeId: "3",
+    assigneeName: "Лёха Навигатор",
     deadline: "2026-06-08",
     isCompleted: false
   }
@@ -438,12 +234,12 @@ export const initialMenuItems: MenuItem[] = [
     id: "m_i1",
     day: "День 1. Обед",
     dishName: "Суп 'Прощай печень' у костра",
-    description: "Наваристый суп из 6 банок свиной тушенки ГОСТ, макаронных рожек, картошки и секретных трав, собранных Михалычем."
+    description: "Наваристый суп из 6 банок свиной тушенки ГОСТ, макаронных рожек, картошки и секретных походных трав."
   },
   {
     id: "m_i2",
     day: "День 1. Ужин",
-    dishName: "Коронный Плов от Юрца Мангальщика",
+    dishName: "Коронный Плов Негодяев",
     description: "Настоящий узбекский плов на костровом чугунном казане с курдюком, чесноком, зирой и любовью."
   },
   {
@@ -455,7 +251,7 @@ export const initialMenuItems: MenuItem[] = [
   {
     id: "m_i4",
     day: "День 2. Обед",
-    dishName: "Печёная Анархическая картошка",
+    dishName: "Печёная походная картошка",
     description: "Картошка запечённая прямо в углях костра, поедаемая с солью и шпротами."
   }
 ];
@@ -464,7 +260,7 @@ export const initialGroceryItems: GroceryItem[] = [
   { id: "g1", name: "Тушёнка свиная ГОСТ (высший сорт, жесть)", quantity: "24 банки", category: "Еда", isBought: true },
   { id: "g2", name: "Гречка Ядрица (мешки по 2кг)", quantity: "3 пачки", category: "Еда", isBought: false },
   { id: "g3", name: "Сгущённое молоко Рогачёв (собачка на принте)", quantity: "8 банок", category: "Еда", isBought: true },
-  { id: "g4", name: "Ром золотой для Бунтаря (для дезинфекции души)", quantity: "3 бутылки", category: "Жидкая валюта", isBought: false },
+  { id: "g4", name: "Ром золотой для команды (для дезинфекции души)", quantity: "3 бутылки", category: "Жидкая валюта", isBought: false },
   { id: "g5", name: "Макароны Рожки (группа А)", quantity: "5 кг", category: "Еда", isBought: false },
   { id: "g6", name: "Вода питьевая в канистрах (по 5л)", quantity: "12 канистр", category: "Еда", isBought: true },
   { id: "g7", name: "Капуста, лук, картошка, специи для плова", quantity: "15 кг веса", category: "Еда", isBought: false },
@@ -472,13 +268,13 @@ export const initialGroceryItems: GroceryItem[] = [
 ];
 
 export const initialInventoryItems: InventoryItem[] = [
-  { id: "inv1", name: "Казан чугунный походный (20 литров)", condition: "нормальное", responsibleName: "Юрец Мангальщик" },
-  { id: "inv2", name: "Бензогенератор барахлящий (требует свечу)", condition: "пришло в негодность", responsibleName: "Андрюха Хорёк" },
+  { id: "inv1", name: "Казан чугунный походный (20 литров)", condition: "нормальное", responsibleName: "Лёха Навигатор" },
+  { id: "inv2", name: "Бензогенератор барахлящий (требует свечу)", condition: "пришло в негодность", responsibleName: "Лёха Навигатор" },
   { id: "inv3", name: "Укупорный тент защитный 4x6м", condition: "нормальное", responsibleName: "Лёха Навигатор" },
-  { id: "inv4", name: "Гитара походная шестиструнная (но без струны 'ми')", condition: "нормальное", responsibleName: "Серёга Три-Аккорда" },
-  { id: "inv5", name: "Костровые треноги и цепи для котла", condition: "проёбано на слёте", responsibleName: "Андрюха Хорёк" },
-  { id: "inv6", name: "Большой надувной матрас в палатку", condition: "утонало к херам", responsibleName: "Данчик Кипиш" },
-  { id: "inv7", name: "Портативная Bluetooth колонка с музлом", condition: "пробухали нахер всё", responsibleName: "Саня Запевала" }
+  { id: "inv4", name: "Гитара походная шестиструнная (но без струны 'ми')", condition: "нормальное", responsibleName: "Лёха Навигатор" },
+  { id: "inv5", name: "Костровые треноги и цепи для котла", condition: "нормальное", responsibleName: "Лёха Навигатор" },
+  { id: "inv6", name: "Большой надувной матрас в палатку", condition: "нормальное", responsibleName: "Лёха Навигатор" },
+  { id: "inv7", name: "Портативная Bluetooth колонка с музлом", condition: "нормальное", responsibleName: "Лёха Навигатор" }
 ];
 
 export const ORIENTEERING_SIGNS_SVG = `data:image/svg+xml,${encodeURIComponent(`
@@ -612,7 +408,7 @@ export const initialContests: Contest[] = [
     title: "Спортивное ориентирование и знаки",
     captainId: "3",
     captainName: "Лёха Навигатор",
-    teamMemberIds: ["3", "1", "2"],
+    teamMemberIds: ["3"],
     place: "2-е место",
     description: "Прохождение лесного маршрута по спортивной карте с нахождением 8 контрольных пунктов (КП). Отметка производится электронными чипами. Засчитывается наименьшее время и точность.",
     schedule: "Суббота, 14:00 - Регистрация и выдача карт; 14:30 - Старт участников по очереди каждые 2 мин; 17:00 - Финиш и подсчет результатов.",
@@ -635,9 +431,9 @@ export const initialContests: Contest[] = [
   {
     id: "c2",
     title: "Туристические узлы и техника туризма",
-    captainId: "8",
-    captainName: "Данчик Кипиш",
-    teamMemberIds: ["8", "3", "1"],
+    captainId: "3",
+    captainName: "Лёха Навигатор",
+    teamMemberIds: ["3"],
     place: "1-е место",
     description: "Соревнование по правильной и скоростной вязке 6 ключевых туристических узлов (Восьмёрка, Булинь, Прямой, Прусик, Ткацкий, Выбленочный) и натягиванию навесной переправы.",
     schedule: "Суббота, 17:30 - Проверка личной обвязки и карабинов; 18:00 - Скоростная вязка узлов 'вслепую' и под счет.",
@@ -660,9 +456,9 @@ export const initialContests: Contest[] = [
   {
     id: "c3",
     title: "Музыкальный баттл у костра",
-    captainId: "2",
-    captainName: "Саня Запевала",
-    teamMemberIds: ["2", "7"],
+    captainId: "3",
+    captainName: "Лёха Навигатор",
+    teamMemberIds: ["3"],
     place: "1-е место",
     description: "Баттл костровых песен под гитару. Конкурсанты исполняют походные хиты, авторские частушки и лирику. Оценивается громкость, артистизм и эмоциональный отклик команды.",
     schedule: "Суббота, 21:00 - Открытие музыкального ринга у большого ночного костра.",
@@ -671,11 +467,11 @@ export const initialContests: Contest[] = [
   {
     id: "c4",
     title: "Кулинарный шедевр из тушняка",
-    captainId: "6",
-    captainName: "Юрец Мангальщик",
-    teamMemberIds: ["6", "4", "5"],
+    captainId: "3",
+    captainName: "Лёха Навигатор",
+    teamMemberIds: ["3"],
     place: "Призёр",
-    description: "Приготовление ресторанного блюда на костре из ограниченного набора продуктов: банка тушенки ГОСТ, крупа, овощи и костровые специи Юрца.",
+    description: "Приготовление ресторанного блюда на костре из ограниченного набора продуктов: банка тушенки ГОСТ, крупа, овощи и костровые специи.",
     schedule: "Воскресенье, 13:00 - Начало готовки у мангальной зоны.",
     attachments: []
   }
@@ -772,7 +568,7 @@ export const initialDocuments: TeamDocument[] = [
     fileName: "Karta_Poligona_Zony.png",
     uploadedBy: "Лёха Навигатор",
     uploadedAt: "2026-08-02",
-    content: "СХЕМА ЛАГЕРЯ:\n- Сектор А: Штабная палатка и флагшток банды 'Негодяи'.\n- Сектор Б: Жилые палатки участников (расстояние между палатками не менее 1.5 м).\n- Сектор В: Костровая зона с навесом и столовой.\n- Сектор Г: Техническая зона, дрова, пилы, огнетушители."
+    content: "СХЕМА ЛАГЕРЯ:\n- Сектор А: Штабная палатка и флагшток туристической команды 'Негодяи'.\n- Сектор Б: Жилые палатки участников (расстояние между палатками не менее 1.5 м).\n- Сектор В: Костровая зона с навесом и столовой.\n- Сектор Г: Техническая зона, дрова, пилы, огнетушители."
   },
   {
     id: "doc_rally_3",
@@ -781,7 +577,7 @@ export const initialDocuments: TeamDocument[] = [
     description: "Почасовое расписание всех стартов, сдачи походных блюд на дегустацию и выступления команд на сцене слёта.",
     fileType: "guide",
     fileName: "Raspisanie_Startov_2026.txt",
-    uploadedBy: "Данчик Кипиш",
+    uploadedBy: "Лёха Навигатор",
     uploadedAt: "2026-08-05",
     content: "ТАЙМИНГ СЛЁТА:\n- Пятница 18:00 — Заезд и обустройство лагеря.\n- Пятница 21:00 — Открытие слёта, жеребьёвка капитанов.\n- Суббота 10:00 — Полоса препятствий и ориентирование.\n- Суббота 14:00 — Конкурс вязки узлов.\n- Суббота 17:00 — Кулинарный баттл.\n- Суббота 20:30 — Карнавал и визитка.\n- Воскресенье 12:00 — Подведение итогов, награждение."
   },
@@ -794,7 +590,7 @@ export const initialDocuments: TeamDocument[] = [
     description: "Главный закон команды: цели, принципы братства, порядок принятия решений советом команды и традиция взаимопомощи.",
     fileType: "doc",
     fileName: "Ustav_Klub_Negodyai.doc",
-    uploadedBy: "Михалыч Лесник",
+    uploadedBy: "Лёха Навигатор",
     uploadedAt: "2018-05-10",
     content: "УСТАВ ТУРИСТИЧЕСКОГО КЛУБА 'НЕГОДЯИ':\nСтатья 1. Клуб создан ради искренней дружбы, походной романтики, преодоления трудностей и веселья.\nСтатья 2. В лагере Негодяев все равны. Чужой труд уважается, костер поддерживается сообща.\nСтатья 3. Своих в лесу не бросают ни при каких обстоятельствах.\nСтатья 4. Главный девиз на вопрос 'Как гуляет негодяй?!' звучит громко и единогласно: 'АХУЕННО!'."
   },
@@ -816,9 +612,9 @@ export const initialDocuments: TeamDocument[] = [
     description: "Регламент сбора ежемесячной абонентской платы 500 рублей, права и полномочия Казначея команды, целевое использование средств.",
     fileType: "pdf",
     fileName: "Polozhenie_O_Fonde_500r.pdf",
-    uploadedBy: "Иришка Булочка",
+    uploadedBy: "Лёха Навигатор",
     uploadedAt: "2024-01-10",
-    content: "ПОЛОЖЕНИЕ О НЕГОДЯЙСКОМ ФОНДЕ:\n1. Размер взноса: Каждый зарегистрированный участник ежемесячно сдаёт 500 рублей в фонд.\n2. Назначение фонда: Ремонт и закупка общекомандного снаряжения (шатры, генератор, пилы, казан), флаги, форма и призы.\n3. Управление фондом: Фондом единолично распоряжается Казначей, назначаемый Администратором.\n4. Должники получают автоматические уведомления и публикуются в общем чате команды."
+    content: "ПОЛОЖЕНИЕ О НЕГОДЯЙСКОМ ФОНДЕ:\n1. Размер взноса: Каждый зарегистрированный участник ежемесячно сдаёт 500 рублей в фонд.\n2. Назначение фонда: Ремонт и закупка общекомандного снаряжения (шатры, генератор, пилы, казан), флаги, форма и призы.\n3. Управление фондом: Фондом единолично распоряжается Казначей, назначаемый Капитаном команды.\n4. Должники получают автоматические уведомления и публикуются в общем чате команды."
   },
 
   // 3. Помощь при сборах и подготовке к конкурсам
@@ -858,42 +654,12 @@ export const initialDocuments: TeamDocument[] = [
 ];
 
 export const initialFundRecords: FundRecord[] = [
-  // 2026 records for participants
-  { id: "fund_1_1", participantId: "1", participantName: "Андрюха Хорёк", participantNickname: "hoorek", year: 2026, month: 1, amount: 500, isPaid: true, paidAt: "2026-01-12", note: "Перевод на Сбер" },
-  { id: "fund_1_2", participantId: "1", participantName: "Андрюха Хорёк", participantNickname: "hoorek", year: 2026, month: 2, amount: 500, isPaid: true, paidAt: "2026-02-10", note: "Наличными на сборе" },
-  { id: "fund_1_3", participantId: "1", participantName: "Андрюха Хорёк", participantNickname: "hoorek", year: 2026, month: 3, amount: 500, isPaid: false, note: "Долг" },
-  { id: "fund_1_4", participantId: "1", participantName: "Андрюха Хорёк", participantNickname: "hoorek", year: 2026, month: 4, amount: 500, isPaid: false, note: "Долг" },
-  { id: "fund_1_5", participantId: "1", participantName: "Андрюха Хорёк", participantNickname: "hoorek", year: 2026, month: 5, amount: 500, isPaid: false, note: "Долг" },
-
-  { id: "fund_2_1", participantId: "2", participantName: "Саня Запевала", participantNickname: "singing_sanya", year: 2026, month: 1, amount: 500, isPaid: true, paidAt: "2026-01-05", note: "СБП Т-Банк" },
-  { id: "fund_2_2", participantId: "2", participantName: "Саня Запевала", participantNickname: "singing_sanya", year: 2026, month: 2, amount: 500, isPaid: true, paidAt: "2026-02-05", note: "СБП Т-Банк" },
-  { id: "fund_2_3", participantId: "2", participantName: "Саня Запевала", participantNickname: "singing_sanya", year: 2026, month: 3, amount: 500, isPaid: true, paidAt: "2026-03-05", note: "СБП Т-Банк" },
-  { id: "fund_2_4", participantId: "2", participantName: "Саня Запевала", participantNickname: "singing_sanya", year: 2026, month: 4, amount: 500, isPaid: true, paidAt: "2026-04-05", note: "СБП Т-Банк" },
-  { id: "fund_2_5", participantId: "2", participantName: "Саня Запевала", participantNickname: "singing_sanya", year: 2026, month: 5, amount: 500, isPaid: true, paidAt: "2026-05-05", note: "СБП Т-Банк" },
-
+  // 2026 records for Captain
   { id: "fund_3_1", participantId: "3", participantName: "Лёха Навигатор", participantNickname: "navigator_alex", year: 2026, month: 1, amount: 500, isPaid: true, paidAt: "2026-01-01", note: "Годовой аванс" },
   { id: "fund_3_2", participantId: "3", participantName: "Лёха Навигатор", participantNickname: "navigator_alex", year: 2026, month: 2, amount: 500, isPaid: true, paidAt: "2026-01-01", note: "Годовой аванс" },
   { id: "fund_3_3", participantId: "3", participantName: "Лёха Навигатор", participantNickname: "navigator_alex", year: 2026, month: 3, amount: 500, isPaid: true, paidAt: "2026-01-01", note: "Годовой аванс" },
   { id: "fund_3_4", participantId: "3", participantName: "Лёха Навигатор", participantNickname: "navigator_alex", year: 2026, month: 4, amount: 500, isPaid: true, paidAt: "2026-01-01", note: "Годовой аванс" },
-  { id: "fund_3_5", participantId: "3", participantName: "Лёха Навигатор", participantNickname: "navigator_alex", year: 2026, month: 5, amount: 500, isPaid: true, paidAt: "2026-01-01", note: "Годовой аванс" },
-
-  { id: "fund_4_1", participantId: "4", participantName: "Иришка Булочка", participantNickname: "irishka_baker", year: 2026, month: 1, amount: 500, isPaid: true, paidAt: "2026-01-10", note: "Казначей оплатил" },
-  { id: "fund_4_2", participantId: "4", participantName: "Иришка Булочка", participantNickname: "irishka_baker", year: 2026, month: 2, amount: 500, isPaid: true, paidAt: "2026-02-10", note: "Казначей оплатил" },
-  { id: "fund_4_3", participantId: "4", participantName: "Иришка Булочка", participantNickname: "irishka_baker", year: 2026, month: 3, amount: 500, isPaid: true, paidAt: "2026-03-10", note: "Казначей оплатил" },
-  { id: "fund_4_4", participantId: "4", participantName: "Иришка Булочка", participantNickname: "irishka_baker", year: 2026, month: 4, amount: 500, isPaid: true, paidAt: "2026-04-10", note: "Казначей оплатил" },
-  { id: "fund_4_5", participantId: "4", participantName: "Иришка Булочка", participantNickname: "irishka_baker", year: 2026, month: 5, amount: 500, isPaid: true, paidAt: "2026-05-10", note: "Казначей оплатил" },
-
-  { id: "fund_5_1", participantId: "5", participantName: "Михалыч Лесник", participantNickname: "forest_boss", year: 2026, month: 1, amount: 500, isPaid: true, paidAt: "2026-01-15", note: "Наличными" },
-  { id: "fund_5_2", participantId: "5", participantName: "Михалыч Лесник", participantNickname: "forest_boss", year: 2026, month: 2, amount: 500, isPaid: true, paidAt: "2026-02-15", note: "Наличными" },
-  { id: "fund_5_3", participantId: "5", participantName: "Михалыч Лесник", participantNickname: "forest_boss", year: 2026, month: 3, amount: 500, isPaid: true, paidAt: "2026-03-15", note: "Наличными" },
-  { id: "fund_5_4", participantId: "5", participantName: "Михалыч Лесник", participantNickname: "forest_boss", year: 2026, month: 4, amount: 500, isPaid: true, paidAt: "2026-04-15", note: "Наличными" },
-  { id: "fund_5_5", participantId: "5", participantName: "Михалыч Лесник", participantNickname: "forest_boss", year: 2026, month: 5, amount: 500, isPaid: false, note: "Долг" },
-
-  { id: "fund_8_1", participantId: "8", participantName: "Данчик Кипиш", participantNickname: "dan_survivor", year: 2026, month: 1, amount: 500, isPaid: false, note: "Долг" },
-  { id: "fund_8_2", participantId: "8", participantName: "Данчик Кипиш", participantNickname: "dan_survivor", year: 2026, month: 2, amount: 500, isPaid: false, note: "Долг" },
-  { id: "fund_8_3", participantId: "8", participantName: "Данчик Кипиш", participantNickname: "dan_survivor", year: 2026, month: 3, amount: 500, isPaid: false, note: "Долг" },
-  { id: "fund_8_4", participantId: "8", participantName: "Данчик Кипиш", participantNickname: "dan_survivor", year: 2026, month: 4, amount: 500, isPaid: false, note: "Долг" },
-  { id: "fund_8_5", participantId: "8", participantName: "Данчик Кипиш", participantNickname: "dan_survivor", year: 2026, month: 5, amount: 500, isPaid: false, note: "Долг" }
+  { id: "fund_3_5", participantId: "3", participantName: "Лёха Навигатор", participantNickname: "navigator_alex", year: 2026, month: 5, amount: 500, isPaid: true, paidAt: "2026-01-01", note: "Годовой аванс" }
 ];
 
 export const initialCreativityIdeas: CreativityIdea[] = [
@@ -906,12 +672,9 @@ export const initialCreativityIdeas: CreativityIdea[] = [
     authorName: "Лёха Навигатор",
     materialsBudget: "Бревна сухостоя, джутовая веревка 50м, брезент, светодиодная лента на аккумуляторе 12В. Бюджет: ~3 500 ₽",
     status: "approved",
-    votes: 14,
-    votedUserIds: ["1", "2", "3", "4", "5", "6"],
-    comments: [
-      { id: "c_1", authorName: "Михалыч Лесник", text: "Одобряю, бензопилу и тросы я возьму. Главное не рубить живые деревья!", createdAt: "2026-08-10 14:20" },
-      { id: "c_2", authorName: "Андрюха Хорёк", text: "Сделаем подсветку красными диодами, ночью будет выглядеть эпично!", createdAt: "2026-08-10 15:05" }
-    ],
+    votes: 1,
+    votedUserIds: ["3"],
+    comments: [],
     createdAt: "2026-08-10"
   },
   {
@@ -919,15 +682,13 @@ export const initialCreativityIdeas: CreativityIdea[] = [
     category: "carnival_costumes",
     title: "Костюмы 'Лесные шаманы и таёжные духи'",
     description: "Образы для конкурса карнавальности: накидки из мешковины, оленьи и сосновые рога, боевая раскраска глиной и углём, бубны из бересты и посохи с колокольчиками.",
-    authorId: "4",
-    authorName: "Иришка Булочка",
+    authorId: "3",
+    authorName: "Лёха Навигатор",
     materialsBudget: "Мешковина 20м, перья, аквагрим походный, колокольчики, джут. Бюджет: ~2 200 ₽",
     status: "in_progress",
-    votes: 19,
-    votedUserIds: ["1", "2", "4", "7", "8"],
-    comments: [
-      { id: "c_3", authorName: "Саня Запевала", text: "Я напишу шаманский ритуальный гимн с горловым пением под варган!", createdAt: "2026-08-12 18:40" }
-    ],
+    votes: 1,
+    votedUserIds: ["3"],
+    comments: [],
     createdAt: "2026-08-12"
   },
   {
@@ -935,47 +696,41 @@ export const initialCreativityIdeas: CreativityIdea[] = [
     category: "camp_contests",
     title: "Ночной турнир по распилу бревен двуручной пилой 'Дружба'",
     description: "Внутрилагерный чемпионат в темноте при свете факелов: пары соревнуются на скорость распила соснового бревна 30 см на аккуратные чурбаки. Победителям — фирменная кружка.",
-    authorId: "1",
-    authorName: "Андрюха Хорёк",
+    authorId: "3",
+    authorName: "Лёха Навигатор",
     materialsBudget: "2 пилы 'Дружба', напильники для разводки зубьев, чурбаки, призовой фонд. Бюджет: ~1 000 ₽",
     status: "discussing",
-    votes: 11,
-    votedUserIds: ["1", "3", "5", "8"],
-    comments: [
-      { id: "c_4", authorName: "Данчик Кипиш", text: "Только в очках и кожаных перчатках, безопасность превыше всего!", createdAt: "2026-08-14 11:15" }
-    ],
+    votes: 1,
+    votedUserIds: ["3"],
+    comments: [],
     createdAt: "2026-08-14"
   },
   {
     id: "idea_4",
     category: "posm_merch",
     title: "Виниловые влагостойкие стикерпаки и эмалированные пины",
-    description: "Выпуск набора походных стикеров для котелков, термосов и машин: фразы 'Как гуляет негодяй?! — АХУЕННО!', 'Запись дубля', 'Пизда на глаза' + металлический значок с лисом/хорьком.",
-    authorId: "2",
-    authorName: "Саня Запевала",
+    description: "Выпуск набора походных стикеров для котелков, термосов и машин: фразы 'Как гуляет негодяй?! — АХУЕННО!', 'Запись дубля', 'Пизда на глаза', 'Кто с Негодяем дрался...', 'Давай Негодяй' + металлический значок с лисом/хорьком.",
+    authorId: "3",
+    authorName: "Лёха Навигатор",
     materialsBudget: "Типография: 100 стикерпаков + 50 значков. Бюджет: ~6 500 ₽ из Негодяйского Фонда",
     status: "approved",
-    votes: 23,
-    votedUserIds: ["1", "2", "3", "4", "5", "6", "7", "8"],
-    comments: [
-      { id: "c_5", authorName: "Иришка Булочка", text: "Казначейство одобрило бюджет! Макеты уже в печати!", createdAt: "2026-08-16 09:30" }
-    ],
+    votes: 1,
+    votedUserIds: ["3"],
+    comments: [],
     createdAt: "2026-08-15"
   },
   {
     id: "idea_5",
     category: "team_clothing",
-    title: "Худи оверсайз из плотного футера с начесом 'Банда Негодяев'",
+    title: "Худи оверсайз из плотного футера с начесом 'Команда Негодяев'",
     description: "Тёплые черные и оливковые худи с глубоким капюшоном от ветра. Спереди минималистичный шеврон, на спине большая шелкография с картой тайги и датой основания 2018.",
-    authorId: "6",
-    authorName: "Юрец Мангальщик",
+    authorId: "3",
+    authorName: "Лёха Навигатор",
     materialsBudget: "Пошив партии 25 шт с термотрансферным нанесением. Стоимость ~2 800 ₽/шт под заказ участников.",
     status: "in_progress",
-    votes: 17,
-    votedUserIds: ["2", "3", "4", "6", "7"],
-    comments: [
-      { id: "c_6", authorName: "Лёха Навигатор", text: "Размерную сетку закинул в документы, пишите свои размеры в чат!", createdAt: "2026-08-17 19:00" }
-    ],
+    votes: 1,
+    votedUserIds: ["3"],
+    comments: [],
     createdAt: "2026-08-17"
   }
 ];
@@ -1003,7 +758,7 @@ export const INITIAL_STORIES: any[] = [
     id: "story_2",
     category: "origin",
     categoryTitle: "История образования команды",
-    title: "Первый слёт 2018 года: как мы стали бандой единомышленников",
+    title: "Первый слёт 2018 года: как мы стали туристической командой единомышленников",
     year: 2018,
     authorName: "Основатели команды",
     content: `Всё началось со спонтанного побега из душного города в мае 2018 года. Шестеро друзей погрузили в старый внедорожник две брезентовые палатки, закопчённый армейский казан и гитару. Место выбрали наугад по спутниковой карте — глухой мыс у излучины быстрой лесной реки.\n\nВ ту ночь зарядил проливной штормовой дождь. В лагерях соседних тургрупп началась паника, а мы натянули тент между вековыми соснами, растопили жаркий костер березовым сушняком, сварили легендарный суп из тушенки с черемшой и пели песни под гитару до рассвета.\n\nКогда утром солнце пробилось сквозь сосны, соседние туристы с улыбкой сказали: «Ну вы и негодяи, в такой потоп так весело куражиться!». Слово прижилось мгновенно. Так родилась туристическая команда «Негодяи» — сообщество людей, готовых пройти сквозь любой ливень, ветер и бурелом с песней и поддержкой надежного плеча.`,

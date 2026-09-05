@@ -10,7 +10,7 @@ import { Participant, ROLE_DEFINITIONS } from '../types';
 interface TopSiteMenuProps {
   currentUser: Participant | null;
   activeTab: string;
-  onNavigateTab: (tabId: string, subTab?: 'overview' | 'tasks' | 'menu') => void;
+  onNavigateTab: (tabId: string, subTab?: 'overview' | 'tasks' | 'menu' | 'contests' | 'creativity') => void;
   onOpenProfileEdit: () => void;
   onOpenSecurity: () => void;
   onOpenBirthdays: () => void;
@@ -54,7 +54,7 @@ export default function TopSiteMenu({
     };
   }, [isOpen]);
 
-  const handleSelectNav = (tabId: string, subTab?: 'overview' | 'tasks' | 'menu') => {
+  const handleSelectNav = (tabId: string, subTab?: 'overview' | 'tasks' | 'menu' | 'contests' | 'creativity') => {
     onNavigateTab(tabId, subTab);
     setIsOpen(false);
   };
@@ -87,16 +87,31 @@ export default function TopSiteMenu({
         )}
       </button>
 
-      {/* DROPDOWN MENU PANEL */}
+      {/* SEMI-TRANSPARENT BACKDROP */}
       {isOpen && (
-        <div className="absolute right-0 top-full mt-2 w-[92vw] sm:w-[420px] max-w-[440px] bg-amber-50 border-4 border-amber-600 rounded-3xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150 flex flex-col max-h-[85vh]">
+        <div 
+          className="fixed inset-0 bg-stone-950/50 backdrop-blur-xs z-40 transition-opacity animate-in fade-in duration-150"
+          onClick={() => setIsOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* DROPDOWN MENU PANEL - ALWAYS FULLY VISIBLE ON MOBILE, TABLET & DESKTOP */}
+      {isOpen && (
+        <div 
+          role="dialog"
+          aria-modal="true"
+          aria-label="Главное меню сайта и навигация"
+          onClick={(e) => e.stopPropagation()}
+          className="fixed z-50 top-3 bottom-3 right-2 sm:right-4 md:right-6 w-[calc(100vw-16px)] sm:w-[420px] max-w-[440px] bg-amber-50 border-4 border-amber-600 rounded-3xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-right-3 duration-200 flex flex-col"
+        >
           
           {/* Header Bar */}
           <div className="bg-gradient-to-r from-red-600 via-amber-600 to-red-700 p-3.5 flex items-center justify-between text-yellow-300 border-b-2 border-amber-400 shrink-0">
             <div className="flex items-center gap-2">
               <span className="text-lg">🧭</span>
               <h3 className="font-black text-xs uppercase tracking-tight text-white leading-tight">
-                Навигация & Профиль негодяя
+                Навигация & Профиль Негодяя
               </h3>
             </div>
             <button
@@ -184,7 +199,7 @@ export default function TopSiteMenu({
                     }}
                     className="w-full py-2 bg-red-600 hover:bg-red-700 text-yellow-300 font-black text-xs uppercase rounded-xl border border-amber-950 shadow transition-all active:scale-95"
                   >
-                    Войти в аккаунт банды
+                    Войти в аккаунт команды
                   </button>
                 </div>
               )}
@@ -225,7 +240,7 @@ export default function TopSiteMenu({
                   <ArrowRight size={14} className="opacity-60" />
                 </button>
 
-                {/* 2: Планируемые слёты (с подпунктами) */}
+                {/* 2: Планируемые слёты (с подпунктами: обзор, задачи, меню, конкурсы, творчество) */}
                 <div className={`rounded-xl border-2 overflow-hidden transition-all ${
                   activeTab === 'home' ? 'border-red-600 bg-amber-100/60' : 'border-amber-200 bg-white'
                 }`}>
@@ -241,37 +256,51 @@ export default function TopSiteMenu({
                           Планируемые слёты
                         </div>
                         <div className="text-[10px] text-stone-500">
-                          График походов, казна, задачи и меню
+                          График походов, казна, задачи, меню, конкурсы и творчество
                         </div>
                       </div>
                     </div>
                     <span className="text-[10px] font-black uppercase text-red-600 bg-red-100 px-1.5 py-0.5 rounded">
-                      Главное
+                      Штаб слёта
                     </span>
                   </button>
 
                   {/* Sub-links inside planned rallies */}
-                  <div className="grid grid-cols-3 gap-1 px-2 pb-2 pt-0.5 border-t border-amber-200/80 bg-amber-50/50">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-1 px-2 pb-2 pt-0.5 border-t border-amber-200/80 bg-amber-50/50">
                     <button
                       type="button"
                       onClick={() => handleSelectNav('home', 'overview')}
-                      className="py-1 px-1.5 bg-white hover:bg-amber-200 border border-amber-300 rounded-lg text-[10px] font-black text-amber-950 uppercase text-center transition-colors shadow-2xs"
+                      className="py-1.5 px-1.5 bg-white hover:bg-amber-200 border border-amber-300 rounded-lg text-[10px] font-black text-amber-950 uppercase text-center transition-colors shadow-2xs"
                     >
-                      🏕️ Обзор
+                      🏕️ Обзор & взносы
                     </button>
                     <button
                       type="button"
                       onClick={() => handleSelectNav('home', 'tasks')}
-                      className="py-1 px-1.5 bg-white hover:bg-amber-200 border border-amber-300 rounded-lg text-[10px] font-black text-amber-950 uppercase text-center transition-colors shadow-2xs"
+                      className="py-1.5 px-1.5 bg-white hover:bg-amber-200 border border-amber-300 rounded-lg text-[10px] font-black text-amber-950 uppercase text-center transition-colors shadow-2xs"
                     >
-                      📋 Задачи
+                      📋 Задачи слёта
                     </button>
                     <button
                       type="button"
                       onClick={() => handleSelectNav('home', 'menu')}
-                      className="py-1 px-1.5 bg-white hover:bg-amber-200 border border-amber-300 rounded-lg text-[10px] font-black text-amber-950 uppercase text-center transition-colors shadow-2xs"
+                      className="py-1.5 px-1.5 bg-white hover:bg-amber-200 border border-amber-300 rounded-lg text-[10px] font-black text-amber-950 uppercase text-center transition-colors shadow-2xs"
                     >
-                      🍲 Меню
+                      🍲 Меню & продукты
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSelectNav('home', 'contests')}
+                      className="py-1.5 px-1.5 bg-white hover:bg-amber-200 border border-amber-300 rounded-lg text-[10px] font-black text-amber-950 uppercase text-center transition-colors shadow-2xs"
+                    >
+                      🏆 Конкурсы
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSelectNav('home', 'creativity')}
+                      className="py-1.5 px-1.5 bg-white hover:bg-amber-200 border border-amber-300 rounded-lg text-[10px] font-black text-amber-950 uppercase text-center transition-colors shadow-2xs col-span-2 sm:col-span-2"
+                    >
+                      🎨 Творчество & креатив
                     </button>
                   </div>
                 </div>
@@ -298,29 +327,7 @@ export default function TopSiteMenu({
                   <ArrowRight size={14} className="opacity-60" />
                 </button>
 
-                {/* 4: Конкурсы */}
-                <button
-                  type="button"
-                  onClick={() => handleSelectNav('contests')}
-                  className={`w-full text-left p-2.5 rounded-xl border-2 transition-all flex items-center justify-between ${
-                    activeTab === 'contests'
-                      ? 'bg-red-600 text-yellow-300 border-amber-950 shadow-sm'
-                      : 'bg-white hover:bg-amber-100/70 text-amber-950 border-amber-200'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Trophy size={17} className={activeTab === 'contests' ? 'text-yellow-300' : 'text-red-600'} />
-                    <div>
-                      <div className="font-black text-xs uppercase leading-tight">Конкурсы</div>
-                      <div className={`text-[10px] ${activeTab === 'contests' ? 'text-yellow-100' : 'text-stone-500'}`}>
-                        Ориентирование, визитки и схемы
-                      </div>
-                    </div>
-                  </div>
-                  <ArrowRight size={14} className="opacity-60" />
-                </button>
-
-                {/* 5: Фотогалерея */}
+                {/* 4: Фотогалерея */}
                 <button
                   type="button"
                   onClick={() => handleSelectNav('gallery')}
@@ -342,7 +349,7 @@ export default function TopSiteMenu({
                   <ArrowRight size={14} className="opacity-60" />
                 </button>
 
-                {/* 6: Документы */}
+                {/* 5: Документы */}
                 <button
                   type="button"
                   onClick={() => handleSelectNav('documents')}
@@ -364,7 +371,7 @@ export default function TopSiteMenu({
                   <ArrowRight size={14} className="opacity-60" />
                 </button>
 
-                {/* 7: Фонд Негодяев */}
+                {/* 6: Фонд Негодяев */}
                 <button
                   type="button"
                   onClick={() => handleSelectNav('fund')}
@@ -377,7 +384,7 @@ export default function TopSiteMenu({
                   <div className="flex items-center gap-2.5">
                     <Coins size={17} className={activeTab === 'fund' ? 'text-yellow-300' : 'text-red-600'} />
                     <div>
-                      <div className="font-black text-xs uppercase leading-tight">Фонд Негодяев (500 ₽)</div>
+                      <div className="font-black text-xs uppercase leading-tight">Фонд Негодяев</div>
                       <div className={`text-[10px] ${activeTab === 'fund' ? 'text-yellow-100' : 'text-stone-500'}`}>
                         Казна команды и контроль взносов
                       </div>
@@ -386,29 +393,7 @@ export default function TopSiteMenu({
                   <ArrowRight size={14} className="opacity-60" />
                 </button>
 
-                {/* 8: Творчество */}
-                <button
-                  type="button"
-                  onClick={() => handleSelectNav('creativity')}
-                  className={`w-full text-left p-2.5 rounded-xl border-2 transition-all flex items-center justify-between ${
-                    activeTab === 'creativity'
-                      ? 'bg-red-600 text-yellow-300 border-amber-950 shadow-sm'
-                      : 'bg-white hover:bg-amber-100/70 text-amber-950 border-amber-200'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Palette size={17} className={activeTab === 'creativity' ? 'text-yellow-300' : 'text-red-600'} />
-                    <div>
-                      <div className="font-black text-xs uppercase leading-tight">Творчество</div>
-                      <div className={`text-[10px] ${activeTab === 'creativity' ? 'text-yellow-100' : 'text-stone-500'}`}>
-                        Идеи, конкурсы и креатив банды
-                      </div>
-                    </div>
-                  </div>
-                  <ArrowRight size={14} className="opacity-60" />
-                </button>
-
-                {/* 9: Админка */}
+                {/* 7: Штаб Капитана (Админка) */}
                 <button
                   type="button"
                   onClick={() => handleSelectNav('admin')}
@@ -422,7 +407,7 @@ export default function TopSiteMenu({
                     <Shield size={17} className={activeTab === 'admin' ? 'text-yellow-300' : 'text-red-600'} />
                     <div>
                       <div className="font-black text-xs uppercase leading-tight flex items-center gap-2">
-                        <span>Панель управления (Админка)</span>
+                        <span>Штаб Капитана</span>
                         {pendingApprovalsCount > 0 && (
                           <span className="bg-red-600 text-white text-[9px] font-black px-1.5 py-0.2 rounded-full">
                             +{pendingApprovalsCount}
@@ -430,7 +415,7 @@ export default function TopSiteMenu({
                         )}
                       </div>
                       <div className={`text-[10px] ${activeTab === 'admin' ? 'text-yellow-100' : 'text-stone-500'}`}>
-                        Роли штаба, модерация, психотипы
+                        Роли команды, модерация, психотипы
                       </div>
                     </div>
                   </div>

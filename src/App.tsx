@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Tent, MessageSquare, Image as ImageIcon, FolderArchive, 
-  Coins, Palette, Shield, Lock, Cake, User, LogOut, 
+  Coins, Palette, Shield, Cake, User, 
   AlertCircle, CheckCircle, Bell, Sparkles, Edit, BookOpen,
   CheckSquare, Coffee, Package, Trophy
 } from 'lucide-react';
@@ -22,6 +22,9 @@ import TasksTab from './components/TasksTab';
 import MenuGroceriesTab from './components/MenuGroceriesTab';
 import InventoryTab from './components/InventoryTab';
 import ContestsTab from './components/ContestsTab';
+import NavigationTabs, { TabItem } from './components/NavigationTabs';
+import TopSiteMenu from './components/TopSiteMenu';
+import ProfileEditModal from './components/ProfileEditModal';
 
 import { 
   Participant, Excursion, ChatMessage, BotConfig, 
@@ -41,11 +44,13 @@ export default function App() {
   // Navigation
   type TabType = 'history' | 'home' | 'tasks' | 'menu' | 'inventory' | 'contests' | 'gallery' | 'documents' | 'fund' | 'creativity' | 'admin';
   const [activeTab, setActiveTab] = useState<TabType>('history');
+  const [homeSubTab, setHomeSubTab] = useState<'overview' | 'tasks' | 'menu' | 'contests' | 'creativity'>('overview');
 
   // Modals
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
   const [isBirthdayModalOpen, setIsBirthdayModalOpen] = useState(false);
+  const [isProfileEditOpen, setIsProfileEditOpen] = useState(false);
 
   // Authentication State
   const [currentUser, setCurrentUser] = useState<Participant | null>(() => {
@@ -164,7 +169,7 @@ export default function App() {
   const handleLoginSuccess = (user: Participant) => {
     setCurrentUser(user);
     localStorage.setItem('negodyai_active_user', JSON.stringify(user));
-    showToast(`Добро пожаловать в банду, ${user.name}!`, 'success');
+    showToast(`Добро пожаловать в команду, ${user.name}!`, 'success');
   };
 
   const handleLogout = () => {
@@ -335,6 +340,37 @@ export default function App() {
   const yearWord = teamAgeYears % 10 === 1 && teamAgeYears % 100 !== 11 ? 'год' : (teamAgeYears % 10 >= 2 && teamAgeYears % 10 <= 4 && (teamAgeYears % 100 < 10 || teamAgeYears % 100 >= 20)) ? 'года' : 'лет';
   const pendingApprovalsCount = participants.filter(p => p.accountStatus === 'pending').length;
 
+  const handleNavigate = (tabId: string, subTab?: 'overview' | 'tasks' | 'menu' | 'contests' | 'creativity') => {
+    if (tabId === 'tasks') {
+      setActiveTab('home');
+      setHomeSubTab('tasks');
+    } else if (tabId === 'menu') {
+      setActiveTab('home');
+      setHomeSubTab('menu');
+    } else if (tabId === 'contests') {
+      setActiveTab('home');
+      setHomeSubTab('contests');
+    } else if (tabId === 'creativity') {
+      setActiveTab('home');
+      setHomeSubTab('creativity');
+    } else {
+      setActiveTab(tabId as any);
+      if (tabId === 'home' && subTab) {
+        setHomeSubTab(subTab);
+      }
+    }
+  };
+
+  const MAIN_TABS: TabItem[] = [
+    { id: 'history', label: 'История команды', icon: BookOpen },
+    { id: 'home', label: 'Планируемые слёты', icon: Tent },
+    { id: 'inventory', label: 'Инвентарь', icon: Package },
+    { id: 'gallery', label: 'Фотогалерея', icon: ImageIcon },
+    { id: 'documents', label: 'Документы', icon: FolderArchive },
+    { id: 'fund', label: 'Фонд Негодяев', icon: Coins },
+    { id: 'admin', label: 'Штаб Капитана', icon: Shield, badge: pendingApprovalsCount > 0 ? pendingApprovalsCount : undefined }
+  ];
+
   return (
     <div className="min-h-screen bg-[#FFFBEB] text-amber-950 flex flex-col font-sans selection:bg-red-600 selection:text-yellow-300">
       
@@ -390,15 +426,15 @@ export default function App() {
 
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-xl sm:text-2xl font-black text-red-600 uppercase tracking-tight leading-none">
-                  Банда <span className="bg-red-600 text-yellow-300 px-2 py-0.5 rounded transform -rotate-1 inline-block">НЕГОДЯИ</span>
+                <h1 className="text-xl sm:text-2xl font-black text-amber-950 uppercase tracking-tight leading-none">
+                  <span className="bg-red-600 text-yellow-300 px-2.5 py-0.5 rounded transform -rotate-1 inline-block shadow-sm">НЕГОДЯИ</span>
                 </h1>
                 <span className="bg-red-700 text-yellow-300 text-[10px] sm:text-xs font-black px-2.5 py-0.5 rounded-full border border-yellow-300 shadow select-none">
                   🧭 нам {teamAgeYears} {yearWord}
                 </span>
               </div>
               <p className="text-[11px] sm:text-xs font-bold text-amber-900 mt-0.5">
-                Официальный клубный сайт туристической команды
+                Туристическая команда «Негодяи»
               </p>
             </div>
           </div>
@@ -406,6 +442,19 @@ export default function App() {
           {/* Open Top Menu Actions */}
           <div className="flex items-center gap-2 flex-wrap">
             
+            {/* Top Dropdown Menu */}
+            <TopSiteMenu
+              currentUser={currentUser}
+              activeTab={activeTab}
+              onNavigateTab={handleNavigate}
+              onOpenProfileEdit={() => setIsProfileEditOpen(true)}
+              onOpenSecurity={() => setIsSecurityModalOpen(true)}
+              onOpenBirthdays={() => setIsBirthdayModalOpen(true)}
+              onOpenAuth={() => setIsAuthModalOpen(true)}
+              onLogout={handleLogout}
+              pendingApprovalsCount={pendingApprovalsCount}
+            />
+
             {/* Birthday Diary Alert */}
             <button
               type="button"
@@ -417,43 +466,8 @@ export default function App() {
               <span className="hidden sm:inline">Дни рождения</span>
             </button>
 
-            {/* Security & Password Open Menu */}
-            <button
-              type="button"
-              onClick={() => setIsSecurityModalOpen(true)}
-              className="px-3 py-2 bg-yellow-300 hover:bg-yellow-200 border-2 border-amber-500 rounded-xl text-xs font-black uppercase text-amber-950 flex items-center gap-1.5 shadow-sm transition-all active:scale-95"
-              title="Безопасность и смена пароля"
-            >
-              <Lock size={16} className="text-red-600" />
-              <span className="hidden sm:inline">Безопасность</span>
-            </button>
-
-            {/* Current User or Login Button */}
-            {currentUser ? (
-              <div className="flex items-center gap-2 bg-white/90 border-2 border-red-600 rounded-2xl p-1 pr-3 shadow-sm">
-                <img src={currentUser.avatar} alt={currentUser.name} className="w-8 h-8 rounded-full border border-amber-300 object-cover" />
-                <div className="text-left leading-none">
-                  <div className="flex items-center gap-1">
-                    <span className="font-black text-xs text-amber-950">{currentUser.name}</span>
-                    {currentUser.role && ROLE_DEFINITIONS[currentUser.role] && (
-                      <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded flex items-center gap-0.5 border ${ROLE_DEFINITIONS[currentUser.role].color}`}>
-                        <span>{ROLE_DEFINITIONS[currentUser.role].icon}</span>
-                        <span>{ROLE_DEFINITIONS[currentUser.role].badge}</span>
-                      </span>
-                    )}
-                  </div>
-                  <span className="text-[10px] font-bold text-red-600">@{currentUser.nickname}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  className="ml-1 p-1 text-red-600 hover:text-red-800"
-                  title="Выйти из аккаунта"
-                >
-                  <LogOut size={15} />
-                </button>
-              </div>
-            ) : (
+            {/* Login Button for Guests */}
+            {!currentUser && (
               <button
                 type="button"
                 onClick={() => setIsAuthModalOpen(true)}
@@ -468,47 +482,12 @@ export default function App() {
 
         </div>
 
-        {/* PRIMARY WEBSITE NAVIGATION TABS */}
-        <div className="bg-amber-100/90 border-t-2 border-amber-300 px-4 py-1.5 overflow-x-auto scrollbar-thin">
-          <div className="max-w-7xl mx-auto flex items-center gap-1.5 min-w-max">
-            {[
-              { id: 'history', label: 'История команды', icon: BookOpen },
-              { id: 'home', label: 'Планируемые слёты и взносы', icon: Tent },
-              { id: 'tasks', label: 'Задачи слёта', icon: CheckSquare },
-              { id: 'menu', label: 'Меню и продукты', icon: Coffee },
-              { id: 'inventory', label: 'Инвентарь', icon: Package },
-              { id: 'contests', label: 'Конкурсы', icon: Trophy },
-              { id: 'gallery', label: 'Фотогалерея', icon: ImageIcon },
-              { id: 'documents', label: 'Документы', icon: FolderArchive },
-              { id: 'fund', label: 'Фонд Негодяев (500 ₽)', icon: Coins },
-              { id: 'creativity', label: 'Творчество', icon: Palette },
-              { id: 'admin', label: 'Админка', icon: Shield, badge: pendingApprovalsCount > 0 ? pendingApprovalsCount : undefined }
-            ].map(item => {
-              const Icon = item.icon;
-              const isActive = activeTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setActiveTab(item.id as any)}
-                  className={`px-3 py-2 rounded-xl text-xs font-black uppercase flex items-center gap-2 transition-all shrink-0 ${
-                    isActive
-                      ? 'bg-red-600 text-yellow-300 shadow-md transform scale-[1.03]'
-                      : 'text-amber-950 hover:bg-amber-200'
-                  }`}
-                >
-                  <Icon size={16} />
-                  <span>{item.label}</span>
-                  {item.badge && (
-                    <span className="bg-red-600 text-white text-[10px] font-black px-1.5 py-0.2 rounded-full animate-pulse">
-                      {item.badge}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        {/* PRIMARY WEBSITE NAVIGATION TABS WITH DUAL-DIRECTION SCROLL */}
+        <NavigationTabs
+          tabs={MAIN_TABS}
+          activeTab={activeTab === 'tasks' || activeTab === 'menu' || activeTab === 'contests' || activeTab === 'creativity' ? 'home' : activeTab}
+          onSelectTab={(id) => handleNavigate(id)}
+        />
       </header>
 
       {/* SYSTEM TOAST ALERT */}
@@ -540,38 +519,64 @@ export default function App() {
           />
         )}
 
-        {/* TAB 1: PLANNED RALLIES & FEES */}
-        {activeTab === 'home' && (
+        {/* TAB 1: PLANNED RALLIES (WITH EMBEDDED TASKS, MENU, CONTESTS, CREATIVITY) */}
+        {(activeTab === 'home' || activeTab === 'tasks' || activeTab === 'menu' || activeTab === 'contests' || activeTab === 'creativity') && (
           <HomeRallyTab
             participants={participants}
             excursions={excursions}
             onUpdateParticipants={setParticipants}
             onNudgeDebtor={handleNudgeDebtor}
-            onNavigateToTab={(tab) => setActiveTab(tab as any)}
-          />
-        )}
-
-        {/* TAB: TASKS (MOVED FROM ADMIN) */}
-        {activeTab === 'tasks' && (
-          <TasksTab
+            onNavigateToTab={handleNavigate}
             tasks={tasks}
             onUpdateTasks={setTasks}
-            participants={participants}
-            currentUser={currentUser}
-            isAdmin={currentUser?.role === 'admin'}
-          />
-        )}
-
-        {/* TAB: MENU & GROCERIES (MOVED FROM ADMIN) */}
-        {activeTab === 'menu' && (
-          <MenuGroceriesTab
             menuItems={menuItems}
             groceryItems={groceryItems}
             onUpdateMenu={setMenuItems}
             onUpdateGroceries={setGroceryItems}
-            participants={participants}
+            contests={contests}
+            onUpdateContests={setContests}
+            creativityIdeas={creativityIdeas}
+            onIdeaAdded={(idea) => setCreativityIdeas(prev => [idea, ...prev])}
+            onIdeaVoted={(id) => {
+              if (!currentUser) return;
+              setCreativityIdeas(prev => prev.map(i => {
+                if (i.id === id) {
+                  const already = i.votedUserIds.includes(currentUser.id);
+                  return {
+                    ...i,
+                    votes: already ? i.votes - 1 : i.votes + 1,
+                    votedUserIds: already ? i.votedUserIds.filter(u => u !== currentUser.id) : [...i.votedUserIds, currentUser.id]
+                  };
+                }
+                return i;
+              }));
+            }}
+            onCommentAdded={(id, text) => {
+              if (!currentUser) return;
+              const newComment = {
+                id: 'c_' + Date.now(),
+                authorName: currentUser.name,
+                text,
+                createdAt: new Date().toISOString().slice(0, 16).replace('T', ' ')
+              };
+              setCreativityIdeas(prev => prev.map(i => i.id === id ? { ...i, comments: [...(i.comments || []), newComment] } : i));
+            }}
+            onStatusChanged={(id, status) => {
+              setCreativityIdeas(prev => prev.map(i => i.id === id ? { ...i, status } : i));
+            }}
             currentUser={currentUser}
             isAdmin={currentUser?.role === 'admin'}
+            activeSubTab={
+              activeTab === 'tasks' ? 'tasks' : 
+              activeTab === 'menu' ? 'menu' : 
+              activeTab === 'contests' ? 'contests' : 
+              activeTab === 'creativity' ? 'creativity' : 
+              homeSubTab
+            }
+            onSubTabChange={(sub) => {
+              setActiveTab('home');
+              setHomeSubTab(sub);
+            }}
           />
         )}
 
@@ -580,17 +585,6 @@ export default function App() {
           <InventoryTab
             inventoryItems={inventoryItems}
             onUpdateInventory={setInventoryItems}
-            participants={participants}
-            currentUser={currentUser}
-            isAdmin={currentUser?.role === 'admin'}
-          />
-        )}
-
-        {/* TAB: CONTESTS (MOVED FROM ADMIN) */}
-        {activeTab === 'contests' && (
-          <ContestsTab
-            contests={contests}
-            onUpdateContests={setContests}
             participants={participants}
             currentUser={currentUser}
             isAdmin={currentUser?.role === 'admin'}
@@ -630,43 +624,6 @@ export default function App() {
             isTreasurer={currentUser?.role === 'treasurer' || currentUser?.role === 'admin'}
             onPaymentToggled={(rec) => setFundRecords(prev => prev.map(r => r.id === rec.id ? { ...r, isPaid: !r.isPaid } : r))}
             onSetTreasurer={(pId) => handleSetRole(pId, 'treasurer')}
-          />
-        )}
-
-        {/* TAB 6: CREATIVITY BANK (5 SUBSECTIONS) */}
-        {activeTab === 'creativity' && (
-          <CreativityTab
-            ideas={creativityIdeas}
-            currentUser={currentUser}
-            isAdmin={currentUser?.role === 'admin'}
-            onIdeaAdded={(idea) => setCreativityIdeas(prev => [idea, ...prev])}
-            onIdeaVoted={(id) => {
-              if (!currentUser) return;
-              setCreativityIdeas(prev => prev.map(i => {
-                if (i.id === id) {
-                  const already = i.votedUserIds.includes(currentUser.id);
-                  return {
-                    ...i,
-                    votes: already ? i.votes - 1 : i.votes + 1,
-                    votedUserIds: already ? i.votedUserIds.filter(u => u !== currentUser.id) : [...i.votedUserIds, currentUser.id]
-                  };
-                }
-                return i;
-              }));
-            }}
-            onCommentAdded={(id, text) => {
-              if (!currentUser) return;
-              const newComment = {
-                id: 'c_' + Date.now(),
-                authorName: currentUser.name,
-                text,
-                createdAt: new Date().toISOString().slice(0, 16).replace('T', ' ')
-              };
-              setCreativityIdeas(prev => prev.map(i => i.id === id ? { ...i, comments: [...i.comments, newComment] } : i));
-            }}
-            onStatusChanged={(id, status) => {
-              setCreativityIdeas(prev => prev.map(i => i.id === id ? { ...i, status } : i));
-            }}
           />
         )}
 
@@ -714,7 +671,7 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-bold text-amber-950">
           <div className="flex items-center gap-2">
             <span className="text-xl">⛺</span>
-            <span>Туристическая банда &laquo;НЕГОДЯИ&raquo; • Основана в {botConfig.foundingYear || 2018} году</span>
+            <span>Туристическая команда &laquo;НЕГОДЯИ&raquo; • Основана в {botConfig.foundingYear || 2018} году</span>
           </div>
           <p className="text-center sm:text-right text-[11px] text-amber-900">
             Все права защищены походным братством. Память сайта на PostgreSQL.
@@ -723,6 +680,18 @@ export default function App() {
       </footer>
 
       {/* MODALS */}
+      <ProfileEditModal
+        isOpen={isProfileEditOpen}
+        onClose={() => setIsProfileEditOpen(false)}
+        currentUser={currentUser}
+        onProfileUpdated={(updated) => {
+          setCurrentUser(updated);
+          localStorage.setItem('negodyai_active_user', JSON.stringify(updated));
+          setParticipants(prev => prev.map(p => p.id === updated.id ? updated : p));
+          showToast('Личные данные успешно сохранены!', 'success');
+        }}
+      />
+
       <AuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}

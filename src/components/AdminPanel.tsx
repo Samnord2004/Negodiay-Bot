@@ -107,16 +107,16 @@ export default function AdminPanel({
         <div className="w-16 h-16 bg-red-600 text-yellow-300 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-4 border-2 border-amber-950 shadow-md">
           🔒
         </div>
-        <h2 className="text-2xl font-black text-red-600 uppercase mb-2">Административная панель</h2>
+        <h2 className="text-2xl font-black text-red-600 uppercase mb-2">Панель Капитана команды</h2>
         <p className="text-xs font-bold text-amber-900 mb-6 leading-relaxed">
-          Управление слётом, одобрение регистраций новых участников, назначение казначея фонда, настройка задач, инвентаря и психотипов доступны только администраторам.
+          Управление слётом, одобрение регистраций новых участников, назначение казначея фонда, настройка задач, инвентаря и психотипов доступны только Капитану команды.
         </p>
         <button
           type="button"
           onClick={onOpenLogin}
           className="w-full bg-red-600 hover:bg-red-700 text-yellow-300 font-black uppercase text-xs py-3.5 rounded-xl border-2 border-amber-950 shadow-md transition-all active:scale-95"
         >
-          Войти как Организатор
+          Войти как Капитан команды
         </button>
       </div>
     );
@@ -130,7 +130,7 @@ export default function AdminPanel({
         <div>
           <div className="flex items-center gap-2">
             <span className="bg-red-600 text-yellow-300 text-xs font-black uppercase px-2.5 py-0.5 rounded-full border border-amber-950">
-              👑 Режим Организатора
+              👑 Капитан команды
             </span>
             {pendingUsers.length > 0 && (
               <span className="bg-amber-500 text-white text-xs font-black px-2 py-0.5 rounded-full animate-bounce">
@@ -139,7 +139,7 @@ export default function AdminPanel({
             )}
           </div>
           <h2 className="text-xl sm:text-2xl font-black text-red-600 uppercase mt-1">
-            Штаб управления бандой «Негодяи»
+            Штаб управления туристической командой «Негодяи»
           </h2>
         </div>
 
@@ -226,7 +226,7 @@ export default function AdminPanel({
                         <span>🎂 {p.birthday || 'Не указан'}</span>
                       </div>
                       <p className="text-[10px] text-amber-600 mt-0.5">
-                        Статус: <strong className="text-amber-800 uppercase">Ожидает решения администратора</strong>
+                        Статус: <strong className="text-amber-800 uppercase">Ожидает решения Капитана команды</strong>
                       </p>
                     </div>
                   </div>
@@ -372,7 +372,7 @@ export default function AdminPanel({
               Коэффициенты и Тональность ИИ (Психотипы)
             </h3>
             <p className="text-xs text-amber-800 mb-4 font-medium leading-relaxed">
-              Блок управления психотипами, походным лексиконом и чувствительностью ИИ перенесен в панель администратора по правилам конфиденциальности команды.
+              Блок управления психотипами, походным лексиконом и чувствительностью ИИ перенесен в панель Капитана команды по правилам конфиденциальности команды.
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -930,48 +930,133 @@ export default function AdminPanel({
           </div>
 
           <div className="space-y-3">
-            {contests.map(c => (
-              <div key={c.id} className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h5 className="font-black text-sm uppercase text-amber-950">{c.title}</h5>
-                    {c.place && (
-                      <span className="bg-yellow-300 text-amber-950 text-xs font-black px-2 py-0.5 rounded-full border border-yellow-500">
-                        {c.place}
+            {contests.map(c => {
+              const participatingMembers = participants.filter(p => c.teamMemberIds?.includes(p.id) && p.id !== c.captainId);
+              const allAssignedIds = new Set([c.captainId, ...(c.teamMemberIds || [])]);
+              const totalCount = (c.captainId ? 1 : 0) + participatingMembers.length;
+
+              return (
+                <div key={c.id} className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 space-y-3">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h5 className="font-black text-sm uppercase text-amber-950">{c.title}</h5>
+                        {c.schedule && (
+                          <span className="bg-stone-800 text-yellow-300 text-[11px] font-bold px-2 py-0.5 rounded-full">
+                            🕒 {c.schedule}
+                          </span>
+                        )}
+                        {c.place && (
+                          <span className="bg-yellow-300 text-amber-950 text-xs font-black px-2 py-0.5 rounded-full border border-yellow-500">
+                            {c.place}
+                          </span>
+                        )}
+                      </div>
+                      {c.description && (
+                        <p className="text-xs text-stone-600 font-medium mt-1">{c.description}</p>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <select
+                        value={c.place || ''}
+                        onChange={(e) => {
+                          const newPlace = e.target.value;
+                          onUpdateContests(contests.map(item => item.id === c.id ? { ...item, place: newPlace } : item));
+                        }}
+                        className="bg-white border border-amber-400 rounded-xl px-2.5 py-1 text-xs font-black text-amber-950 outline-none"
+                      >
+                        <option value="">Без места</option>
+                        <option value="🥇 1-е место">🥇 1-е место</option>
+                        <option value="🥈 2-е место">🥈 2-е место</option>
+                        <option value="🥉 3-е место">🥉 3-е место</option>
+                        <option value="Призёр">Призёр</option>
+                        <option value="Участие">Участие</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* FULL PARTICIPANTS LIST */}
+                  <div className="bg-white/80 border border-amber-200 rounded-xl p-3 space-y-2">
+                    <div className="flex items-center justify-between text-[11px] font-black uppercase text-amber-900">
+                      <span className="flex items-center gap-1.5">
+                        <Users size={14} className="text-red-600" />
+                        Состав участников на конкурсе ({totalCount} чел.):
                       </span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      {/* Captain Badge */}
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-200 border-2 border-amber-400 rounded-xl text-xs font-black text-amber-950 shadow-2xs">
+                        <span>👑</span>
+                        <span>{c.captainName}</span>
+                        <span className="bg-red-600 text-yellow-300 text-[9px] font-black uppercase px-1.5 py-0.2 rounded">
+                          Капитан конкурса
+                        </span>
+                      </div>
+
+                      {/* Participating Members */}
+                      {participatingMembers.map(m => (
+                        <div key={m.id} className="inline-flex items-center gap-1.5 px-3 py-1 bg-white border border-amber-300 rounded-xl text-xs font-bold text-stone-900 shadow-2xs">
+                          <span>{m.avatar || '🏕️'}</span>
+                          <span>{m.name}</span>
+                          <span className="text-stone-400 text-[10px]">(@{m.nickname})</span>
+                          <button
+                            type="button"
+                            title="Исключить из состава"
+                            onClick={() => {
+                              const updatedMembers = (c.teamMemberIds || []).filter(id => id !== m.id);
+                              onUpdateContests(contests.map(item => item.id === c.id ? { ...item, teamMemberIds: updatedMembers } : item));
+                            }}
+                            className="text-stone-400 hover:text-red-600 ml-1 text-xs"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+
+                      {participatingMembers.length === 0 && (
+                        <span className="text-xs text-stone-500 italic py-1">
+                          (Другие участники пока не записаны)
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Quick Add Member to Contest */}
+                    {participants.filter(p => !allAssignedIds.has(p.id)).length > 0 && (
+                      <div className="pt-2 border-t border-amber-100 flex items-center gap-2 flex-wrap">
+                        <span className="text-[11px] font-bold text-amber-800">Добавить участника:</span>
+                        <select
+                          defaultValue=""
+                          onChange={(e) => {
+                            const addId = e.target.value;
+                            if (addId) {
+                              const currentList = c.teamMemberIds || [];
+                              if (!currentList.includes(addId)) {
+                                onUpdateContests(contests.map(item => item.id === c.id ? { ...item, teamMemberIds: [...currentList, addId] } : item));
+                              }
+                              e.target.value = '';
+                            }
+                          }}
+                          className="bg-amber-50 border border-amber-300 rounded-lg px-2 py-1 text-xs font-bold text-amber-950 outline-none"
+                        >
+                          <option value="">+ Выбрать из списка команды...</option>
+                          {participants.filter(p => !allAssignedIds.has(p.id)).map(p => (
+                            <option key={p.id} value={p.id}>{p.name} (@{p.nickname})</option>
+                          ))}
+                        </select>
+                      </div>
                     )}
                   </div>
-                  <div className="text-xs text-amber-800 mt-1 space-x-3">
-                    <span>👑 Капитан: <strong>{c.captainName}</strong></span>
-                    {c.teamMemberIds && c.teamMemberIds.length > 0 && (
-                      <span>👥 В команде: {c.teamMemberIds.length} чел.</span>
-                    )}
-                  </div>
+
                   {c.imageUrl && (
                     <div className="mt-2 w-24 h-16 rounded border border-amber-300 overflow-hidden">
                       <img src={c.imageUrl} alt={c.title} className="w-full h-full object-cover" />
                     </div>
                   )}
                 </div>
-
-                <div className="flex items-center gap-2">
-                  <select
-                    value={c.place || ''}
-                    onChange={(e) => {
-                      const newPlace = e.target.value;
-                      onUpdateContests(contests.map(item => item.id === c.id ? { ...item, place: newPlace } : item));
-                    }}
-                    className="bg-white border border-amber-400 rounded-xl px-2 py-1 text-xs font-black text-amber-950"
-                  >
-                    <option value="">Без места</option>
-                    <option value="🥇 1-е место">🥇 1-е место</option>
-                    <option value="🥈 2-е место">🥈 2-е место</option>
-                    <option value="🥉 3-е место">🥉 3-е место</option>
-                    <option value="Участие">Участие</option>
-                  </select>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

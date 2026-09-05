@@ -204,12 +204,12 @@ export default function AuthModal({
                     currentUser.role === 'treasurer' ? 'bg-emerald-600 text-white border-emerald-700' :
                     'bg-amber-200 text-amber-900 border-amber-400'
                   }`}>
-                    {currentUser.role === 'admin' ? 'Администратор' : currentUser.role === 'treasurer' ? 'Казначей фонда' : 'Участник'}
+                    {currentUser.role === 'admin' ? 'Капитан команды' : currentUser.role === 'treasurer' ? 'Казначей фонда' : 'Участник'}
                   </span>
                 </div>
                 <p className="text-sm font-bold text-red-600">@{currentUser.nickname}</p>
                 <p className="text-xs text-amber-700 mt-1">
-                  Статус аккаунта: <span className="font-bold text-emerald-700">Одобрен администратором ✓</span>
+                  Статус аккаунта: <span className="font-bold text-emerald-700">Одобрен Капитаном команды ✓</span>
                 </p>
                 {currentUser.biometricEnabled && (
                   <p className="text-xs text-emerald-600 flex items-center gap-1 font-bold mt-0.5">
@@ -233,7 +233,7 @@ export default function AuthModal({
                 <span className="font-bold text-amber-950">{currentUser.birthday || 'Не указан'}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-amber-800">В банде с:</span>
+                <span className="text-amber-800">В команде с:</span>
                 <span className="font-bold text-amber-950">{currentUser.joinedYear} года</span>
               </div>
             </div>
@@ -334,7 +334,7 @@ export default function AuthModal({
                     />
                   </div>
                   <p className="text-[11px] text-amber-700 mt-1">
-                    Для входа администратором: логин <span className="font-bold text-red-600">admin</span> (пароль по умолчанию: <span className="font-bold text-red-600">admin</span>)
+                    Для входа Капитаном команды: логин <span className="font-bold text-red-600">admin</span> (пароль по умолчанию: <span className="font-bold text-red-600">admin</span>)
                   </p>
                 </div>
 
@@ -376,7 +376,7 @@ export default function AuthModal({
                   <form onSubmit={handleSendVerificationCode} className="space-y-3">
                     <div className="bg-amber-100 p-2.5 rounded-lg border border-amber-300 text-[11px] text-amber-900 font-semibold flex items-center gap-2">
                       <UserCheck className="w-5 h-5 text-red-600 shrink-0" />
-                      <span>Внимание: Все новые аккаунты проходят обязательное подтверждение администратором!</span>
+                      <span>Внимание: Все новые аккаунты проходят обязательное подтверждение Капитаном команды!</span>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -395,7 +395,7 @@ export default function AuthModal({
                       </div>
                       <div>
                         <label className="block text-[11px] font-black uppercase text-amber-900 mb-1">
-                          Позывной в банде *
+                          Позывной в команде *
                         </label>
                         <input
                           type="text"

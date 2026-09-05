@@ -262,6 +262,11 @@ export async function initDb() {
 
       -- Purge bot messages from team internal chat as requested by user
       DELETE FROM messages WHERE is_bot = TRUE OR sender_nickname = 'negodyai_bot';
+      -- Clean up mock bots: only keep Captain ('3') and real user accounts
+      DELETE FROM participants WHERE id IN ('1', '2', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20') AND id != '3';
+      DELETE FROM messages WHERE sender_name IN ('Андрюха Хорёк', 'Иришка Булочка', 'Михалыч Лесник', 'Саня Запевала');
+      DELETE FROM fund_records WHERE participant_id IN ('1', '2', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20') AND participant_id != '3';
+      UPDATE participants SET avatar = '' WHERE avatar LIKE '%dicebear.com/7.x/bottts%';
     `);
 
     // Load or seed Participants
@@ -271,7 +276,7 @@ export async function initDb() {
         await pool.query(
           `INSERT INTO participants (id, name, nickname, psychotype, avatar, paid_amount, total_cost, debt_amount, joined, birthday, joined_year, skipped_years, gender, role, email, phone, password, account_status, biometric_enabled)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19) ON CONFLICT (id) DO NOTHING`,
-          [p.id, p.name, p.nickname, p.psychotype, p.avatar, p.paidAmount, p.totalCost, p.debtAmount, p.joined, p.birthday || null, p.joinedYear, JSON.stringify(p.skippedYears), p.gender, p.role || 'member', p.email || '', p.phone || '', p.password || '123', p.accountStatus || 'active', p.biometricEnabled || false]
+          [p.id, p.name, p.nickname, p.psychotype, p.avatar, p.paidAmount, p.totalCost, p.debtAmount, p.joined, p.birthday || null, p.joinedYear, JSON.stringify(p.skippedYears), p.gender, p.role || 'admin', p.email || '', p.phone || '', p.password || 'admin', p.accountStatus || 'active', p.biometricEnabled || false]
         );
       }
       cacheParticipants = [...initialParticipants];
@@ -281,7 +286,7 @@ export async function initDb() {
         name: r.name,
         nickname: r.nickname,
         psychotype: r.psychotype,
-        avatar: r.avatar,
+        avatar: (r.avatar && !r.avatar.includes("dicebear.com/7.x/bottts")) ? r.avatar : "",
         paidAmount: Number(r.paid_amount),
         totalCost: Number(r.total_cost),
         debtAmount: Number(r.debt_amount),
@@ -290,25 +295,20 @@ export async function initDb() {
         joinedYear: Number(r.joined_year),
         skippedYears: Array.isArray(r.skipped_years) ? r.skipped_years : JSON.parse(r.skipped_years || "[]"),
         gender: r.gender,
-        role: (r.role as UserRole) || (r.id === "3" ? "admin" : r.id === "4" ? "treasurer" : "member"),
-        email: r.email || (r.id === "3" ? "admin@negodyai.club" : r.id === "4" ? "treasurer@negodyai.club" : undefined),
+        role: (r.role as UserRole) || (r.id === "3" ? "admin" : "member"),
+        email: r.email || (r.id === "3" ? "admin@negodyai.club" : undefined),
         phone: r.phone || undefined,
         password: r.password || (r.id === "3" ? "admin" : "123"),
         accountStatus: (r.account_status as AccountStatus) || "active",
         biometricEnabled: Boolean(r.biometric_enabled)
       }));
 
-      // Ensure at least one admin and treasurer exist in cache
+      // Ensure at least one admin exists in cache (Captain)
       const hasAdmin = cacheParticipants.some(p => p.role === 'admin');
       if (!hasAdmin && cacheParticipants.length > 0) {
         cacheParticipants[0].role = 'admin';
         cacheParticipants[0].password = 'admin';
         await pool.query("UPDATE participants SET role = 'admin', password = 'admin' WHERE id = $1", [cacheParticipants[0].id]);
-      }
-      const hasTreasurer = cacheParticipants.some(p => p.role === 'treasurer');
-      if (!hasTreasurer && cacheParticipants.length > 1) {
-        cacheParticipants[1].role = 'treasurer';
-        await pool.query("UPDATE participants SET role = 'treasurer' WHERE id = $1", [cacheParticipants[1].id]);
       }
     }
 

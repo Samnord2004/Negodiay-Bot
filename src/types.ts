@@ -20,10 +20,10 @@ export interface RoleInfo {
 export const ROLE_DEFINITIONS: Record<UserRole, RoleInfo> = {
   admin: {
     role: 'admin',
-    title: 'Администратор',
-    badge: 'Админ',
+    title: 'Капитан команды',
+    badge: 'Капитан команды',
     color: 'bg-red-600 text-white border-red-700',
-    description: 'Полное управление сайтом, подтверждение участников и настройки команды',
+    description: 'Капитан туристической команды Негодяи: руководство командой, назначение ролей, утверждение участников и общее управление',
     icon: '👑'
   },
   treasurer: {
@@ -71,7 +71,7 @@ export const ROLE_DEFINITIONS: Record<UserRole, RoleInfo> = {
     title: 'Шеф-повар',
     badge: 'Шеф-повар',
     color: 'bg-orange-600 text-white border-orange-700',
-    description: 'Командный повар: полевая кухня, меню слёта, костровой плов и сытость всей банды',
+    description: 'Командный повар: полевая кухня, меню слёта, костровой плов и сытость всей команды',
     icon: '👨‍🍳'
   },
   member: {
@@ -79,7 +79,7 @@ export const ROLE_DEFINITIONS: Record<UserRole, RoleInfo> = {
     title: 'Участник',
     badge: 'Негодяй',
     color: 'bg-stone-700 text-stone-100 border-stone-800',
-    description: 'Член походного братства команды Негодяи',
+    description: 'Член походного братства туристической команды Негодяи',
     icon: '⛺'
   }
 };

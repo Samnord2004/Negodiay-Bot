@@ -65,7 +65,7 @@ export default function TeamAuthGate({
       );
       if (found) {
         if (found.accountStatus === 'pending') {
-          setLoginError('Ваша заявка ожидает подтверждения администратором.');
+          setLoginError('Ваша заявка ожидает подтверждения Капитаном команды.');
         } else {
           onLogin(found);
         }
@@ -157,7 +157,7 @@ export default function TeamAuthGate({
       if (!response.ok || !data.success) {
         setRegError(data.error || 'Ошибка при регистрации');
       } else {
-        setRegSuccessMessage('Заявка успешно отправлена! Ожидайте подтверждения от администратора команды.');
+        setRegSuccessMessage('Заявка успешно отправлена! Ожидайте подтверждения от Капитана команды.');
         onRegisterSuccess(data.user);
       }
     } catch (err) {
@@ -178,7 +178,7 @@ export default function TeamAuthGate({
         accountStatus: 'pending',
         biometricEnabled: regBiometric
       };
-      setRegSuccessMessage('Заявка успешно отправлена! Ожидайте подтверждения от администратора команды.');
+      setRegSuccessMessage('Заявка успешно отправлена! Ожидайте подтверждения от Капитана команды.');
       onRegisterSuccess(fallbackUser);
     } finally {
       setIsLoading(false);
@@ -207,7 +207,7 @@ export default function TeamAuthGate({
 
           <div className="bg-amber-950/40 border border-amber-500/30 rounded-2xl p-4 text-left text-xs space-y-2 text-amber-200">
             <p className="font-semibold leading-relaxed">
-              Ваша заявка принята в закрытый реестр <span className="text-yellow-400 font-bold">туристической команды "Негодяи"</span> и ожидает одобрения главным администратором.
+              Ваша заявка принята в закрытый реестр <span className="text-yellow-400 font-bold">туристической команды "Негодяи"</span> и ожидает одобрения Капитаном команды.
             </p>
             <p className="text-[11px] text-amber-300/80 font-medium">
               Информация на сайте (история команды, слёты, взносы, задачи, инвентарь и фотогалерея) станет доступна сразу после одобрения профиля.
@@ -420,7 +420,7 @@ export default function TeamAuthGate({
                 </div>
                 <div>
                   <label className="block text-[10px] uppercase font-black text-amber-400 mb-1">
-                    Позывной в банде:
+                    Позывной в команде:
                   </label>
                   <input
                     type="text"

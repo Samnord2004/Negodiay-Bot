@@ -191,6 +191,31 @@ async function generateBotResponseInternal(body: any): Promise<any> {
     };
   }
 
+  // 5. "Кто с Негодяем дрался..."
+  if (msgLower.includes("кто с негодяем дрался") || msgLower.includes("негодяем дрался") || msgLower.includes("кто дрался")) {
+    let answerText = "🌲👊 Кто с Негодяем дрался — тот в крапиве обосрался! С нашей командой шутки плохи, порвём за своих!";
+    if (swearingLevel === "low") {
+      answerText = "🌲👊 Кто с Негодяем дрался — тот без штанов остался! С нашей командой шутки плохи, победа за нами!";
+    }
+    return {
+      text: answerText,
+      detectedPsychotype: "Бунтарь-анархист",
+      detectedPsychotypeExplanation: "Фирменная Негодяйская боевая поговорка!",
+      adapterStyleUsed: "Боевой клич Негодяев"
+    };
+  }
+
+  // 6. "Давай Негодяй"
+  if (msgLower.includes("давай негодяй") || msgLower.includes("давай, негодяй")) {
+    let answerText = "🔥 Давай Негодяй — жги, гуляй, наливай и не унывай! Вперёд в тайгу, навстречу костровому угару!";
+    return {
+      text: answerText,
+      detectedPsychotype: "Весельчак-балагур",
+      detectedPsychotypeExplanation: "Задорный командный боевой заряд 'Давай Негодяй'!",
+      adapterStyleUsed: "Командный боевой клич"
+    };
+  }
+
   // Check for attachments query
   const isKnotsQuery = msgLower.includes("узел") || msgLower.includes("узл") || msgLower.includes("вязать") || msgLower.includes("прусик") || msgLower.includes("восьмерк");
   const isOrientQuery = msgLower.includes("ориентирован") || msgLower.includes("знаки") || msgLower.includes("карты") || msgLower.includes("кп");
@@ -253,7 +278,7 @@ async function generateBotResponseInternal(body: any): Promise<any> {
   ).join("\n") || "Чат пуст.";
 
   const systemPrompt = `
-Ты — ИИ-бот по имени "Главный Негодяй" (Максимка) в групповом чате брутальной, но очень веселой и дружной походной команды "Негодяи". Эта банда обожает подшучивать над всеми, готовить плов, ходить по рекам, терять сапоги и сосиски.
+Ты — ИИ-бот по имени "Главный Негодяй" (Максимка) в групповом чате брутальной, но очень веселой и дружной туристической команды "Негодяи". Эта команда обожает подшучивать над всеми, готовить плов, ходить по рекам, терять сапоги и сосиски.
 
 Твоя цель — отвечать собеседнику уморительно, задорно, держать дух похода и обязательно использовать особенности из предоставленной конфигурации.
 
@@ -264,7 +289,7 @@ async function generateBotResponseInternal(body: any): Promise<any> {
 - "high": Полный походный хардкор! Используй сочный, многоэтажный, но исключительно дружеский и уморительный русский мат, фольклорные связки и крутые походные ругательства ("какого хуя", "ёбаный карась", "пиздец котенку", "заебали в край"). Сделай это шедевром народного творчества, над которым поржёт вся команда! Но не скатывайся в унылое быдло — будь харизматичным Негодяем у костра.
 
 === ТВОЯ ПАМЯТЬ О ТУРАХ, СПЛАВАХ И ПОХОДАХ ===
-Предстоящая программа туров, сплавов и организованных походов нашей банды:
+Предстоящая программа туров, сплавов и организованных походов нашей команды:
 ${excursionsContext}
 
 Ведомость оплаты и долгов команды (долг = общая цена - сколько сдали):
@@ -283,15 +308,17 @@ ${groceryContext}
 === ИНВЕНТАРИЗАЦИЯ И ОБЩЕЕ ИМУЩЕСТВО (с отслеживанием состояния) ===
 ${inventoryContext}
 
-=== ДНИ РОЖДЕНИЯ НАШЕЙ БАНДЫ ===
+=== ДНИ РОЖДЕНИЯ НАШЕЙ КОМАНДЫ ===
 ${birthdayContext}
 ${todayBirthdaysMention}
 
-=== ФИРМЕННЫЕ КРЫЛАТЫЕ ВЫРАЖЕНИЯ И ДЕВИЗЫ БАНДЫ НЕГОДЯЕВ (СТРОГО СОБЛЮДАЙ!) ===
+=== ФИРМЕННЫЕ КРЫЛАТЫЕ ВЫРАЖЕНИЯ И ДЕВИЗЫ КОМАНДЫ НЕГОДЯЕВ (СТРОГО СОБЛЮДАЙ!) ===
 1. Если спрашивают "Как гуляет негодяй?" (или вариации этого вопроса) — твой ответ СТРОГО И ЕДИНСТВЕННО: "Ахуенно!" (БЕЗ ВСЯКИХ КОММЕНТАРИЕВ, СЛОВ ИЛИ СМАЙЛОВ ПОСЛЕ СЛОВА "Ахуенно!").
 2. "Пизда на глаза" — фирменный ответ на многие вопросы или сильное удивление.
 3. "Записьдень" (от слова "запиздень") — использовать когда кто-то слишком много пиздит или занудствует.
 4. "Запись дубля" — фирменный тост: "За пизду бля!". Отвечай "За пизду бля!".
+5. "Кто с Негодяем дрался..." — отвечай крылатой фразой: "Кто с Негодяем дрался — тот в крапиве обосрался!".
+6. "Давай Негодяй" — отвечай бодро: "Давай Негодяй — жги, гуляй, наливай и не унывай!".
 
 === ИНСТРУКЦИИ ПО ТВОЕМУ ОТВЕТУ (ОБЯЗАТЕЛЬНО К ИСПОЛНЕНИЮ!) ===
 1. ОТВЕЧАЙ СТРОГО ТОМУ, КТО ЗАДАЛ ВОПРОС! В самом первом предложении твоего ответа ("text") ты обязан ЛИЧНО в дружеской, походной или подкольной форме обратиться к собеседнику ${senderName} (или по его никнейму @${senderNickname}). Например: "Слышь, ${senderName}, по поводу...", "Эй, @${senderNickname}, слушай сюда...", "${senderName}, косячник походный, держи расклад...".
@@ -303,7 +330,7 @@ ${todayBirthdaysMention}
    - Если спрашивают про туры, сплавы, походы или куда едем: зачитай список туров, сплавов и походов ${excursionsContext}, назови даты, локации и стоимость.
    - Если спрашивают про дни рождения, днюху, поздравления или у кого-то сегодня праздник: зачитай список дней рождения ${birthdayContext}, перечисли именинников сегодня, и выдай невероятное, эпичное Негодяйское походное поздравление (например: пожелай крепкой печени, чтоб палатка не текла, тушенка была чисто один кусковой говяжий сок, кабаны за три версты оббегали, а в спальнике всегда было сухо и тепло)! Подколи их психотип!
 
-В нашей банде ровно 15 угарных психотипов. Тебе нужно проанализировать последнее сообщение от ${senderName} (@${senderNickname}) (его текущий заявленный тип: "${senderPsychotype}") и тонко подстроиться под один из 15 психотипов:
+В нашей команде ровно 15 угарных психотипов. Тебе нужно проанализировать последнее сообщение от ${senderName} (@${senderNickname}) (его текущий заявленный тип: "${senderPsychotype}") и тонко подстроиться под один из 15 психотипов:
 1. "Весельчак-балагур" (Шутит, флудит, орет, обожает безумие)
 2. "Душнила-контролёр" (Сверяет списки, обожает Excel и правила занудства)
 3. "Паникёр-истерик" (Боится клещей, медведей, промокнуть, туч)
@@ -560,7 +587,7 @@ app.post("/api/auth/register", (req, res) => {
     name,
     nickname,
     psychotype: "Новичок-энтузиаст",
-    avatar: avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(nickname)}`,
+    avatar: avatar || "",
     paidAmount: 0,
     totalCost: 15000,
     debtAmount: 15000,
@@ -572,14 +599,14 @@ app.post("/api/auth/register", (req, res) => {
     email: email || "",
     phone: phone || "",
     password: password || "123",
-    accountStatus: "pending" as const, // Requires admin approval!
+    accountStatus: "pending" as const, // Requires captain approval!
     biometricEnabled: Boolean(biometricEnabled)
   };
 
   registerNewParticipant(newParticipant);
   res.json({
     success: true,
-    message: "Заявка на регистрацию принята! Ожидайте подтверждения от администратора команды.",
+    message: "Заявка на регистрацию принята! Ожидайте подтверждения от Капитана команды.",
     user: newParticipant
   });
 });
@@ -588,18 +615,35 @@ app.post("/api/auth/login", (req, res) => {
   const { identifier, password, useBiometrics } = req.body;
   const participants = getParticipants();
 
-  // Admin special login check
-  if ((identifier === "admin" || identifier === "admin@negodyai.club") && password === getAdminPassword()) {
-    const adminUser = participants.find(p => p.role === "admin") || {
-      id: "admin_user",
-      name: "Главный Администратор",
-      nickname: "Admin",
-      role: "admin",
-      accountStatus: "active",
-      avatar: "https://api.dicebear.com/7.x/bottts/svg?seed=Admin",
-      biometricEnabled: true,
-      psychotype: "Генералиссимус-стратег"
-    };
+  // Captain special login check
+  if ((identifier === "admin" || identifier === "admin@negodyai.club") && (password === getAdminPassword() || useBiometrics)) {
+    let adminUser = participants.find(p => p.role === "admin" || p.id === "3");
+    if (!adminUser) {
+      adminUser = {
+        id: "3",
+        name: "Капитан команды",
+        nickname: "Captain",
+        role: "admin",
+        accountStatus: "active",
+        avatar: "",
+        biometricEnabled: true,
+        psychotype: "Генералиссимус-стратег",
+        paidAmount: 0,
+        totalCost: 0,
+        debtAmount: 0,
+        joined: true,
+        joinedYear: 2018,
+        skippedYears: [],
+        gender: "male",
+        email: "admin@negodyai.club",
+        phone: "+7 999 123-45-67",
+        password: getAdminPassword()
+      };
+      addOrUpdateParticipant(adminUser);
+    } else if (adminUser.avatar && adminUser.avatar.includes("dicebear.com/7.x/bottts")) {
+      adminUser.avatar = "";
+      addOrUpdateParticipant(adminUser);
+    }
     return res.json({
       success: true,
       user: { ...adminUser, role: "admin" }
@@ -618,11 +662,11 @@ app.post("/api/auth/login", (req, res) => {
   }
 
   if (user.accountStatus === "pending") {
-    return res.status(403).json({ success: false, error: "Ваша регистрация ожидает подтверждения администратором команды." });
+    return res.status(403).json({ success: false, error: "Ваша регистрация ожидает подтверждения Капитаном команды." });
   }
 
   if (user.accountStatus === "rejected") {
-    return res.status(403).json({ success: false, error: "Ваша регистрация была отклонена администратором." });
+    return res.status(403).json({ success: false, error: "Ваша регистрация была отклонена Капитаном команды." });
   }
 
   if (useBiometrics) {
@@ -646,7 +690,7 @@ app.post("/api/auth/change-password", (req, res) => {
   }
   if (userId === "admin_user" || userId === "admin") {
     saveAdminPassword(newPassword);
-    return res.json({ success: true, message: "Пароль администратора изменен" });
+    return res.json({ success: true, message: "Пароль Капитана команды изменен" });
   }
   const user = getParticipants().find(p => p.id === userId);
   if (!user) {
@@ -672,18 +716,52 @@ app.post("/api/user/update-profile", (req, res) => {
     return res.status(400).json({ success: false, error: "userId обязателен" });
   }
   const participants = getParticipants();
-  const existing = participants.find(p => p.id === userId);
+  let existing = participants.find(p => p.id === userId);
+  
+  // Robust fallback for Captain/admin accounts if ID alias was used
+  if (!existing && (userId === "admin_user" || userId === "3" || userId === "admin")) {
+    existing = participants.find(p => p.role === "admin" || p.id === "3");
+  }
+
+  // If user was not found by ID (e.g. client registered locally or restored state)
   if (!existing) {
-    return res.status(404).json({ success: false, error: "Пользователь не найден" });
+    existing = {
+      id: userId,
+      name: name || "Участник команды",
+      nickname: nickname || "negodyai",
+      psychotype: psychotype || "Весельчак-балагур",
+      avatar: "",
+      paidAmount: 0,
+      totalCost: 0,
+      debtAmount: 0,
+      joined: true,
+      birthday: birthday || "",
+      joinedYear: joinedYear || 2018,
+      skippedYears: [],
+      gender: gender === "female" ? "female" : "male",
+      role: (userId === "admin_user" || userId === "3" || userId === "admin") ? "admin" : "member",
+      email: email || "",
+      phone: phone || "",
+      password: "123",
+      accountStatus: "active",
+      biometricEnabled: false
+    };
+  }
+
+  // Clean avatar to ensure no Dicebear bot art survives
+  let cleanAvatar = existing.avatar || "";
+  if (avatar !== undefined) {
+    cleanAvatar = avatar && avatar.includes("dicebear.com/7.x/bottts") ? "" : avatar.trim();
   }
 
   const updated = {
     ...existing,
+    id: existing.id,
     name: name !== undefined && name.trim() !== "" ? name.trim() : existing.name,
     nickname: nickname !== undefined && nickname.trim() !== "" ? nickname.trim().replace(/^@/, '') : existing.nickname,
     email: email !== undefined ? email.trim() : existing.email,
     phone: phone !== undefined ? phone.trim() : existing.phone,
-    avatar: avatar !== undefined && avatar.trim() !== "" ? avatar : existing.avatar,
+    avatar: cleanAvatar,
     birthday: birthday !== undefined ? birthday : existing.birthday,
     joinedYear: joinedYear !== undefined && !isNaN(Number(joinedYear)) ? Number(joinedYear) : existing.joinedYear,
     psychotype: psychotype !== undefined ? psychotype : existing.psychotype,
@@ -720,7 +798,7 @@ app.post("/api/admin/set-role", (req, res) => {
 app.post("/api/admin/login", (req, res) => {
   const { username, password } = req.body;
   if (username === "admin" && password === getAdminPassword()) {
-    return res.json({ success: true, message: "Вы вошли как администратор!" });
+    return res.json({ success: true, message: "Вы вошли как Капитан команды!" });
   }
   return res.status(401).json({ success: false, error: "Неправильный логин или пароль" });
 });
@@ -731,7 +809,7 @@ app.post("/api/admin/change-password", (req, res) => {
     return res.status(400).json({ success: false, error: "Пароль не может быть пустым" });
   }
   saveAdminPassword(newPassword);
-  return res.json({ success: true, message: "Пароль администратора успешно изменен!" });
+  return res.json({ success: true, message: "Пароль Капитана команды успешно изменен!" });
 });
 
 // Gallery Photos
@@ -790,7 +868,7 @@ app.post("/api/documents", (req, res) => {
     fileName: fileName || title + ".pdf",
     fileType: fileType || "pdf",
     content: content || undefined,
-    uploadedBy: uploadedBy || "Администратор",
+    uploadedBy: uploadedBy || "Капитан команды",
     uploadedAt: new Date().toISOString().split("T")[0]
   };
   addTeamDocument(newDoc);
@@ -1066,6 +1144,26 @@ function generateMockNegodyaiResponse(
     };
   }
 
+  if (msgLower.includes("кто с негодяем дрался") || msgLower.includes("негодяем дрался") || msgLower.includes("кто дрался")) {
+    return {
+      text: swearingLevel === "low" 
+        ? "Кто с Негодяем дрался — тот без штанов остался! 🌲👊 С нашей командой шутки плохи, победа за нами!" 
+        : "Кто с Негодяем дрался — тот в крапиве обосрался! 🌲👊 С нашей командой шутки плохи, порвём за своих!",
+      detectedPsychotype: "Бунтарь-анархист",
+      detectedPsychotypeExplanation: "Фирменная Негодяйская боевая поговорка!",
+      adapterStyleUsed: "Боевой клич Негодяев"
+    };
+  }
+
+  if (msgLower.includes("давай негодяй") || msgLower.includes("давай, негодяй")) {
+    return {
+      text: "🔥 Давай Негодяй — жги, гуляй, наливай и не унывай! Вперёд в тайгу, навстречу костровому угару! 🍻",
+      detectedPsychotype: "Весельчак-балагур",
+      detectedPsychotypeExplanation: "Задорный командный боевой заряд 'Давай Негодяй'!",
+      adapterStyleUsed: "Командный боевой клич"
+    };
+  }
+
   // Check for birthday-related questions or trigger congrats!
   const isBirthdayQuery = msgLower.includes("днюх") || msgLower.includes("рожден") || msgLower.includes("именин") || msgLower.includes("поздрав");
   if (isBirthdayQuery) {
@@ -1094,7 +1192,7 @@ function generateMockNegodyaiResponse(
     if (todayList.length > 0) {
       const bdayPerson = todayList[0].name;
       if (swearingLevel === "high") {
-        text = `🎉 Ёбаный карась! У ${bdayPerson} СЕГОДНЯ ДЕНЬ РОЖДЕНИЯ, банда! От лица всех Негодяев желаю: крепчайшей титановой печени, чтоб палатка стояла железобетонно, костер горел в любой ливень, а тушенка была чисто один кусковой говяжий сок, нахуй! С праздником, братуха! Наливай полнее! 🍻🎂🎈`;
+        text = `🎉 Ёбаный карась! У ${bdayPerson} СЕГОДНЯ ДЕНЬ РОЖДЕНИЯ, команда! От лица всех Негодяев желаю: крепчайшей титановой печени, чтоб палатка стояла железобетонно, костер горел в любой ливень, а тушенка была чисто один кусковой говяжий сок, нахуй! С праздником, братуха! Наливай полнее! 🍻🎂🎈`;
       } else if (swearingLevel === "medium") {
         text = `🎉 Братва, внимание! Сегодня ДЕНЬ РОЖДЕНИЯ у нашего негодяя: ${bdayPerson}, бля! От всей команды поздравляем! Желаем здоровья, сочного плова в казане, сухих спальников и чтобы байдарки никогда нахуй не переворачивались! Ура имениннику! 🍲🥂🎂`;
       } else {
@@ -1111,7 +1209,7 @@ function generateMockNegodyaiResponse(
       else if (msgLower.includes("данчик") || msgLower.includes("кипиш")) targetName = "Данчик Кипиш";
 
       if (swearingLevel === "high") {
-        text = `🎂 Слышь, ${senderName}! Сегодня прямо сейчас никто не проставился, но вот походный календарь днюх банды: ${upcomingList}! А для ${targetName} желаю, чтоб жизнь была огонь, а в рюкзаке всегда звенело то, что надо, бля! 🍻`;
+        text = `🎂 Слышь, ${senderName}! Сегодня прямо сейчас никто не проставился, но вот походный календарь днюх команды: ${upcomingList}! А для ${targetName} желаю, чтоб жизнь была огонь, а в рюкзаке всегда звенело то, что надо, бля! 🍻`;
       } else {
         text = `🎂 Привет, ${senderName}! Я слежу за всеми днями рождения нашей команды! Ближайшие даты негодяев: ${upcomingList}. Готовим кружки и поздравления!`;
       }
@@ -1190,7 +1288,7 @@ function generateMockNegodyaiResponse(
       if (swearingLevel === "high") {
         text = `Слышь, ${senderName}! По бабкам тут полный пиздец! Должники опять зажали взносы, бля. Пинаем халявщиков толпой: ${totalDebtors}. Какого хуя сметы стоят?! Быстро скинулись нахуй, иначе будете спать на сырых шишках и грызть кору вместо шашлыка!`;
       } else if (swearingLevel === "medium") {
-        text = `Так, банда! Смета горит, бля. Наши забывчивые негодяи: ${totalDebtors} — вы задолжали! Давайте скидывайтесь оперативнее, нахуй, надо уже закупать тушняк, казан и бронировать гидов!`;
+        text = `Так, команда! Смета горит, бля. Наши забывчивые негодяи: ${totalDebtors} — вы задолжали! Давайте скидывайтесь оперативнее, нахуй, надо уже закупать тушняк, казан и бронировать гидов!`;
       } else {
         text = `По финансовым отчетам ведомости у нас есть задержки по сборам: ${totalDebtors}. Ребятки, давайте поскорее закроем долги, чтобы мы могли спокойно ехать кутить в поход! Всех обнял!`;
       }
@@ -1211,10 +1309,10 @@ function generateMockNegodyaiResponse(
       } else if (swearingLevel === "medium") {
         text = `Напоминаю, бля! Едем в поход: ${excNames}. Всем перетряхнуть палатки, подготовить сапоги! Пропустить такое — полный пиздец, будет угарно!`;
       } else {
-        text = `Эй, банда Негодяев! Наш грандиозный поход всё ближе: ${excNames}. Готовим хорошее настроение и пакуем походные рюкзаки. Это будет незабываемо!`;
+        text = `Эй, команда Негодяев! Наш грандиозный поход всё ближе: ${excNames}. Готовим хорошее настроение и пакуем походные рюкзаки. Это будет незабываемо!`;
       }
     } else {
-      text = `Активных туров нет. Сидим греем задницы у костра и ждем, когда админ добавит новый угарный маршрут!`;
+      text = `Активных туров нет. Сидим греем задницы у костра и ждем, когда Капитан команды добавит новый угарный маршрут!`;
     }
   } else if (hasMenuKeywords) {
     adapterStyleUsed = "Кулинарный расклад слёта";
@@ -1230,7 +1328,7 @@ function generateMockNegodyaiResponse(
         text = `Привет, ${senderName}! Вот наше вкуснотища-меню на слёт: ${dishesList}. Не забудьте, что нужно еще докупить: ${groceriesNeeded || "все закупки закрыты"}! Ждем ароматного плова и ухи у костра!`;
       }
     } else {
-      text = `Пока меню на слёт пустует. Админ еще не внес фирменный плов и тушенку! Пора бы заполнить раздел еды!`;
+      text = `Пока меню на слёт пустует. Капитан команды еще не внес фирменный плов и тушенку! Пора бы заполнить раздел еды!`;
     }
   } else if (hasTaskKeywords) {
     adapterStyleUsed = "Раздача походных задач";
@@ -1241,7 +1339,7 @@ function generateMockNegodyaiResponse(
       if (swearingLevel === "high") {
         text = `Слышь, ${senderName}! По задачам слёта у нас висит нехилый завал, бля! Вот горе-дела, которые НАДО СДЕЛАТЬ: ${tasksList}. Быстро подхватили задницы и закрываем дедлайны нахуй, а то на слёте будете только дрова таскать!`;
       } else if (swearingLevel === "medium") {
-        text = `Банда, по задачам слёта у нас тут есть невыполненные хвосты, бля: ${tasksList}! Давайте активнее включайтесь, помогайте ответственным, чтобы слёт прошёл на высоте!`;
+        text = `Команда, по задачам слёта у нас тут есть невыполненные хвосты, бля: ${tasksList}! Давайте активнее включайтесь, помогайте ответственным, чтобы слёт прошёл на высоте!`;
       } else {
         text = `Привет, ${senderName}! Напоминаю список важных задач для слёта: ${tasksList}. Давайте дружно закроем их до выезда!`;
       }
@@ -1447,7 +1545,7 @@ function generateMockNegodyaiResponse(
         } else if (swearingLevel === "medium") {
           text = `Опять всё дома оставил, бля?! Но главное настроение не забыл, халявщик ${senderName}! Ладно, ложку выстругаем веткой, спать пустим к Хорьку в палатку!`;
         } else {
-          text = `Ну ты даешь! Опять забыл всё снаряжение. Хорошо, что банда Негодяев своих в беде не бросает — поделимся и ложкой, и палаткой, заходи!`;
+          text = `Ну ты даешь! Опять забыл всё снаряжение. Хорошо, что команда Негодяев своих в беде не бросает — поделимся и ложкой, и палаткой, заходи!`;
         }
         break;
 
@@ -1458,7 +1556,7 @@ function generateMockNegodyaiResponse(
         } else if (swearingLevel === "medium") {
           text = `Красава, ${senderName}! Юмор зашёл, бля. С таким настроем мы любые горы свернём и весь тушняк уничтожим!`;
         } else {
-          text = `Шутка огонь! ${senderName}, с тобой хоть в тайгу, хоть в горы. Всегда поднимешь настроение банде!`;
+          text = `Шутка огонь! ${senderName}, с тобой хоть в тайгу, хоть в горы. Всегда поднимешь настроение команде!`;
         }
         break;
 
