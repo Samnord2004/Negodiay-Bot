@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { Participant } from '../types';
 import { getSafeAvatar } from '../utils/avatar';
+import { getBirthdayRemainingDays, formatBirthdayShort } from '../utils/dateUtils';
 
 interface BirthdayNotificationsProps {
   participants: Participant[];
@@ -21,45 +22,13 @@ export default function BirthdayNotifications({
 }: BirthdayNotificationsProps) {
   const [filterQuery, setFilterQuery] = useState('');
 
-  const today = new Date();
-  const currentMonth = today.getMonth() + 1;
-  const currentDay = today.getDate();
-
-  // Helper to parse MM-DD and calculate days remaining until next birthday
-  const getDaysUntilBirthday = (bdayStr?: string): { days: number; isToday: boolean; dateFormatted: string; age?: number } | null => {
-    if (!bdayStr) return null;
-    const parts = bdayStr.split('-');
-    if (parts.length < 2) return null;
-    
-    const birthYear = parts.length === 3 ? parseInt(parts[0], 10) : undefined;
-    const month = parseInt(parts[parts.length - 2], 10);
-    const day = parseInt(parts[parts.length - 1], 10);
-    
-    if (isNaN(month) || isNaN(day)) return null;
-
-    let targetDate = new Date(today.getFullYear(), month - 1, day);
-    if (targetDate < new Date(today.getFullYear(), today.getMonth(), today.getDate())) {
-      // Birthday already occurred this year, roll over to next year
-      targetDate = new Date(today.getFullYear() + 1, month - 1, day);
-    }
-
-    const diffTime = targetDate.getTime() - new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
-    const days = Math.round(diffTime / (1000 * 60 * 60 * 24));
-    const isToday = (month === currentMonth && day === currentDay);
-
-    const dateFormatted = `${day < 10 ? '0' + day : day}.${month < 10 ? '0' + month : month}`;
-    const age = birthYear ? today.getFullYear() - birthYear : undefined;
-
-    return { days, isToday, dateFormatted, age };
-  };
-
-  // Grouped upcoming birthdays
+  // Grouped upcoming birthdays using dateUtils
   const participantsWithBirthday = participants
     .map(p => ({
       participant: p,
-      info: getDaysUntilBirthday(p.birthday)
+      info: getBirthdayRemainingDays(p.birthday)
     }))
-    .filter((item): item is { participant: Participant; info: NonNullable<ReturnType<typeof getDaysUntilBirthday>> } => item.info !== null)
+    .filter((item): item is { participant: Participant; info: NonNullable<ReturnType<typeof getBirthdayRemainingDays>> } => item.info !== null)
     .sort((a, b) => a.info.days - b.info.days);
 
   // Specific alerts
@@ -76,27 +45,29 @@ export default function BirthdayNotifications({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
-      <div className="bg-amber-50 border-4 border-red-600 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden my-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/40 backdrop-blur-xs p-4 overflow-y-auto">
+      <div className="bg-white border border-stone-200 rounded-3xl shadow-xl w-full max-w-2xl overflow-hidden my-6">
         
         {/* Header */}
-        <div className="bg-yellow-400 border-b-4 border-red-600 px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Cake className="text-red-600 w-6 h-6 animate-bounce" />
+        <div className="bg-gradient-to-r from-amber-50/80 via-white to-red-50/40 border-b border-stone-200 px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-amber-100/90 border border-amber-300 flex items-center justify-center text-red-600 shadow-2xs">
+              <Cake className="w-5 h-5" />
+            </div>
             <div>
-              <h3 className="font-black text-lg uppercase text-red-700 tracking-tight">
+              <h3 className="font-bold text-base uppercase text-stone-900 tracking-tight">
                 Ежедневник дней рождений Негодяев
               </h3>
-              <p className="text-[11px] font-bold text-red-900">
-                Календарь праздников и автоматические уведомления
+              <p className="text-xs text-stone-500 font-medium">
+                Формат ДД.ММ.ГГ • Календарь праздников и оповещения
               </p>
             </div>
           </div>
           <button 
             onClick={onClose}
-            className="text-red-700 hover:text-red-900 bg-yellow-300 hover:bg-yellow-200 rounded-full p-1.5 transition-colors"
+            className="text-stone-400 hover:text-stone-700 hover:bg-stone-100 rounded-full p-2 transition-colors"
           >
-            <X size={20} />
+            <X size={18} />
           </button>
         </div>
 
@@ -205,7 +176,7 @@ export default function BirthdayNotifications({
           {/* ALL BIRTHDAYS LIST */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <h4 className="font-black text-xs uppercase text-amber-950 flex items-center gap-1.5">
+              <h4 className="font-bold text-xs uppercase text-stone-800 flex items-center gap-1.5">
                 <Calendar size={14} className="text-red-600" />
                 Все дни рождения команды ({participantsWithBirthday.length})
               </h4>
@@ -214,7 +185,7 @@ export default function BirthdayNotifications({
                 value={filterQuery}
                 onChange={(e) => setFilterQuery(e.target.value)}
                 placeholder="Поиск по имени..."
-                className="px-3 py-1 bg-white border border-amber-300 rounded-lg text-xs font-semibold text-amber-950 focus:border-red-500"
+                className="px-3 py-1 bg-stone-50 border border-stone-200 focus:border-red-500 focus:bg-white rounded-xl text-xs font-medium text-stone-900 outline-none"
               />
             </div>
 
@@ -222,38 +193,38 @@ export default function BirthdayNotifications({
               {filteredBirthdays.map(({ participant, info }) => (
                 <div 
                   key={participant.id}
-                  className={`p-3 rounded-xl border-2 flex items-center justify-between transition-all ${
+                  className={`p-3 rounded-2xl border flex items-center justify-between transition-all ${
                     info.isToday 
-                      ? 'bg-yellow-100 border-red-500 shadow-md' 
+                      ? 'bg-amber-50/90 border-red-300 shadow-xs' 
                       : info.days <= 7
-                      ? 'bg-amber-50 border-amber-400'
-                      : 'bg-white border-amber-200 hover:border-amber-400'
+                      ? 'bg-amber-50/40 border-amber-200'
+                      : 'bg-white border-stone-200 hover:border-amber-300'
                   }`}
                 >
                   <div className="flex items-center gap-3">
                     <img 
                       src={getSafeAvatar(participant.avatar, participant.gender)} 
                       alt={participant.name} 
-                      className="w-10 h-10 rounded-full border border-amber-300 bg-amber-100 object-cover" 
+                      className="w-10 h-10 rounded-full border border-stone-200 bg-stone-100 object-cover" 
                     />
                     <div>
                       <div className="flex items-center gap-1.5">
-                        <span className="font-black text-sm text-amber-950">{participant.name}</span>
-                        <span className="text-xs font-bold text-red-600">@{participant.nickname}</span>
+                        <span className="font-bold text-sm text-stone-900">{participant.name}</span>
+                        <span className="text-xs font-semibold text-red-600">@{participant.nickname}</span>
                       </div>
-                      <p className="text-xs text-amber-700 font-semibold">
-                        Дата: {info.dateFormatted} {info.age ? `(${info.age} лет)` : ''}
+                      <p className="text-xs text-stone-500 font-medium">
+                        Дата: <span className="font-bold text-stone-700">{info.dateFormatted}</span> {info.age ? `(${info.age} лет)` : ''}
                       </p>
                     </div>
                   </div>
 
                   <div className="text-right">
                     {info.isToday ? (
-                      <span className="inline-block px-2.5 py-1 bg-red-600 text-yellow-300 font-black text-xs uppercase rounded-full shadow">
+                      <span className="inline-block px-2.5 py-1 bg-red-600 text-yellow-200 font-black text-xs uppercase rounded-full shadow-xs">
                         Сегодня! 🎂
                       </span>
                     ) : (
-                      <span className="text-xs font-black text-amber-800 bg-amber-100 px-2.5 py-1 rounded-full border border-amber-300">
+                      <span className="text-xs font-bold text-amber-900 bg-amber-100/70 px-2.5 py-1 rounded-full border border-amber-200">
                         через {info.days} дн.
                       </span>
                     )}
@@ -266,13 +237,13 @@ export default function BirthdayNotifications({
         </div>
 
         {/* Footer */}
-        <div className="bg-amber-100 border-t-2 border-amber-300 px-6 py-3 flex justify-end">
+        <div className="bg-stone-50 border-t border-stone-200 px-6 py-3 flex justify-end">
           <button
             type="button"
             onClick={onClose}
-            className="px-5 py-2 bg-red-600 hover:bg-red-700 text-yellow-300 font-black uppercase text-xs rounded-xl shadow transition-colors"
+            className="px-5 py-2 bg-stone-900 hover:bg-stone-800 text-white font-bold uppercase text-xs rounded-xl shadow-xs transition-colors"
           >
-            Понятно
+            Закрыть
           </button>
         </div>
 

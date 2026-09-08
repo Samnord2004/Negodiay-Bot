@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { 
   X, User, Mail, Phone, Calendar, Sparkles, Upload, 
-  RefreshCw, CheckCircle, ShieldAlert, HeartHandshake, Smile
+  RefreshCw, CheckCircle, ShieldAlert, HeartHandshake, Smile, Camera
 } from 'lucide-react';
 import { Participant, ROLE_DEFINITIONS } from '../types';
 import { PSYCHOTYPES } from '../mockData';
 import { compressImage } from '../utils/imageCompressor';
+import { formatBirthdayShort } from '../utils/dateUtils';
 
 interface ProfileEditModalProps {
   isOpen: boolean;
@@ -25,7 +26,7 @@ export default function ProfileEditModal({
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [birthday, setBirthday] = useState('');
-  const [joinedYear, setJoinedYear] = useState<number>(2018);
+  const [joinedYear, setJoinedYear] = useState<number>(1993);
   const [skippedYears, setSkippedYears] = useState<number[]>([]);
   const [gender, setGender] = useState<'male' | 'female'>('male');
   const [psychotype, setPsychotype] = useState('');
@@ -42,8 +43,8 @@ export default function ProfileEditModal({
       setNickname(currentUser.nickname || '');
       setEmail(currentUser.email || '');
       setPhone(currentUser.phone || '');
-      setBirthday(currentUser.birthday || '');
-      setJoinedYear(currentUser.joinedYear || 2018);
+      setBirthday(currentUser.birthday ? formatBirthdayShort(currentUser.birthday) : '');
+      setJoinedYear(currentUser.joinedYear || 1993);
       setSkippedYears(Array.isArray(currentUser.skippedYears) ? currentUser.skippedYears : []);
       setGender(currentUser.gender || 'male');
       setPsychotype(currentUser.psychotype || PSYCHOTYPES[0]?.name || 'Весельчак-балагур');
@@ -56,6 +57,12 @@ export default function ProfileEditModal({
   }, [isOpen]);
 
   if (!isOpen || !currentUser) return null;
+
+  const currentYear = new Date().getFullYear();
+  const allYearsSince1993: number[] = [];
+  for (let y = 1993; y <= currentYear; y++) {
+    allYearsSince1993.push(y);
+  }
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -103,6 +110,8 @@ export default function ProfileEditModal({
       return;
     }
 
+    const normalizedBirthday = birthday.trim() ? formatBirthdayShort(birthday.trim()) : '';
+
     setLoading(true);
     try {
       const res = await fetch('/api/user/update-profile', {
@@ -114,8 +123,8 @@ export default function ProfileEditModal({
           nickname: nickname.trim().replace(/^@/, ''),
           email: email.trim(),
           phone: phone.trim(),
-          birthday: birthday.trim(),
-          joinedYear: Number(joinedYear) || 2018,
+          birthday: normalizedBirthday,
+          joinedYear: Number(joinedYear) || 1993,
           skippedYears: skippedYears.filter(y => !isNaN(y)),
           gender,
           psychotype,
@@ -143,20 +152,20 @@ export default function ProfileEditModal({
   const roleMeta = currentUser.role ? ROLE_DEFINITIONS[currentUser.role] : null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-xs overflow-y-auto animate-in fade-in duration-200">
-      <div className="bg-amber-50 border-4 border-amber-600 rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden my-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-stone-900/60 backdrop-blur-xs overflow-y-auto animate-in fade-in duration-200">
+      <div className="bg-white border border-stone-200 rounded-3xl shadow-xl max-w-lg w-full overflow-hidden my-auto">
         
         {/* Header */}
-        <div className="bg-gradient-to-r from-red-600 via-amber-600 to-red-700 p-4 flex items-center justify-between text-yellow-300 border-b-2 border-amber-400">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-full bg-amber-950/50 border border-yellow-300 flex items-center justify-center text-lg shadow-inner">
+        <div className="bg-white px-6 py-4 flex items-center justify-between border-b border-stone-100">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-lg">
               ✏️
             </div>
             <div>
-              <h3 className="font-black text-base uppercase tracking-tight text-white leading-tight">
+              <h3 className="font-black text-base uppercase tracking-tight text-stone-900 leading-tight">
                 Редактирование профиля
               </h3>
-              <p className="text-[11px] text-yellow-200 font-bold">
+              <p className="text-xs text-stone-500 font-medium">
                 Личные данные соратника команды «Негодяи»
               </p>
             </div>
@@ -164,24 +173,24 @@ export default function ProfileEditModal({
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 text-white hover:text-yellow-300 hover:bg-white/10 rounded-xl transition-colors"
+            className="p-2 text-stone-400 hover:text-stone-700 hover:bg-stone-100 rounded-xl transition-colors"
           >
-            <X size={20} />
+            <X size={18} />
           </button>
         </div>
 
         {/* Form Body */}
-        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 max-h-[80vh] overflow-y-auto scrollbar-thin">
+        <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-4 max-h-[80vh] overflow-y-auto scrollbar-thin">
           
           {/* Status Banners */}
           {error && (
-            <div className="p-3 bg-red-100 border-2 border-red-500 rounded-2xl flex items-center gap-2 text-xs font-bold text-red-800">
+            <div className="p-3 bg-red-50 border border-red-200 rounded-2xl flex items-center gap-2 text-xs font-semibold text-red-700">
               <ShieldAlert size={16} className="text-red-600 shrink-0" />
               <span>{error}</span>
             </div>
           )}
           {successMsg && (
-            <div className="p-3 bg-emerald-100 border-2 border-emerald-500 rounded-2xl flex items-center gap-2 text-xs font-bold text-emerald-800 animate-in fade-in">
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center gap-2 text-xs font-semibold text-emerald-700 animate-in fade-in">
               <CheckCircle size={16} className="text-emerald-600 shrink-0" />
               <span>{successMsg}</span>
             </div>
@@ -189,64 +198,54 @@ export default function ProfileEditModal({
 
           {/* Current Role Notice */}
           {roleMeta && (
-            <div className="p-3 bg-white border-2 border-amber-300 rounded-2xl flex items-center justify-between gap-3 shadow-xs">
-              <div className="flex items-center gap-2">
+            <div className="p-3 bg-stone-50 border border-stone-200 rounded-2xl flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
                 <span className="text-2xl">{roleMeta.icon}</span>
                 <div>
-                  <div className="text-[11px] text-stone-500 font-bold uppercase">Назначенная роль в команде</div>
-                  <div className="text-xs font-black text-amber-950">{roleMeta.title}</div>
+                  <div className="text-[10px] text-stone-500 font-bold uppercase tracking-wider">Роль в команде</div>
+                  <div className="text-xs font-bold text-stone-900">{roleMeta.title}</div>
                 </div>
               </div>
-              <span className={`text-[10px] font-black px-2 py-0.5 rounded border ${roleMeta.color}`}>
+              <span className={`text-[11px] font-bold px-2.5 py-1 rounded-lg border ${roleMeta.color}`}>
                 {roleMeta.badge}
               </span>
             </div>
           )}
 
           {/* Avatar Section */}
-          <div className="bg-white border-2 border-amber-300 rounded-2xl p-3.5 space-y-3 shadow-xs">
-            <label className="block text-xs font-black uppercase text-amber-950">
+          <div className="bg-stone-50/70 border border-stone-200 rounded-2xl p-4 space-y-3">
+            <label className="block text-xs font-bold uppercase text-stone-800 tracking-wider">
               Аватарка / Фото профиля
             </label>
-            <div className="flex flex-col sm:flex-row items-center gap-3">
+            <div className="flex flex-col sm:flex-row items-center gap-4">
               <div className="relative shrink-0">
                 {avatar && avatar.trim() && !avatar.includes('dicebear.com/7.x/bottts') ? (
                   <img
                     src={avatar.trim()}
                     alt="Avatar preview"
-                    className="w-20 h-20 rounded-2xl border-2 border-amber-500 object-cover bg-amber-100 shadow"
+                    className="w-20 h-20 rounded-2xl border border-stone-300 object-cover bg-white shadow-xs"
                   />
                 ) : (
-                  <div className="w-20 h-20 rounded-2xl border-2 border-amber-500 bg-amber-200 flex flex-col items-center justify-center text-amber-950 font-black shadow text-2xl">
-                    {name.trim() ? name.trim().charAt(0).toUpperCase() : <User size={32} className="text-amber-800" />}
+                  <div className="w-20 h-20 rounded-2xl border border-dashed border-amber-300 bg-amber-50/60 flex flex-col items-center justify-center text-amber-900 font-bold text-2xl">
+                    <span>{name.charAt(0) || 'Н'}</span>
                   </div>
                 )}
                 {compressing && (
-                  <div className="absolute inset-0 bg-black/40 rounded-2xl flex items-center justify-center text-white">
-                    <RefreshCw size={20} className="animate-spin" />
+                  <div className="absolute inset-0 bg-white/80 rounded-2xl flex items-center justify-center text-[10px] font-bold text-stone-700">
+                    Сжатие...
                   </div>
                 )}
               </div>
 
-              <div className="flex-1 space-y-2 w-full">
+              <div className="flex-1 w-full space-y-2">
                 <div className="flex items-center gap-2">
-                  <label className={`flex-1 px-3 py-2 bg-amber-200 hover:bg-amber-300 border border-amber-400 rounded-xl text-xs font-black text-amber-950 uppercase cursor-pointer flex items-center justify-center gap-1.5 transition-colors shadow-2xs ${compressing ? 'opacity-50 pointer-events-none' : ''}`}>
-                    {compressing ? (
-                      <>
-                        <RefreshCw size={14} className="animate-spin text-red-700" />
-                        <span>Обработка...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Upload size={14} />
-                        <span>Загрузить фото</span>
-                      </>
-                    )}
+                  <label className="cursor-pointer flex-1 py-2 px-3 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold text-center flex items-center justify-center gap-1.5 transition-colors shadow-xs">
+                    <Camera size={14} />
+                    <span>Загрузить фото с устройства</span>
                     <input
                       type="file"
                       accept="image/*"
                       onChange={handleFileUpload}
-                      disabled={compressing}
                       className="hidden"
                     />
                   </label>
@@ -254,7 +253,7 @@ export default function ProfileEditModal({
                     <button
                       type="button"
                       onClick={() => setAvatar('')}
-                      className="px-3 py-2 bg-stone-200 hover:bg-stone-300 border border-stone-400 rounded-xl text-xs font-black text-stone-700 uppercase flex items-center justify-center gap-1 transition-colors shadow-2xs"
+                      className="px-3 py-2 bg-stone-100 hover:bg-stone-200 border border-stone-300 rounded-xl text-xs font-semibold text-stone-700 flex items-center justify-center gap-1 transition-colors"
                       title="Удалить аватар"
                     >
                       <X size={14} />
@@ -266,8 +265,8 @@ export default function ProfileEditModal({
                   type="text"
                   value={avatar}
                   onChange={(e) => setAvatar(e.target.value)}
-                  placeholder="Или вставьте прямую ссылку на фото..."
-                  className="w-full text-[11px] px-2.5 py-1.5 bg-amber-50/70 border border-amber-300 rounded-lg outline-none font-mono"
+                  placeholder="Или вставьте прямую ссылку на фото (URL)..."
+                  className="w-full text-xs px-3 py-2 bg-white border border-stone-200 rounded-xl outline-none font-mono text-stone-800 focus:border-red-500"
                 />
               </div>
             </div>
@@ -276,7 +275,7 @@ export default function ProfileEditModal({
           {/* Name and Nickname */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-black uppercase text-amber-950 mb-1">
+              <label className="block text-xs font-bold uppercase text-stone-800 mb-1">
                 Имя / Фамилия *
               </label>
               <div className="relative">
@@ -286,25 +285,25 @@ export default function ProfileEditModal({
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Алексей Самойлов"
                   required
-                  className="w-full pl-8 pr-3 py-2 bg-white border-2 border-amber-300 focus:border-red-600 rounded-xl text-xs font-bold text-amber-950 outline-none"
+                  className="w-full pl-8 pr-3 py-2 bg-white border border-stone-200 focus:border-red-500 rounded-xl text-xs font-medium text-stone-900 outline-none transition-colors"
                 />
-                <User size={15} className="absolute left-2.5 top-2.5 text-amber-700" />
+                <User size={15} className="absolute left-2.5 top-2.5 text-stone-400" />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-black uppercase text-amber-950 mb-1">
+              <label className="block text-xs font-bold uppercase text-stone-800 mb-1">
                 Позывной в команде *
               </label>
               <div className="relative">
-                <span className="absolute left-2.5 top-2 font-black text-xs text-red-600">@</span>
+                <span className="absolute left-2.5 top-2 font-bold text-xs text-red-600">@</span>
                 <input
                   type="text"
                   value={nickname}
                   onChange={(e) => setNickname(e.target.value)}
                   placeholder="Grizli"
                   required
-                  className="w-full pl-7 pr-3 py-2 bg-white border-2 border-amber-300 focus:border-red-600 rounded-xl text-xs font-bold text-amber-950 outline-none"
+                  className="w-full pl-7 pr-3 py-2 bg-white border border-stone-200 focus:border-red-500 rounded-xl text-xs font-medium text-stone-900 outline-none transition-colors"
                 />
               </div>
             </div>
@@ -313,7 +312,7 @@ export default function ProfileEditModal({
           {/* Email and Phone */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-black uppercase text-amber-950 mb-1">
+              <label className="block text-xs font-bold uppercase text-stone-800 mb-1">
                 Email
               </label>
               <div className="relative">
@@ -322,14 +321,14 @@ export default function ProfileEditModal({
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="alex@gmail.com"
-                  className="w-full pl-8 pr-3 py-2 bg-white border-2 border-amber-300 focus:border-red-600 rounded-xl text-xs font-bold text-amber-950 outline-none"
+                  className="w-full pl-8 pr-3 py-2 bg-white border border-stone-200 focus:border-red-500 rounded-xl text-xs font-medium text-stone-900 outline-none transition-colors"
                 />
-                <Mail size={15} className="absolute left-2.5 top-2.5 text-amber-700" />
+                <Mail size={15} className="absolute left-2.5 top-2.5 text-stone-400" />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-black uppercase text-amber-950 mb-1">
+              <label className="block text-xs font-bold uppercase text-stone-800 mb-1">
                 Телефон
               </label>
               <div className="relative">
@@ -338,9 +337,9 @@ export default function ProfileEditModal({
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder="+7 (999) 000-00-00"
-                  className="w-full pl-8 pr-3 py-2 bg-white border-2 border-amber-300 focus:border-red-600 rounded-xl text-xs font-bold text-amber-950 outline-none"
+                  className="w-full pl-8 pr-3 py-2 bg-white border border-stone-200 focus:border-red-500 rounded-xl text-xs font-medium text-stone-900 outline-none transition-colors"
                 />
-                <Phone size={15} className="absolute left-2.5 top-2.5 text-amber-700" />
+                <Phone size={15} className="absolute left-2.5 top-2.5 text-stone-400" />
               </div>
             </div>
           </div>
@@ -348,51 +347,58 @@ export default function ProfileEditModal({
           {/* Birthday and Joined Year */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-black uppercase text-amber-950 mb-1">
-                🎂 День рождения (Днюха)
+              <label className="block text-xs font-bold uppercase text-stone-800 mb-1">
+                🎂 День рождения (ДД.ММ.ГГ)
               </label>
               <div className="relative">
                 <input
                   type="text"
                   value={birthday}
                   onChange={(e) => setBirthday(e.target.value)}
-                  placeholder="15 июля (или 1985-07-15)"
-                  className="w-full pl-8 pr-3 py-2 bg-white border-2 border-amber-300 focus:border-red-600 rounded-xl text-xs font-bold text-amber-950 outline-none"
+                  onBlur={() => {
+                    if (birthday.trim()) {
+                      setBirthday(formatBirthdayShort(birthday.trim()));
+                    }
+                  }}
+                  placeholder="15.06.88"
+                  className="w-full pl-8 pr-3 py-2 bg-white border border-stone-200 focus:border-red-500 rounded-xl text-xs font-medium text-stone-900 outline-none transition-colors"
                 />
-                <Calendar size={15} className="absolute left-2.5 top-2.5 text-amber-700" />
+                <Calendar size={15} className="absolute left-2.5 top-2.5 text-amber-600" />
               </div>
+              <p className="text-[10px] text-stone-500 mt-1">Формат: ДД.ММ.ГГ (например 15.06.88)</p>
             </div>
 
             <div>
-              <label className="block text-xs font-black uppercase text-amber-950 mb-1">
+              <label className="block text-xs font-bold uppercase text-stone-800 mb-1">
                 Год вступления в команду
               </label>
               <input
                 type="number"
-                min="2010"
+                min="1993"
                 max={new Date().getFullYear()}
                 value={joinedYear}
                 onChange={(e) => setJoinedYear(Number(e.target.value))}
-                className="w-full px-3 py-2 bg-white border-2 border-amber-300 focus:border-red-600 rounded-xl text-xs font-bold text-amber-950 outline-none"
+                className="w-full px-3 py-2 bg-white border border-stone-200 focus:border-red-500 rounded-xl text-xs font-medium text-stone-900 outline-none transition-colors"
               />
+              <p className="text-[10px] text-stone-500 mt-1">Основание команды — 1993 г.</p>
             </div>
           </div>
 
-          {/* Skipped Rally Years (Пропущенные года слёта) */}
-          <div className="bg-amber-100/70 p-3 rounded-2xl border-2 border-amber-300">
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="block text-xs font-black uppercase text-amber-950">
-                Пропущенные года слёта команды
+          {/* Skipped Rally Years (Пропущенные года слёта с 1993 г.) */}
+          <div className="bg-stone-50 border border-stone-200 rounded-2xl p-3.5">
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-bold uppercase text-stone-800">
+                Пропущенные слёты команды (с 1993 г.)
               </label>
-              <span className="text-[11px] font-bold text-red-700">
-                {skippedYears.length > 0 ? `Пропущено: ${skippedYears.length} г.` : 'Без пропусков'}
+              <span className="text-[11px] font-bold text-red-600">
+                {skippedYears.length > 0 ? `Пропущено: ${skippedYears.length} г.` : 'Без пропусков (все слёты)'}
               </span>
             </div>
-            <p className="text-[11px] text-amber-900 mb-2">
-              Отметьте года, когда вы по уважительной (или нет) причине не смогли поехать на слёт. Это учитывается в реестре и расчете стажа.
+            <p className="text-[11px] text-stone-500 mb-2.5">
+              Нажмите на год слёта, чтобы отметить пропуск. Влияет на расчёт непрерывного походного стажа.
             </p>
-            <div className="flex flex-wrap gap-1.5">
-              {[2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026].map(year => {
+            <div className="max-h-36 overflow-y-auto p-1 bg-white rounded-xl border border-stone-200 flex flex-wrap gap-1.5 scrollbar-thin">
+              {allYearsSince1993.map(year => {
                 const isSkipped = skippedYears.includes(year);
                 return (
                   <button
@@ -405,13 +411,13 @@ export default function ProfileEditModal({
                         setSkippedYears(prev => [...prev, year].sort((a, b) => a - b));
                       }
                     }}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-black border transition-all ${
+                    className={`px-2 py-1 rounded-lg text-xs font-bold border transition-all ${
                       isSkipped
-                        ? 'bg-red-600 text-yellow-300 border-red-800 shadow-xs'
-                        : 'bg-white text-amber-950 border-amber-300 hover:bg-amber-50'
+                        ? 'bg-red-50 text-red-700 border-red-300'
+                        : 'bg-white text-stone-700 border-stone-200 hover:bg-stone-50'
                     }`}
                   >
-                    {year} {isSkipped ? '✕' : ''}
+                    {year} {isSkipped ? '✕' : '✓'}
                   </button>
                 );
               })}
@@ -421,17 +427,17 @@ export default function ProfileEditModal({
           {/* Gender and Psychotype */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-black uppercase text-amber-950 mb-1">
+              <label className="block text-xs font-bold uppercase text-stone-800 mb-1">
                 Пол
               </label>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={() => setGender('male')}
-                  className={`py-2 px-3 rounded-xl font-black text-xs uppercase border-2 transition-all ${
+                  className={`py-2 px-3 rounded-xl font-bold text-xs border transition-all ${
                     gender === 'male'
-                      ? 'bg-blue-600 text-white border-blue-900 shadow-sm'
-                      : 'bg-white text-stone-700 border-amber-300 hover:bg-amber-100'
+                      ? 'bg-stone-900 text-white border-stone-900'
+                      : 'bg-white text-stone-700 border-stone-200 hover:bg-stone-50'
                   }`}
                 >
                   🧑 Парень
@@ -439,10 +445,10 @@ export default function ProfileEditModal({
                 <button
                   type="button"
                   onClick={() => setGender('female')}
-                  className={`py-2 px-3 rounded-xl font-black text-xs uppercase border-2 transition-all ${
+                  className={`py-2 px-3 rounded-xl font-bold text-xs border transition-all ${
                     gender === 'female'
-                      ? 'bg-pink-600 text-white border-pink-900 shadow-sm'
-                      : 'bg-white text-stone-700 border-amber-300 hover:bg-amber-100'
+                      ? 'bg-red-600 text-white border-red-600'
+                      : 'bg-white text-stone-700 border-stone-200 hover:bg-stone-50'
                   }`}
                 >
                   👩 Девушка
@@ -451,13 +457,13 @@ export default function ProfileEditModal({
             </div>
 
             <div>
-              <label className="block text-xs font-black uppercase text-amber-950 mb-1">
+              <label className="block text-xs font-bold uppercase text-stone-800 mb-1">
                 Походный психотип
               </label>
               <select
                 value={psychotype}
                 onChange={(e) => setPsychotype(e.target.value)}
-                className="w-full px-2.5 py-2 bg-white border-2 border-amber-300 focus:border-red-600 rounded-xl text-xs font-bold text-amber-950 outline-none cursor-pointer"
+                className="w-full px-3 py-2 bg-white border border-stone-200 focus:border-red-500 rounded-xl text-xs font-medium text-stone-900 outline-none transition-colors"
               >
                 {PSYCHOTYPES.map((pt) => (
                   <option key={pt.name} value={pt.name}>
@@ -468,34 +474,23 @@ export default function ProfileEditModal({
             </div>
           </div>
 
-          {/* Footer Buttons */}
-          <div className="pt-2 flex items-center justify-end gap-2 border-t-2 border-amber-200">
+          {/* Footer Actions */}
+          <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-stone-100">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 bg-stone-200 hover:bg-stone-300 text-stone-800 font-black text-xs uppercase rounded-xl transition-colors"
+              className="px-4 py-2 bg-stone-100 hover:bg-stone-200 text-stone-700 font-semibold text-xs rounded-xl transition-colors"
             >
               Отмена
             </button>
             <button
               type="submit"
-              disabled={loading}
-              className="px-5 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-yellow-300 border-2 border-amber-950 font-black text-xs uppercase rounded-xl shadow-md transition-all active:scale-95 flex items-center gap-1.5"
+              disabled={loading || compressing}
+              className="px-6 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-bold text-xs uppercase tracking-wide rounded-xl shadow-xs transition-colors"
             >
-              {loading ? (
-                <>
-                  <RefreshCw size={14} className="animate-spin" />
-                  <span>Сохраняем...</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles size={14} />
-                  <span>Сохранить изменения</span>
-                </>
-              )}
+              {loading ? 'Сохранение...' : 'Сохранить профиль'}
             </button>
           </div>
-
         </form>
       </div>
     </div>

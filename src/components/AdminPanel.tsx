@@ -130,6 +130,76 @@ export default function AdminPanel({
 
   const pendingUsers = participants.filter(p => p.accountStatus === 'pending');
 
+  // Password reset requests state & Captain password reset modal
+  interface PasswordResetRequest {
+    id: string;
+    userId: string;
+    userName: string;
+    userNickname: string;
+    note?: string;
+    status: 'pending' | 'resolved';
+    createdAt: string;
+  }
+
+  const [resetRequests, setResetRequests] = useState<PasswordResetRequest[]>([]);
+  const [isLoadingResetRequests, setIsLoadingResetRequests] = useState(false);
+  const [resetModalUser, setResetModalUser] = useState<Participant | null>(null);
+  const [customNewPassword, setCustomNewPassword] = useState('123');
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
+  const [resetSuccessMessage, setResetSuccessMessage] = useState<string | null>(null);
+
+  const loadResetRequests = async () => {
+    setIsLoadingResetRequests(true);
+    try {
+      const res = await fetch('/api/admin/password-reset-requests');
+      if (res.ok) {
+        const data = await res.json();
+        setResetRequests(data.requests || []);
+      }
+    } catch (err) {
+      console.error("Failed to load reset requests:", err);
+    } finally {
+      setIsLoadingResetRequests(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isAdmin) {
+      loadResetRequests();
+    }
+  }, [isAdmin]);
+
+  const handleResetUserPassword = async (userId: string, newPass: string) => {
+    setIsResettingPassword(true);
+    setResetSuccessMessage(null);
+    try {
+      const res = await fetch('/api/admin/reset-user-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, newPassword: newPass })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        if (data.participants) {
+          onUpdateParticipants(data.participants);
+        }
+        setResetSuccessMessage(`Пароль для ${data.user.name} (@${data.user.nickname}) успешно изменён на: ${newPass}`);
+        loadResetRequests();
+        setTimeout(() => {
+          setResetModalUser(null);
+          setResetSuccessMessage(null);
+        }, 3000);
+      } else {
+        alert(data.error || 'Ошибка сброса пароля');
+      }
+    } catch (err) {
+      console.error("Error resetting password:", err);
+      alert('Не удалось связаться с сервером');
+    } finally {
+      setIsResettingPassword(false);
+    }
+  };
+
   const handleRefreshPending = async () => {
     setIsRefreshingPending(true);
     try {
@@ -140,6 +210,7 @@ export default function AdminPanel({
           onUpdateParticipants(data.participants);
         }
       }
+      await loadResetRequests();
     } catch (err) {
       console.error("Refresh pending error:", err);
     } finally {
@@ -332,120 +403,216 @@ export default function AdminPanel({
       </div>
 
       {/* Admin Tabs */}
-      <div className="flex flex-wrap gap-1.5 bg-amber-100 p-1.5 rounded-2xl border-2 border-amber-300">
-        {[
-          { id: 'pending', label: `Заявки (${pendingUsers.length})`, icon: UserCheck, alert: pendingUsers.length > 0 },
-          { id: 'roles', label: 'Роли & Казначей', icon: Shield },
-          { id: 'teamSettings', label: 'Параметры команды', icon: Settings },
-          { id: 'tasks', label: 'Задачи слёта', icon: CheckSquare },
-          { id: 'menu', label: 'Меню и Продукты', icon: Coffee },
-          { id: 'inventory', label: 'Инвентарь', icon: Package },
-          { id: 'contests', label: 'Конкурсы', icon: Award },
-          { id: 'excursions', label: 'Слёты и Взносы', icon: Calendar }
-        ].map(tab => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`flex-1 min-w-[120px] py-2 px-2 text-xs font-black uppercase rounded-xl flex items-center justify-center gap-1.5 transition-all ${
-                isActive 
-                  ? 'bg-red-600 text-yellow-300 shadow-md transform scale-[1.02]' 
-                  : 'text-amber-950 hover:bg-amber-200'
-              }`}
-            >
-              <Icon size={14} />
-              <span>{tab.label}</span>
-              {tab.alert && <span className="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>}
-            </button>
-          );
-        })}
-      </div>
+      {(() => {
+        const pendingResetCount = resetRequests.filter(r => r.status === 'pending').length;
+        return (
+          <div className="flex flex-wrap gap-1.5 bg-amber-100 p-1.5 rounded-2xl border-2 border-amber-300">
+            {[
+              { id: 'pending', label: `Заявки (${pendingUsers.length + pendingResetCount})`, icon: UserCheck, alert: (pendingUsers.length > 0 || pendingResetCount > 0) },
+              { id: 'roles', label: 'Роли & Пароли', icon: Shield },
+              { id: 'teamSettings', label: 'Параметры команды', icon: Settings },
+              { id: 'tasks', label: 'Задачи слёта', icon: CheckSquare },
+              { id: 'menu', label: 'Меню и Продукты', icon: Coffee },
+              { id: 'inventory', label: 'Инвентарь', icon: Package },
+              { id: 'contests', label: 'Конкурсы', icon: Award },
+              { id: 'excursions', label: 'Слёты и Взносы', icon: Calendar }
+            ].map(tab => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id as any)}
+                  className={`flex-1 min-w-[120px] py-2 px-2 text-xs font-black uppercase rounded-xl flex items-center justify-center gap-1.5 transition-all ${
+                    isActive 
+                      ? 'bg-red-600 text-yellow-300 shadow-md transform scale-[1.02]' 
+                      : 'text-amber-950 hover:bg-amber-200'
+                  }`}
+                >
+                  <Icon size={14} />
+                  <span>{tab.label}</span>
+                  {tab.alert && <span className="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>}
+                </button>
+              );
+            })}
+          </div>
+        );
+      })()}
 
-      {/* TAB 1: PENDING REGISTRATIONS */}
-      {activeTab === 'pending' && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <h3 className="font-black text-base uppercase text-red-600 flex items-center gap-2">
-              <UserCheck size={18} />
-              Подтверждение регистрации участников
-            </h3>
-            <div className="flex items-center gap-3">
-              <span className="text-xs font-bold text-amber-900">
-                Ожидают проверки: {pendingUsers.length}
-              </span>
-              <button
-                type="button"
-                onClick={handleRefreshPending}
-                disabled={isRefreshingPending}
-                className="px-3 py-1 bg-amber-200 hover:bg-amber-300 text-amber-950 font-black text-xs uppercase rounded-xl border border-amber-400 flex items-center gap-1.5 shadow-2xs transition-colors"
-                title="Обновить список заявок с сервера"
-              >
-                <RefreshCw size={13} className={isRefreshingPending ? 'animate-spin text-red-600' : 'text-red-600'} />
-                <span>{isRefreshingPending ? 'Обновление...' : 'Обновить'}</span>
-              </button>
+      {/* TAB 1: PENDING REGISTRATIONS & PASSWORD RESETS */}
+      {activeTab === 'pending' && (() => {
+        const pendingResets = resetRequests.filter(r => r.status === 'pending');
+        return (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-amber-200">
+              <div>
+                <h3 className="font-black text-base uppercase text-red-600 flex items-center gap-2">
+                  <UserCheck size={18} />
+                  Модерация заявок и сброс паролей
+                </h3>
+                <p className="text-xs text-amber-800 font-medium mt-0.5">
+                  Регистрация активируется только Капитаном. Здесь же обрабатываются запросы на сброс паролей от участников.
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleRefreshPending}
+                  disabled={isRefreshingPending || isLoadingResetRequests}
+                  className="px-3 py-1 bg-amber-200 hover:bg-amber-300 text-amber-950 font-black text-xs uppercase rounded-xl border border-amber-400 flex items-center gap-1.5 shadow-2xs transition-colors"
+                  title="Обновить список заявок с сервера"
+                >
+                  <RefreshCw size={13} className={(isRefreshingPending || isLoadingResetRequests) ? 'animate-spin text-red-600' : 'text-red-600'} />
+                  <span>{(isRefreshingPending || isLoadingResetRequests) ? 'Обновление...' : 'Обновить всё'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* SECTION 1: PASSWORD RESET REQUESTS */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="font-black text-xs uppercase text-amber-950 flex items-center gap-2">
+                  <Key size={15} className="text-red-600" />
+                  Запросы участников на сброс пароля ({pendingResets.length})
+                </h4>
+                {pendingResets.length > 0 && (
+                  <span className="text-[11px] font-bold text-red-600 bg-red-100 border border-red-300 px-2 py-0.5 rounded-full">
+                    Требуют сброса Капитаном
+                  </span>
+                )}
+              </div>
+
+              {pendingResets.length === 0 ? (
+                <div className="bg-amber-50/60 rounded-xl p-3 text-center border border-amber-200 text-xs text-amber-800 font-medium">
+                  Запросов на сброс пароля нет. Когда участник запросит сброс пароля у Капитана, запрос отобразится здесь.
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {pendingResets.map(req => {
+                    const matchedUser = participants.find(p => p.id === req.userId);
+                    return (
+                      <div key={req.id} className="bg-white border-2 border-red-400 rounded-xl p-3.5 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <img 
+                            src={getSafeAvatar(matchedUser?.avatar, matchedUser?.gender)} 
+                            alt={req.userName} 
+                            className="w-10 h-10 rounded-full border-2 border-red-500 bg-amber-100 object-cover" 
+                          />
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-black text-amber-950 text-sm">{req.userName}</span>
+                              <span className="text-xs font-bold text-red-600">@{req.userNickname}</span>
+                            </div>
+                            {req.note && (
+                              <p className="text-xs text-stone-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 mt-1 inline-block">
+                                Сообщение: <span className="font-semibold">{req.note}</span>
+                              </p>
+                            )}
+                            <p className="text-[10px] text-stone-500 mt-0.5">
+                              Запрос отправлен: {new Date(req.createdAt).toLocaleString('ru-RU')}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 w-full sm:w-auto">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const targetUser = matchedUser || ({
+                                id: req.userId,
+                                name: req.userName,
+                                nickname: req.userNickname,
+                                role: 'member' as UserRole
+                              } as Participant);
+                              setResetModalUser(targetUser);
+                              setCustomNewPassword('123');
+                              setResetSuccessMessage(null);
+                            }}
+                            className="w-full sm:w-auto px-3.5 py-2 bg-red-600 hover:bg-red-700 text-yellow-300 font-black text-xs uppercase rounded-xl shadow transition-colors flex items-center justify-center gap-1.5"
+                          >
+                            <Key size={14} />
+                            Сбросить пароль
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* SECTION 2: PENDING REGISTRATIONS */}
+            <div className="space-y-3 pt-2">
+              <div className="flex items-center justify-between">
+                <h4 className="font-black text-xs uppercase text-amber-950 flex items-center gap-2">
+                  <UserCheck size={15} className="text-emerald-700" />
+                  Заявки на регистрацию в команду ({pendingUsers.length})
+                </h4>
+                <span className="text-[11px] text-amber-800 font-semibold">
+                  Одобрение Капитаном команды
+                </span>
+              </div>
+
+              {pendingUsers.length === 0 ? (
+                <div className="bg-amber-50 rounded-2xl p-6 text-center border-2 border-dashed border-amber-300">
+                  <CheckCircle className="w-10 h-10 text-emerald-500 mx-auto mb-1.5" />
+                  <p className="font-black text-amber-950 text-sm uppercase">Все заявки рассмотрены!</p>
+                  <p className="text-xs text-amber-700 mt-1">Новые участники регистрируются без проверочных кодов и сразу направляются сюда.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {pendingUsers.map(p => (
+                    <div key={p.id} className="bg-amber-50 border-2 border-amber-400 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
+                      <div className="flex items-center gap-3">
+                        <img src={getSafeAvatar(p.avatar, p.gender)} alt={p.name} className="w-12 h-12 rounded-full border-2 border-amber-400 bg-white object-cover" />
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-black text-amber-950 text-sm">{p.name}</span>
+                            <span className="text-xs font-bold text-red-600">@{p.nickname}</span>
+                            {p.biometricEnabled && (
+                              <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded border border-emerald-300">
+                                🛡️ Биометрия
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-amber-800 space-x-2 mt-0.5">
+                            {p.phone && <span>📞 {p.phone}</span>}
+                            {p.email && <span>📧 {p.email}</span>}
+                            <span>🎂 {p.birthday || 'Не указан'}</span>
+                          </div>
+                          <p className="text-[10px] text-amber-600 mt-0.5">
+                            Статус: <strong className="text-amber-800 uppercase">Ожидает решения Капитана команды</strong>
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 w-full sm:w-auto">
+                        <button
+                          type="button"
+                          onClick={() => onApproveUser(p.id)}
+                          className="flex-1 sm:flex-initial px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase rounded-xl shadow transition-colors flex items-center justify-center gap-1"
+                        >
+                          <UserCheck size={14} />
+                          Принять в команду
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onRejectUser(p.id)}
+                          className="px-3 py-2 bg-red-100 hover:bg-red-200 text-red-700 font-bold text-xs uppercase rounded-xl border border-red-300 transition-colors flex items-center justify-center gap-1"
+                        >
+                          <UserX size={14} />
+                          Отклонить
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
-
-          {pendingUsers.length === 0 ? (
-            <div className="bg-amber-50 rounded-2xl p-8 text-center border-2 border-dashed border-amber-300">
-              <CheckCircle className="w-12 h-12 text-emerald-500 mx-auto mb-2" />
-              <p className="font-black text-amber-950 text-sm uppercase">Все заявки рассмотрены!</p>
-              <p className="text-xs text-amber-700 mt-1">Новые участники после регистрации сразу появятся в этом списке.</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {pendingUsers.map(p => (
-                <div key={p.id} className="bg-amber-50 border-2 border-amber-400 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
-                  <div className="flex items-center gap-3">
-                    <img src={getSafeAvatar(p.avatar, p.gender)} alt={p.name} className="w-12 h-12 rounded-full border-2 border-amber-400 bg-white object-cover" />
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-black text-amber-950 text-sm">{p.name}</span>
-                        <span className="text-xs font-bold text-red-600">@{p.nickname}</span>
-                        {p.biometricEnabled && (
-                          <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded border border-emerald-300">
-                            🛡️ Биометрия
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-[11px] text-amber-800 space-x-2 mt-0.5">
-                        {p.phone && <span>📞 {p.phone}</span>}
-                        {p.email && <span>📧 {p.email}</span>}
-                        <span>🎂 {p.birthday || 'Не указан'}</span>
-                      </div>
-                      <p className="text-[10px] text-amber-600 mt-0.5">
-                        Статус: <strong className="text-amber-800 uppercase">Ожидает решения Капитана команды</strong>
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 w-full sm:w-auto">
-                    <button
-                      type="button"
-                      onClick={() => onApproveUser(p.id)}
-                      className="flex-1 sm:flex-initial px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase rounded-xl shadow transition-colors flex items-center justify-center gap-1"
-                    >
-                      <UserCheck size={14} />
-                      Принять в команду
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onRejectUser(p.id)}
-                      className="px-3 py-2 bg-red-100 hover:bg-red-200 text-red-700 font-bold text-xs uppercase rounded-xl border border-red-300 transition-colors flex items-center justify-center gap-1"
-                    >
-                      <UserX size={14} />
-                      Отклонить
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+        );
+      })()}
 
       {/* TAB 2: ROLES & TEAM ROLES */}
       {activeTab === 'roles' && (
@@ -494,6 +661,7 @@ export default function AdminPanel({
                   <th className="p-3">Позывной</th>
                   <th className="p-3">Текущая роль</th>
                   <th className="p-3 min-w-[200px]">Назначить роль в команде</th>
+                  <th className="p-3 text-center">Пароль</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-amber-100">
@@ -544,6 +712,21 @@ export default function AdminPanel({
                             </button>
                           )}
                         </div>
+                      </td>
+                      <td className="p-3 text-center">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setResetModalUser(p);
+                            setCustomNewPassword('123');
+                            setResetSuccessMessage(null);
+                          }}
+                          className="px-2.5 py-1 bg-amber-100 hover:bg-red-600 hover:text-yellow-300 text-amber-950 font-bold text-[11px] rounded-lg border border-amber-300 hover:border-red-600 inline-flex items-center gap-1 transition-colors shadow-2xs"
+                          title="Сбросить пароль участнику"
+                        >
+                          <Key size={12} className="text-red-600" />
+                          <span>Сбросить</span>
+                        </button>
                       </td>
                     </tr>
                   );
@@ -1580,6 +1763,132 @@ export default function AdminPanel({
                   </div>
                 </div>
               ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: RESET PARTICIPANT PASSWORD (CAPTAIN ONLY) */}
+      {resetModalUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="bg-white border-4 border-amber-400 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-amber-200 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-red-100 border border-red-300 flex items-center justify-center text-red-600">
+                  <Key size={18} />
+                </div>
+                <div>
+                  <h3 className="font-black text-amber-950 text-sm uppercase">Сброс пароля участника</h3>
+                  <p className="text-[11px] text-stone-500 font-medium">Штаб Капитана команды</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setResetModalUser(null);
+                  setResetSuccessMessage(null);
+                }}
+                className="text-stone-400 hover:text-stone-700 font-black text-lg p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Target User Info */}
+            <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-3 flex items-center gap-3">
+              <img
+                src={getSafeAvatar(resetModalUser.avatar, resetModalUser.gender)}
+                alt={resetModalUser.name}
+                className="w-12 h-12 rounded-full border-2 border-amber-400 object-cover bg-white"
+              />
+              <div>
+                <h4 className="font-black text-amber-950 text-sm">{resetModalUser.name}</h4>
+                <div className="text-xs font-bold text-red-600">@{resetModalUser.nickname}</div>
+                <div className="text-[11px] text-stone-500">{resetModalUser.email || resetModalUser.phone || 'Контакты не указаны'}</div>
+              </div>
+            </div>
+
+            {resetSuccessMessage ? (
+              <div className="bg-emerald-50 border-2 border-emerald-400 text-emerald-900 rounded-xl p-4 text-center space-y-1">
+                <CheckCircle className="w-8 h-8 text-emerald-600 mx-auto" />
+                <p className="font-black text-xs uppercase">{resetSuccessMessage}</p>
+                <p className="text-[11px] text-emerald-700">Сообщите этот пароль участнику команды.</p>
+              </div>
+            ) : (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!customNewPassword.trim()) {
+                    alert('Введите новый пароль');
+                    return;
+                  }
+                  handleResetUserPassword(resetModalUser.id, customNewPassword.trim());
+                }}
+                className="space-y-4"
+              >
+                <div>
+                  <label className="block text-xs font-black uppercase text-amber-950 mb-1">
+                    Новый пароль для участника:
+                  </label>
+                  <input
+                    type="text"
+                    value={customNewPassword}
+                    onChange={(e) => setCustomNewPassword(e.target.value)}
+                    className="w-full px-3 py-2 bg-amber-50 border-2 border-amber-400 rounded-xl font-mono text-sm font-bold text-amber-950 focus:border-red-600 outline-none"
+                    placeholder="Введите новый пароль"
+                    required
+                  />
+                  <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                    <span className="text-[10px] text-stone-500 font-bold uppercase">Быстрый выбор:</span>
+                    <button
+                      type="button"
+                      onClick={() => setCustomNewPassword('123')}
+                      className="text-[10px] bg-amber-100 hover:bg-amber-200 border border-amber-300 font-bold px-2 py-0.5 rounded-md"
+                    >
+                      123
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCustomNewPassword('321')}
+                      className="text-[10px] bg-amber-100 hover:bg-amber-200 border border-amber-300 font-bold px-2 py-0.5 rounded-md"
+                    >
+                      321
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCustomNewPassword('negodyai1993')}
+                      className="text-[10px] bg-amber-100 hover:bg-amber-200 border border-amber-300 font-bold px-2 py-0.5 rounded-md"
+                    >
+                      negodyai1993
+                    </button>
+                  </div>
+                </div>
+
+                <p className="text-[11px] text-stone-600 bg-amber-50/80 p-2.5 rounded-lg border border-amber-200">
+                  ⚠️ Пароль будет немедленно изменён в системе. Участник сможет войти на сайт под своим позывным и этим новым паролем.
+                </p>
+
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setResetModalUser(null);
+                      setResetSuccessMessage(null);
+                    }}
+                    className="px-4 py-2 bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold text-xs uppercase rounded-xl transition-colors"
+                  >
+                    Отмена
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isResettingPassword}
+                    className="px-5 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-yellow-300 font-black text-xs uppercase rounded-xl shadow transition-colors flex items-center gap-1.5"
+                  >
+                    <Key size={14} />
+                    <span>{isResettingPassword ? 'Сохранение...' : 'Установить пароль'}</span>
+                  </button>
+                </div>
+              </form>
             )}
           </div>
         </div>

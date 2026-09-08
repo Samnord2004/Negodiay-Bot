@@ -100,7 +100,8 @@ export interface Participant {
   joinedYear: number; // год первого прихода в команду
   skippedYears: number[]; // года пропусков слета
   gender: 'male' | 'female';
-  role?: UserRole; // 'admin' | 'treasurer' | 'member'
+  role?: UserRole; // 'admin' | 'treasurer' | 'member' | 'chef' etc.
+  roleTitle?: string;
   email?: string;
   phone?: string;
   password?: string;
@@ -329,10 +330,10 @@ export interface ThemeConfig {
 }
 
 export const DEFAULT_THEME_CONFIG: ThemeConfig = {
-  bgColor: '#FFFBEB',
-  textColor: '#451A03',
+  bgColor: '#FAFAF9',
+  textColor: '#1C1917',
   accentColor: '#DC2626',
-  headerBg: '#FACC15',
+  headerBg: '#FFFFFF',
   brightness: 100,
   contrast: 100
 };

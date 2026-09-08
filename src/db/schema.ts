@@ -65,7 +65,7 @@ export const botConfig = pgTable("bot_config", {
   autoDetectPsychotype: boolean("auto_detect_psychotype").notNull().default(true),
   activePersonality: text("active_personality").notNull().default("Старожила слётов"),
   welcomeTemplate: text("welcome_template").notNull().default("Привет, {name}! Добро пожаловать на Слёт Негодяев!"),
-  foundingYear: integer("founding_year").notNull().default(2018),
+  foundingYear: integer("founding_year").notNull().default(1993),
   customLogo: text("custom_logo")
 });
 

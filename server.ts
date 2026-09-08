@@ -59,6 +59,7 @@ import {
   saveStories
 } from "./db";
 import { ORIENTEERING_SIGNS_SVG, KNOTS_DIAGRAM_SVG, CONTEST_SCHEDULE_SVG } from "./src/mockData";
+import { Participant, UserRole } from "./src/types";
 
 // Load environment variables
 dotenv.config();
@@ -591,6 +592,22 @@ app.post("/api/sync", (req, res) => {
 // Verification codes cache: target -> { code, expiresAt, attempts }
 const activeVerificationCodes = new Map<string, { code: string; target: string; expiresAt: number; attempts: number }>();
 
+// Password reset tokens: email -> { code, userId, expiresAt }
+const activePasswordResetCodes = new Map<string, { code: string; userId: string; email: string; expiresAt: number }>();
+
+// Captain password reset requests queue
+interface PasswordResetRequest {
+  id: string;
+  userId: string;
+  userName: string;
+  userNickname: string;
+  userEmail: string;
+  requestedAt: string;
+  status: 'pending' | 'resolved';
+  note: string;
+}
+let passwordResetRequests: PasswordResetRequest[] = [];
+
 // Auth & Registration
 app.post("/api/auth/send-verification-code", (req, res) => {
   const { target, method } = req.body;
@@ -599,9 +616,8 @@ app.post("/api/auth/send-verification-code", (req, res) => {
   }
 
   const cleanTarget = target.trim().toLowerCase();
-  // Generate 4-digit code
   const code = Math.floor(1000 + Math.random() * 9000).toString();
-  const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
+  const expiresAt = Date.now() + 5 * 60 * 1000;
 
   activeVerificationCodes.set(cleanTarget, {
     code,
@@ -611,74 +627,209 @@ app.post("/api/auth/send-verification-code", (req, res) => {
   });
 
   const methodLabel = method === "email" ? "на электронную почту" : "по СМС";
-  console.log(`[AUTH] Sent verification code ${code} ${methodLabel} to ${cleanTarget}`);
-
   return res.json({
     success: true,
     message: `Код подтверждения отправлен ${methodLabel} на ${target}`,
-    code, // Returned for transparent preview notification
+    code,
     expiresAt
   });
 });
 
+// Registration without verification code: all new users require Captain approval!
 app.post("/api/auth/register", async (req, res) => {
-  const { name, nickname, email, phone, password, verificationMethod, verificationCode, biometricEnabled, avatar } = req.body;
+  const { name, nickname, email, phone, password, birthday, gender, biometricEnabled, avatar } = req.body;
   if (!name || !name.trim() || !nickname || !nickname.trim()) {
     return res.status(400).json({ success: false, error: "Укажите имя и позывной" });
   }
 
-  const target = (verificationMethod === "email" ? email : phone)?.trim().toLowerCase();
-  if (!target) {
-    return res.status(400).json({ success: false, error: "Укажите телефон или email для верификации" });
+  const cleanNick = nickname.trim().replace(/^@/, '');
+  const existingWithNick = getParticipants().find(
+    p => p.nickname.toLowerCase() === cleanNick.toLowerCase() && p.accountStatus !== "rejected"
+  );
+  if (existingWithNick) {
+    return res.status(400).json({ success: false, error: "Участник с таким позывным уже зарегистрирован на портале" });
   }
-
-  const stored = activeVerificationCodes.get(target);
-  if (!stored) {
-    return res.status(400).json({ success: false, error: "Пожалуйста, сначала запросите проверочный код" });
-  }
-  if (Date.now() > stored.expiresAt) {
-    activeVerificationCodes.delete(target);
-    return res.status(400).json({ success: false, error: "Срок действия кода подтверждения истёк. Запросите новый код." });
-  }
-  if (stored.code !== verificationCode?.trim()) {
-    stored.attempts += 1;
-    if (stored.attempts >= 5) {
-      activeVerificationCodes.delete(target);
-      return res.status(400).json({ success: false, error: "Превышено количество попыток. Запросите новый код." });
-    }
-    return res.status(400).json({ success: false, error: "Неверный код подтверждения. Проверьте код и попробуйте снова." });
-  }
-
-  // Code verified successfully
-  activeVerificationCodes.delete(target);
 
   const newId = "user_" + Date.now();
   const newParticipant = {
     id: newId,
     name: name.trim(),
-    nickname: nickname.trim().replace(/^@/, ''),
+    nickname: cleanNick,
     psychotype: "Новичок-энтузиаст",
     avatar: avatar || "",
     paidAmount: 0,
     totalCost: 15000,
     debtAmount: 15000,
     joined: false,
+    birthday: birthday ? String(birthday).trim() : "",
     joinedYear: new Date().getFullYear(),
     skippedYears: [],
-    gender: "male" as const,
-    role: "member" as const,
+    gender: (gender === "female" ? "female" : "male") as "male" | "female",
+    role: "member" as UserRole,
     email: email ? email.trim() : "",
     phone: phone ? phone.trim() : "",
-    password: password || "123",
-    accountStatus: "pending" as const, // Requires captain approval!
+    password: password && password.trim().length >= 3 ? password.trim() : "123",
+    accountStatus: "pending" as const, // Strict rule: requires Captain approval!
     biometricEnabled: Boolean(biometricEnabled)
   };
 
   await registerNewParticipant(newParticipant);
   res.json({
     success: true,
-    message: "Заявка на регистрацию принята! Ожидайте подтверждения от Капитана команды.",
+    message: "Заявка на регистрацию принята! Так как доступ на портал команды закрытый, аккаунт будет активирован после одобрения Капитаном команды.",
     user: newParticipant,
+    participants: getParticipants()
+  });
+});
+
+// 1. Password Recovery via Email
+app.post("/api/auth/forgot-password-email", (req, res) => {
+  const { emailOrNickname } = req.body;
+  if (!emailOrNickname || !emailOrNickname.trim()) {
+    return res.status(400).json({ success: false, error: "Укажите e-mail или позывной" });
+  }
+
+  const clean = emailOrNickname.trim().toLowerCase().replace(/^@/, '');
+  const user = getParticipants().find(p => 
+    (p.email && p.email.toLowerCase() === clean) ||
+    p.nickname.toLowerCase() === clean
+  );
+
+  if (!user) {
+    return res.status(404).json({ success: false, error: "Участник с таким e-mail или позывным не найден" });
+  }
+
+  if (!user.email || !user.email.includes("@")) {
+    return res.status(400).json({ 
+      success: false, 
+      error: "У вашего профиля не указан e-mail. Воспользуйтесь опцией запроса сброса пароля у Капитана команды." 
+    });
+  }
+
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  activePasswordResetCodes.set(user.email.toLowerCase(), {
+    code,
+    userId: user.id,
+    email: user.email,
+    expiresAt: Date.now() + 15 * 60 * 1000
+  });
+
+  console.log(`[AUTH] Sent password reset code ${code} to ${user.email}`);
+
+  res.json({
+    success: true,
+    message: `Код восстановления отправлен на ${user.email}`,
+    email: user.email,
+    resetCode: code
+  });
+});
+
+app.post("/api/auth/reset-password-with-code", async (req, res) => {
+  const { email, code, newPassword } = req.body;
+  if (!email || !code || !newPassword) {
+    return res.status(400).json({ success: false, error: "Заполните все поля" });
+  }
+
+  if (newPassword.trim().length < 3) {
+    return res.status(400).json({ success: false, error: "Новый пароль должен содержать минимум 3 символа" });
+  }
+
+  const cleanEmail = email.trim().toLowerCase();
+  const stored = activePasswordResetCodes.get(cleanEmail);
+  if (!stored) {
+    return res.status(400).json({ success: false, error: "Код восстановления не найден или истёк. Запросите код заново." });
+  }
+
+  if (Date.now() > stored.expiresAt) {
+    activePasswordResetCodes.delete(cleanEmail);
+    return res.status(400).json({ success: false, error: "Срок действия кода истёк. Запросите новый код." });
+  }
+
+  if (stored.code !== code.trim()) {
+    return res.status(400).json({ success: false, error: "Неверный код восстановления" });
+  }
+
+  await updateParticipantPassword(stored.userId, newPassword.trim());
+  activePasswordResetCodes.delete(cleanEmail);
+
+  res.json({
+    success: true,
+    message: "Пароль успешно изменён! Теперь вы можете войти в систему с новым паролем."
+  });
+});
+
+// 2. Request Password Reset from Captain
+app.post("/api/auth/request-captain-reset", (req, res) => {
+  const { identifier, note } = req.body;
+  if (!identifier || !identifier.trim()) {
+    return res.status(400).json({ success: false, error: "Укажите позывной, имя или контакты" });
+  }
+
+  const clean = identifier.trim().toLowerCase().replace(/^@/, '');
+  const user = getParticipants().find(p => 
+    p.nickname.toLowerCase() === clean ||
+    p.name.toLowerCase().includes(clean) ||
+    (p.email && p.email.toLowerCase() === clean) ||
+    (p.phone && p.phone.includes(clean))
+  );
+
+  const reqId = "req_" + Date.now();
+  const resetReq: PasswordResetRequest = {
+    id: reqId,
+    userId: user ? user.id : "unknown",
+    userName: user ? user.name : identifier.trim(),
+    userNickname: user ? user.nickname : clean,
+    userEmail: user?.email || "",
+    requestedAt: new Date().toLocaleDateString("ru-RU") + " " + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    status: "pending",
+    note: note ? note.trim() : ""
+  };
+
+  // Prevent duplicate spam requests
+  passwordResetRequests = passwordResetRequests.filter(r => !(r.userNickname.toLowerCase() === resetReq.userNickname.toLowerCase() && r.status === "pending"));
+  passwordResetRequests.unshift(resetReq);
+
+  res.json({
+    success: true,
+    message: "Запрос на сброс пароля отправлен Капитану команды! Капитан сбросит ваш пароль в панели управления."
+  });
+});
+
+// Captain: View Password Reset Requests
+app.get("/api/admin/password-reset-requests", (req, res) => {
+  res.json({
+    success: true,
+    requests: passwordResetRequests.filter(r => r.status === "pending")
+  });
+});
+
+// Captain: Reset User Password directly
+app.post("/api/admin/reset-user-password", async (req, res) => {
+  const { userId, newPassword } = req.body;
+  if (!userId) {
+    return res.status(400).json({ success: false, error: "userId обязателен" });
+  }
+
+  const participants = getParticipants();
+  const user = participants.find(p => p.id === userId);
+  if (!user) {
+    return res.status(404).json({ success: false, error: "Участник не найден" });
+  }
+
+  const finalPassword = newPassword && newPassword.trim() ? newPassword.trim() : "123";
+  await updateParticipantPassword(userId, finalPassword);
+
+  // Mark pending reset requests for this user as resolved
+  passwordResetRequests = passwordResetRequests.map(r => 
+    (r.userId === userId || r.userNickname.toLowerCase() === user.nickname.toLowerCase()) 
+      ? { ...r, status: "resolved" as const } 
+      : r
+  );
+
+  res.json({
+    success: true,
+    message: `Пароль для ${user.name} (@${user.nickname}) успешно сброшен на: "${finalPassword}"`,
+    newPassword: finalPassword,
     participants: getParticipants()
   });
 });
@@ -926,7 +1077,7 @@ app.put("/api/participants/:id/skipped-years", async (req, res) => {
       return res.status(404).json({ success: false, error: "Участник не найден" });
     }
     const cleanYears = Array.isArray(skippedYears) 
-      ? Array.from(new Set(skippedYears.map(Number).filter(n => !isNaN(n) && n > 2000 && n <= 2030))).sort((a, b) => a - b)
+      ? Array.from(new Set(skippedYears.map(Number).filter(n => !isNaN(n) && n >= 1993 && n <= 2030))).sort((a, b) => a - b)
       : [];
     const updated = {
       ...existing,

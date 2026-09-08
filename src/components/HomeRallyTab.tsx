@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { Participant, Excursion, TaskItem, MenuItem, GroceryItem, Contest, CreativityIdea } from '../types';
 import { getSafeAvatar } from '../utils/avatar';
+import { formatBirthdayShort } from '../utils/dateUtils';
 import TasksTab from './TasksTab';
 import MenuGroceriesTab from './MenuGroceriesTab';
 import ContestsTab from './ContestsTab';
@@ -97,6 +98,9 @@ export default function HomeRallyTab({
   };
 
   const activeExcursions = excursions.filter(e => e.isActive);
+  const isCaptain = isAdmin || currentUser?.role === 'admin';
+  const canManagePayments = isCaptain || currentUser?.role === 'treasurer';
+
   const totalTargetFunds = participants.reduce((sum, p) => sum + (p.totalCost || 0), 0);
   const totalPaidFunds = participants.reduce((sum, p) => sum + (p.paidAmount || 0), 0);
   const totalDebt = Math.max(0, totalTargetFunds - totalPaidFunds);
@@ -123,7 +127,7 @@ export default function HomeRallyTab({
 
   const getTeamYearsText = (joinedYear: number, skippedYears?: number[]) => {
     const currentY = new Date().getFullYear();
-    const years = currentY - (joinedYear || 2018) - (skippedYears ? skippedYears.length : 0);
+    const years = currentY - (joinedYear || 1993) - (skippedYears ? skippedYears.length : 0);
     const positiveYears = Math.max(0, years);
     const lastDigit = positiveYears % 10;
     const lastTwoDigits = positiveYears % 100;
@@ -194,35 +198,35 @@ export default function HomeRallyTab({
     <div className="space-y-6">
       
       {/* SECTION TABS FOR "ПЛАНИРУЕМЫЕ СЛЁТЫ" */}
-      <div className="bg-amber-100/90 border-3 border-amber-400 p-1.5 rounded-2xl shadow-sm">
-        <div className="flex items-center gap-2 overflow-x-auto scrollbar-none">
+      <div className="bg-stone-100/90 border border-stone-200 p-1.5 rounded-2xl shadow-xs">
+        <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none">
           
           <button
             type="button"
             onClick={() => handleSubTabSwitch('overview')}
-            className={`flex-1 min-w-[140px] py-2.5 px-3 rounded-xl font-black text-xs uppercase flex items-center justify-center gap-2 transition-all border-2 ${
+            className={`flex-1 min-w-[140px] py-2 px-3 rounded-xl font-bold text-xs uppercase flex items-center justify-center gap-2 transition-all ${
               internalSubTab === 'overview'
-                ? 'bg-red-600 text-yellow-300 border-amber-950 shadow-md transform scale-[1.02]'
-                : 'bg-white/80 hover:bg-white text-amber-950 border-amber-300'
+                ? 'bg-white text-red-600 border border-stone-200 shadow-xs'
+                : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200/50'
             }`}
           >
-            <Tent size={16} className={internalSubTab === 'overview' ? 'text-yellow-300' : 'text-red-600'} />
+            <Tent size={16} className={internalSubTab === 'overview' ? 'text-red-600' : 'text-stone-400'} />
             <span>Обзор и взносы</span>
           </button>
 
           <button
             type="button"
             onClick={() => handleSubTabSwitch('tasks')}
-            className={`flex-1 min-w-[140px] py-2.5 px-3 rounded-xl font-black text-xs uppercase flex items-center justify-center gap-2 transition-all border-2 ${
+            className={`flex-1 min-w-[140px] py-2 px-3 rounded-xl font-bold text-xs uppercase flex items-center justify-center gap-2 transition-all ${
               internalSubTab === 'tasks'
-                ? 'bg-red-600 text-yellow-300 border-amber-950 shadow-md transform scale-[1.02]'
-                : 'bg-white/80 hover:bg-white text-amber-950 border-amber-300'
+                ? 'bg-white text-red-600 border border-stone-200 shadow-xs'
+                : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200/50'
             }`}
           >
-            <CheckSquare size={16} className={internalSubTab === 'tasks' ? 'text-yellow-300' : 'text-red-600'} />
+            <CheckSquare size={16} className={internalSubTab === 'tasks' ? 'text-red-600' : 'text-stone-400'} />
             <span>Задачи слёта</span>
             {pendingTasksCount > 0 && (
-              <span className="bg-amber-950 text-yellow-300 text-[10px] font-black px-1.5 py-0.2 rounded-full border border-yellow-300">
+              <span className="bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.2 rounded-full">
                 {pendingTasksCount}
               </span>
             )}
@@ -231,16 +235,16 @@ export default function HomeRallyTab({
           <button
             type="button"
             onClick={() => handleSubTabSwitch('menu')}
-            className={`flex-1 min-w-[140px] py-2.5 px-3 rounded-xl font-black text-xs uppercase flex items-center justify-center gap-2 transition-all border-2 ${
+            className={`flex-1 min-w-[140px] py-2 px-3 rounded-xl font-bold text-xs uppercase flex items-center justify-center gap-2 transition-all ${
               internalSubTab === 'menu'
-                ? 'bg-red-600 text-yellow-300 border-amber-950 shadow-md transform scale-[1.02]'
-                : 'bg-white/80 hover:bg-white text-amber-950 border-amber-300'
+                ? 'bg-white text-red-600 border border-stone-200 shadow-xs'
+                : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200/50'
             }`}
           >
-            <Coffee size={16} className={internalSubTab === 'menu' ? 'text-yellow-300' : 'text-red-600'} />
+            <Coffee size={16} className={internalSubTab === 'menu' ? 'text-red-600' : 'text-stone-400'} />
             <span>Меню и продукты</span>
             {unboughtGroceriesCount > 0 && (
-              <span className="bg-amber-950 text-yellow-300 text-[10px] font-black px-1.5 py-0.2 rounded-full border border-yellow-300">
+              <span className="bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.2 rounded-full">
                 {unboughtGroceriesCount}
               </span>
             )}
@@ -249,16 +253,16 @@ export default function HomeRallyTab({
           <button
             type="button"
             onClick={() => handleSubTabSwitch('contests')}
-            className={`flex-1 min-w-[140px] py-2.5 px-3 rounded-xl font-black text-xs uppercase flex items-center justify-center gap-2 transition-all border-2 ${
+            className={`flex-1 min-w-[140px] py-2 px-3 rounded-xl font-bold text-xs uppercase flex items-center justify-center gap-2 transition-all ${
               internalSubTab === 'contests'
-                ? 'bg-red-600 text-yellow-300 border-amber-950 shadow-md transform scale-[1.02]'
-                : 'bg-white/80 hover:bg-white text-amber-950 border-amber-300'
+                ? 'bg-white text-red-600 border border-stone-200 shadow-xs'
+                : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200/50'
             }`}
           >
-            <Trophy size={16} className={internalSubTab === 'contests' ? 'text-yellow-300' : 'text-red-600'} />
+            <Trophy size={16} className={internalSubTab === 'contests' ? 'text-red-600' : 'text-stone-400'} />
             <span>Конкурсы</span>
             {contests.length > 0 && (
-              <span className="bg-amber-950 text-yellow-300 text-[10px] font-black px-1.5 py-0.2 rounded-full border border-yellow-300">
+              <span className="bg-stone-700 text-white text-[10px] font-bold px-1.5 py-0.2 rounded-full">
                 {contests.length}
               </span>
             )}
@@ -267,16 +271,16 @@ export default function HomeRallyTab({
           <button
             type="button"
             onClick={() => handleSubTabSwitch('creativity')}
-            className={`flex-1 min-w-[140px] py-2.5 px-3 rounded-xl font-black text-xs uppercase flex items-center justify-center gap-2 transition-all border-2 ${
+            className={`flex-1 min-w-[140px] py-2 px-3 rounded-xl font-bold text-xs uppercase flex items-center justify-center gap-2 transition-all ${
               internalSubTab === 'creativity'
-                ? 'bg-red-600 text-yellow-300 border-amber-950 shadow-md transform scale-[1.02]'
-                : 'bg-white/80 hover:bg-white text-amber-950 border-amber-300'
+                ? 'bg-white text-red-600 border border-stone-200 shadow-xs'
+                : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200/50'
             }`}
           >
-            <Palette size={16} className={internalSubTab === 'creativity' ? 'text-yellow-300' : 'text-red-600'} />
+            <Palette size={16} className={internalSubTab === 'creativity' ? 'text-red-600' : 'text-stone-400'} />
             <span>Творчество</span>
             {creativityIdeas.length > 0 && (
-              <span className="bg-amber-950 text-yellow-300 text-[10px] font-black px-1.5 py-0.2 rounded-full border border-yellow-300">
+              <span className="bg-stone-700 text-white text-[10px] font-bold px-1.5 py-0.2 rounded-full">
                 {creativityIdeas.length}
               </span>
             )}
@@ -290,35 +294,35 @@ export default function HomeRallyTab({
         <div className="space-y-6 animate-in fade-in duration-200">
           
           {/* Top Banner Overview */}
-          <div className="bg-yellow-400 border-4 border-red-600 rounded-3xl p-6 shadow-xl relative overflow-hidden">
+          <div className="bg-gradient-to-br from-amber-50/60 via-white to-stone-50 border border-stone-200 rounded-3xl p-6 shadow-xs relative overflow-hidden">
             <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
               <div>
-                <span className="bg-red-600 text-yellow-300 font-black text-xs uppercase px-3 py-1 rounded-full border border-amber-950 shadow">
+                <span className="bg-red-600 text-white font-bold text-xs uppercase px-3 py-1 rounded-full shadow-xs">
                   🏕️ Официальный штаб слёта
                 </span>
-                <h2 className="text-2xl sm:text-3xl font-black text-red-700 uppercase mt-2 leading-tight">
+                <h2 className="text-xl sm:text-2xl font-black text-stone-900 uppercase mt-2.5 leading-tight">
                   туристической команды "Негодяи"
                 </h2>
-                <p className="text-xs sm:text-sm font-bold text-amber-950 mt-1 max-w-2xl leading-relaxed">
+                <p className="text-xs sm:text-sm text-stone-600 mt-1 max-w-2xl leading-relaxed">
                   Планируемые лесные слёты, стоянки у костра, палаточные лагеря и дух приключений. Единый реестр участников, казна сборов, горящие задачи и раскладка походного питания.
                 </p>
               </div>
 
               {/* Quick Stats Grid */}
-              <div className="grid grid-cols-3 gap-2 sm:gap-3 bg-yellow-100/90 border-3 border-red-500 p-3.5 rounded-2xl shrink-0 shadow-inner">
-                <div className="text-center px-1">
-                  <span className="block text-[10px] uppercase font-black text-amber-900">Собрано</span>
+              <div className="grid grid-cols-3 gap-2 sm:gap-3 bg-white border border-stone-200 p-3.5 rounded-2xl shrink-0 shadow-xs">
+                <div className="text-center px-1.5">
+                  <span className="block text-[10px] uppercase font-bold text-stone-500">Собрано</span>
                   <span className="text-base sm:text-xl font-black text-emerald-600">{totalPaidFunds.toLocaleString()} ₽</span>
                 </div>
-                <div className="text-center px-1 border-x-2 border-amber-300">
-                  <span className="block text-[10px] uppercase font-black text-amber-900">Долг команды</span>
+                <div className="text-center px-1.5 border-x border-stone-200">
+                  <span className="block text-[10px] uppercase font-bold text-stone-500">Долг команды</span>
                   <span className="text-base sm:text-xl font-black text-red-600">{totalDebt.toLocaleString()} ₽</span>
                 </div>
-                <div className="text-center px-1">
-                  <span className="block text-[10px] uppercase font-black text-amber-900">Должников</span>
+                <div className="text-center px-1.5">
+                  <span className="block text-[10px] uppercase font-bold text-stone-500">Должников</span>
                   <span className="text-base sm:text-xl font-black text-red-600 flex items-center justify-center gap-1">
                     {debtorsCount}
-                    {debtorsCount > 0 && <AlertCircle size={14} className="text-red-500 animate-pulse" />}
+                    {debtorsCount > 0 && <AlertCircle size={14} className="text-red-500" />}
                   </span>
                 </div>
               </div>
@@ -326,59 +330,59 @@ export default function HomeRallyTab({
           </div>
 
           {/* Active Hikes / Gathering Schedule */}
-          <div className="bg-white border-4 border-red-600 rounded-3xl p-6 shadow-xl space-y-4">
+          <div className="bg-white border border-stone-200 rounded-3xl p-6 shadow-xs space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-xl font-black text-red-600 uppercase flex items-center gap-2">
-                  <Calendar size={22} className="text-red-600" />
+                <h3 className="text-lg font-black text-stone-900 uppercase flex items-center gap-2">
+                  <Calendar size={20} className="text-red-600" />
                   Активные Сборы и Походы
                 </h3>
-                <p className="text-xs font-bold text-amber-900 mt-0.5">
-                  Текущие утвержденные выезды и расчет сумм взносов
+                <p className="text-xs text-stone-500 mt-0.5">
+                  Текущие утвержденные выезды и расчет сумм взносов (редактирование доступно только капитану)
                 </p>
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {activeExcursions.map(ex => (
-                <div key={ex.id} className="bg-amber-50 border-3 border-amber-400 rounded-2xl p-4 flex flex-col justify-between shadow-sm hover:border-red-500 transition-colors">
+                <div key={ex.id} className="bg-stone-50/60 border border-stone-200 rounded-2xl p-5 flex flex-col justify-between shadow-2xs hover:border-amber-400 transition-colors">
                   <div>
                     <div className="flex items-center justify-between gap-2">
-                      <h4 className="font-black text-base uppercase text-amber-950">{ex.title}</h4>
-                      <span className="bg-emerald-600 text-white text-[10px] font-black uppercase px-2 py-0.5 rounded-full">
+                      <h4 className="font-bold text-base uppercase text-stone-900">{ex.title}</h4>
+                      <span className="bg-emerald-600 text-white text-[10px] font-bold uppercase px-2 py-0.5 rounded-full">
                         Активен
                       </span>
                     </div>
-                    <div className="flex items-center gap-3 text-xs font-bold text-amber-800 mt-1.5">
+                    <div className="flex items-center gap-3 text-xs font-semibold text-stone-600 mt-1.5">
                       <span className="flex items-center gap-1">📍 {ex.location}</span>
                       <span className="flex items-center gap-1">📅 {ex.date}</span>
                     </div>
                     {ex.description && (
-                      <p className="text-xs text-amber-900 mt-2 font-medium leading-relaxed">
+                      <p className="text-xs text-stone-600 mt-2 font-normal leading-relaxed">
                         {ex.description}
                       </p>
                     )}
                   </div>
 
-                  <div className="mt-4 pt-3 border-t-2 border-amber-200 flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-3 text-xs font-black">
-                      <span className="bg-blue-100 text-blue-900 px-2 py-1 rounded-lg border border-blue-300">
+                  <div className="mt-4 pt-3 border-t border-stone-200 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 text-xs font-bold">
+                      <span className="bg-blue-50 text-blue-700 px-2.5 py-1 rounded-lg border border-blue-200">
                         🧑 Парни: {ex.costBoys || ex.costPerPerson} ₽
                       </span>
-                      <span className="bg-pink-100 text-pink-900 px-2 py-1 rounded-lg border border-pink-300">
+                      <span className="bg-pink-50 text-pink-700 px-2.5 py-1 rounded-lg border border-pink-200">
                         👩 Девчули: {ex.costGirls || Math.round(ex.costPerPerson * 0.7)} ₽
                       </span>
                     </div>
 
-                    {isAdmin && (
+                    {isCaptain && (
                       <button
                         type="button"
                         onClick={() => setEditingExcursion({ ...ex })}
-                        className="px-3 py-1.5 bg-yellow-400 hover:bg-yellow-500 text-amber-950 font-black text-xs uppercase rounded-xl border-2 border-amber-500 flex items-center gap-1.5 shadow-xs transition-all"
-                        title="Редактировать слёт и взносы"
+                        className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white font-bold text-xs uppercase rounded-xl flex items-center gap-1.5 shadow-xs transition-all"
+                        title="Редактировать слёт и взносы (доступно капитану)"
                       >
-                        <Edit size={14} className="text-red-700" />
-                        <span>Редактировать</span>
+                        <Edit size={14} className="text-white" />
+                        <span>Редактировать слёт</span>
                       </button>
                     )}
                   </div>
@@ -388,45 +392,50 @@ export default function HomeRallyTab({
           </div>
 
           {/* Participants Roster & Debt Register */}
-          <div className="bg-white border-4 border-red-600 rounded-3xl p-6 shadow-xl space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b-2 border-amber-200">
+          <div className="bg-white border border-stone-200 rounded-3xl p-6 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-stone-100">
               <div>
-                <h3 className="text-xl font-black text-red-600 uppercase flex items-center gap-2">
-                  <Users size={22} className="text-red-600" />
+                <h3 className="text-lg font-black text-stone-900 uppercase flex items-center gap-2">
+                  <Users size={20} className="text-red-600" />
                   Реестр Негодяев команды ({participants.length})
                 </h3>
-                <p className="text-xs font-bold text-amber-900 mt-0.5">
+                <p className="text-xs text-stone-500 mt-0.5">
                   Учет взносов на текущий слёт, стаж в команде и дни рождения
                 </p>
               </div>
+              {!canManagePayments && (
+                <div className="text-[11px] font-semibold text-stone-500 bg-stone-50 px-3 py-1.5 rounded-xl border border-stone-200 flex items-center gap-1.5">
+                  <span>🔒 Оплаты вносят Казначей и Капитан</span>
+                </div>
+              )}
             </div>
 
             {/* Responsive Table */}
-            <div className="overflow-x-auto rounded-2xl border-2 border-amber-300">
+            <div className="overflow-x-auto rounded-2xl border border-stone-200">
               <table className="w-full text-left text-xs bg-white">
-                <thead className="bg-yellow-400 uppercase text-amber-950 font-black border-b-2 border-red-500">
+                <thead className="bg-stone-50 uppercase text-stone-600 font-bold border-b border-stone-200">
                   <tr>
                     <th className="p-3">Негодяй</th>
                     <th className="p-3">Роль</th>
                     <th className="p-3">Стаж</th>
-                    <th className="p-3">🎂 Днюха</th>
+                    <th className="p-3">🎂 Днюха (ДД.ММ.ГГ)</th>
                     <th className="p-3">Сдано / Всего</th>
                     <th className="p-3">Задолженность</th>
                     <th className="p-3 text-right">Действия</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-amber-200">
+                <tbody className="divide-y divide-stone-100">
                   {participants.map(p => {
                     const isDebtor = (p.debtAmount || 0) > 0;
                     return (
-                      <tr key={p.id} className="hover:bg-amber-50/70 transition-colors">
+                      <tr key={p.id} className="hover:bg-stone-50/70 transition-colors">
                         {/* Participant Avatar & Name */}
                         <td className="p-3">
                           <div className="flex items-center gap-2.5">
-                            <img src={getSafeAvatar(p.avatar, p.gender)} alt={p.name} className="w-9 h-9 rounded-full border-2 border-amber-400 bg-white object-cover" />
+                            <img src={getSafeAvatar(p.avatar, p.gender)} alt={p.name} className="w-9 h-9 rounded-full border border-stone-200 bg-white object-cover" />
                             <div>
-                              <p className="font-black text-sm text-amber-950 leading-tight">{p.name}</p>
-                              <span className="text-[11px] font-bold text-red-600">@{p.nickname}</span>
+                              <p className="font-bold text-sm text-stone-900 leading-tight">{p.name}</p>
+                              <span className="text-[11px] font-semibold text-red-600">@{p.nickname}</span>
                             </div>
                           </div>
                         </td>
@@ -434,41 +443,46 @@ export default function HomeRallyTab({
                         {/* Role */}
                         <td className="p-3">
                           {p.role === 'admin' && (
-                            <span className="bg-red-600 text-white font-black text-[10px] uppercase px-2 py-0.5 rounded shadow-xs">
-                              Админ
+                            <span className="bg-red-50 text-red-700 font-bold text-[10px] uppercase px-2 py-0.5 rounded border border-red-200 shadow-2xs">
+                              Капитан
                             </span>
                           )}
                           {p.role === 'treasurer' && (
-                            <span className="bg-emerald-600 text-white font-black text-[10px] uppercase px-2 py-0.5 rounded shadow-xs">
+                            <span className="bg-emerald-50 text-emerald-700 font-bold text-[10px] uppercase px-2 py-0.5 rounded border border-emerald-200 shadow-2xs">
                               Казначей
                             </span>
                           )}
+                          {p.role === 'chef' && (
+                            <span className="bg-amber-50 text-amber-800 font-bold text-[10px] uppercase px-2 py-0.5 rounded border border-amber-200 shadow-2xs">
+                              Шеф-повар
+                            </span>
+                          )}
                           {(!p.role || p.role === 'member') && (
-                            <span className="bg-amber-100 text-amber-900 font-bold text-[10px] uppercase px-2 py-0.5 rounded">
+                            <span className="bg-stone-100 text-stone-700 font-medium text-[10px] uppercase px-2 py-0.5 rounded">
                               Негодяй
                             </span>
                           )}
-                          {p.role && p.role !== 'admin' && p.role !== 'treasurer' && p.role !== 'member' && (
-                            <span className="bg-amber-200 text-amber-950 font-bold text-[10px] uppercase px-2 py-0.5 rounded">
-                              {p.role}
+                          {p.role && p.role !== 'admin' && p.role !== 'treasurer' && p.role !== 'chef' && p.role !== 'member' && (
+                            <span className="bg-stone-100 text-stone-700 font-medium text-[10px] uppercase px-2 py-0.5 rounded">
+                              {p.roleTitle || p.role}
                             </span>
                           )}
                         </td>
 
                         {/* Team Age & Skipped Years */}
                         <td className="p-3">
-                          <div className="font-bold text-amber-950 flex items-center gap-1.5 flex-wrap">
-                            <span>{getTeamYearsText(p.joinedYear || 2018, p.skippedYears)}</span>
-                            <span className="text-[11px] text-amber-800 font-medium">(с {p.joinedYear || 2018} г.)</span>
+                          <div className="font-bold text-stone-900 flex items-center gap-1.5 flex-wrap">
+                            <span>{getTeamYearsText(p.joinedYear || 1993, p.skippedYears)}</span>
+                            <span className="text-[11px] text-stone-500 font-normal">(с {p.joinedYear || 1993} г.)</span>
                           </div>
 
                           {/* Skipped Years display */}
                           {p.skippedYears && p.skippedYears.length > 0 ? (
                             <div className="mt-1 flex items-center gap-1.5 flex-wrap">
-                              <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-950 border border-amber-300 px-2 py-0.5 rounded-md text-[11px] font-bold">
+                              <span className="inline-flex items-center gap-1 bg-red-50 text-red-800 border border-red-200 px-2 py-0.5 rounded-md text-[11px] font-semibold">
                                 <span>Пропущено слётов:</span>
-                                <strong className="text-red-700 font-black">{p.skippedYears.slice().sort((a,b)=>a-b).join(', ')}</strong>
-                                <span className="text-[10px] text-amber-700">({p.skippedYears.length} г.)</span>
+                                <strong className="text-red-700 font-bold">{p.skippedYears.slice().sort((a,b)=>a-b).join(', ')}</strong>
+                                <span className="text-[10px] text-red-600">({p.skippedYears.length} г.)</span>
                               </span>
                               {(isAdmin || currentUser?.id === p.id) && (
                                 <button
@@ -477,7 +491,7 @@ export default function HomeRallyTab({
                                     setEditingSkippedParticipant(p);
                                     setTempSkippedYears(Array.isArray(p.skippedYears) ? [...p.skippedYears] : []);
                                   }}
-                                  className="text-[10px] text-red-600 hover:text-red-800 underline font-black"
+                                  className="text-[10px] text-red-600 hover:text-red-800 underline font-bold"
                                   title="Изменить пропущенные года слёта"
                                 >
                                   ред.
@@ -486,7 +500,7 @@ export default function HomeRallyTab({
                             </div>
                           ) : (
                             <div className="mt-1 flex items-center gap-1.5">
-                              <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-md text-[10px] font-bold">
+                              <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-md text-[10px] font-semibold">
                                 🎖️ Без пропусков
                               </span>
                               {(isAdmin || currentUser?.id === p.id) && (
@@ -496,7 +510,7 @@ export default function HomeRallyTab({
                                     setEditingSkippedParticipant(p);
                                     setTempSkippedYears([]);
                                   }}
-                                  className="text-[10px] text-amber-700 hover:text-red-700 underline font-medium"
+                                  className="text-[10px] text-stone-500 hover:text-red-600 underline font-medium"
                                   title="Указать пропущенные слёты"
                                 >
                                   + пропуск
@@ -507,27 +521,27 @@ export default function HomeRallyTab({
                         </td>
 
                         {/* Birthday */}
-                        <td className="p-3 font-bold text-amber-900">
-                          {p.birthday || '—'}
+                        <td className="p-3 font-semibold text-stone-700">
+                          {p.birthday ? formatBirthdayShort(p.birthday) : '—'}
                         </td>
 
                         {/* Paid vs Total */}
                         <td className="p-3">
-                          <div className="font-black text-amber-950">
-                            <span className="text-emerald-600">{p.paidAmount.toLocaleString()} ₽</span>
-                            <span className="text-amber-500 font-bold"> / {p.totalCost.toLocaleString()} ₽</span>
+                          <div className="font-bold text-stone-900">
+                            <span className="text-emerald-600 font-black">{p.paidAmount.toLocaleString()} ₽</span>
+                            <span className="text-stone-400 font-normal"> / {p.totalCost.toLocaleString()} ₽</span>
                           </div>
                         </td>
 
                         {/* Debt */}
                         <td className="p-3">
                           {isDebtor ? (
-                            <span className="bg-red-100 text-red-700 font-black text-xs px-2 py-1 rounded-lg border border-red-300 inline-flex items-center gap-1">
+                            <span className="bg-red-50 text-red-700 font-bold text-xs px-2 py-1 rounded-lg border border-red-200 inline-flex items-center gap-1">
                               <AlertCircle size={12} />
                               {p.debtAmount.toLocaleString()} ₽
                             </span>
                           ) : (
-                            <span className="bg-emerald-100 text-emerald-800 font-black text-xs px-2 py-1 rounded-lg border border-emerald-300 inline-flex items-center gap-1">
+                            <span className="bg-emerald-50 text-emerald-700 font-bold text-xs px-2 py-1 rounded-lg border border-emerald-200 inline-flex items-center gap-1">
                               <CheckCircle size={12} />
                               Сдал всё!
                             </span>
@@ -546,41 +560,44 @@ export default function HomeRallyTab({
                                   setTimeout(() => setNudgingId(null), 2500);
                                 }}
                                 disabled={nudgingId === p.id}
-                                className="px-2.5 py-1 bg-yellow-400 hover:bg-yellow-500 active:scale-95 text-amber-950 font-black text-[10px] uppercase rounded-lg shadow-xs border border-amber-500 flex items-center gap-1 transition-all disabled:opacity-80"
+                                className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 active:scale-95 text-amber-900 font-bold text-[10px] uppercase rounded-lg border border-amber-300 flex items-center gap-1 transition-all disabled:opacity-80"
                                 title="Отправить напоминание о взносе в чат от лица Бота Максимки"
                               >
                                 <span>⚡</span>
                                 <span>{nudgingId === p.id ? 'Пнули! ⚡' : 'Пнуть ⚡'}</span>
                               </button>
                             )}
-                            <button
-                              type="button"
-                              onClick={() => setSelectedForPay(selectedForPay === p.id ? null : p.id)}
-                              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] uppercase rounded-lg shadow-xs"
-                            >
-                              + Оплата
-                            </button>
+                            {canManagePayments && (
+                              <button
+                                type="button"
+                                onClick={() => setSelectedForPay(selectedForPay === p.id ? null : p.id)}
+                                className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] uppercase rounded-lg shadow-xs"
+                                title="Внести оплату (казначей или капитан)"
+                              >
+                                + Оплата
+                              </button>
+                            )}
                           </div>
 
-                          {selectedForPay === p.id && (
-                            <div className="mt-2 p-2 bg-amber-100 rounded-xl border border-amber-300 text-left flex items-center gap-2">
+                          {selectedForPay === p.id && canManagePayments && (
+                            <div className="mt-2 p-2 bg-stone-50 rounded-xl border border-stone-200 text-left flex items-center gap-2">
                               <input
                                 type="number"
                                 value={paymentAmount}
                                 onChange={(e) => setPaymentAmount(Number(e.target.value))}
-                                className="w-20 px-2 py-1 bg-white border border-amber-400 rounded text-xs font-black text-amber-950"
+                                className="w-20 px-2 py-1 bg-white border border-stone-300 rounded text-xs font-bold text-stone-900"
                               />
                               <button
                                 type="button"
                                 onClick={() => handleAddPayment(p.id)}
-                                className="px-2.5 py-1 bg-emerald-600 text-white font-black text-[10px] uppercase rounded shadow-xs"
+                                className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] uppercase rounded shadow-xs"
                               >
                                 Зачесть
                               </button>
                               <button
                                 type="button"
                                 onClick={() => setSelectedForPay(null)}
-                                className="text-amber-800 hover:text-red-600 text-xs font-bold"
+                                className="px-2 py-1 bg-stone-200 hover:bg-stone-300 text-stone-700 font-bold text-[10px] uppercase rounded"
                               >
                                 ✕
                               </button>
@@ -800,25 +817,25 @@ export default function HomeRallyTab({
                 className="w-12 h-12 rounded-xl object-cover border-2 border-amber-400"
               />
               <div>
-                <div className="font-black text-sm text-amber-950">{editingSkippedParticipant.name}</div>
-                <div className="text-xs text-amber-700 font-bold">
-                  @{editingSkippedParticipant.nickname} • в команде с {editingSkippedParticipant.joinedYear || 2018} г.
+                <div className="font-bold text-sm text-stone-900">{editingSkippedParticipant.name}</div>
+                <div className="text-xs text-stone-500 font-medium">
+                  @{editingSkippedParticipant.nickname} • в команде с {editingSkippedParticipant.joinedYear || 1993} г.
                 </div>
               </div>
             </div>
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-black uppercase text-amber-950">
-                  Выберите года, когда участник пропустил слёт:
+                <span className="text-xs font-bold uppercase text-stone-800">
+                  Выберите года, когда участник пропустил слёт (с 1993 года):
                 </span>
-                <span className="text-xs font-black text-red-700">
+                <span className="text-xs font-bold text-red-600">
                   {tempSkippedYears.length > 0 ? `Пропусков: ${tempSkippedYears.length}` : 'Без пропусков'}
                 </span>
               </div>
 
-              <div className="grid grid-cols-3 gap-2">
-                {[2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026].map(year => {
+              <div className="max-h-48 overflow-y-auto p-2 bg-white rounded-xl border border-stone-200 grid grid-cols-4 sm:grid-cols-6 gap-1.5 scrollbar-thin">
+                {Array.from({ length: new Date().getFullYear() - 1993 + 1 }, (_, i) => 1993 + i).map(year => {
                   const isSkipped = tempSkippedYears.includes(year);
                   return (
                     <button
@@ -831,20 +848,20 @@ export default function HomeRallyTab({
                           setTempSkippedYears(prev => [...prev, year].sort((a, b) => a - b));
                         }
                       }}
-                      className={`py-2 px-3 rounded-xl text-xs font-black border-2 transition-all ${
+                      className={`py-1.5 px-2 rounded-lg text-xs font-bold border transition-all ${
                         isSkipped
-                          ? 'bg-red-600 text-yellow-300 border-red-800 shadow-xs'
-                          : 'bg-white text-amber-950 border-amber-300 hover:bg-amber-100'
+                          ? 'bg-red-50 text-red-700 border-red-300'
+                          : 'bg-white text-stone-700 border-stone-200 hover:bg-stone-50'
                       }`}
                     >
-                      {year} {isSkipped ? '✕ Пропуск' : '✓ Был'}
+                      {year} {isSkipped ? '✕' : '✓'}
                     </button>
                   );
                 })}
               </div>
 
-              <p className="text-[11px] text-amber-800 italic pt-1">
-                Расчёт стажа: {getTeamYearsText(editingSkippedParticipant.joinedYear || 2018, tempSkippedYears)} чистой верности команде.
+              <p className="text-[11px] text-stone-500 italic pt-1">
+                Расчёт стажа: {getTeamYearsText(editingSkippedParticipant.joinedYear || 1993, tempSkippedYears)} чистой верности команде.
               </p>
             </div>
 

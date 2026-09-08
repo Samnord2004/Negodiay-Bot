@@ -428,17 +428,23 @@ export async function initDb() {
       await pool.query(
         `INSERT INTO bot_config (id, swearing_level, auto_detect_psychotype, active_personality, welcome_template, founding_year, custom_logo)
          VALUES (1, $1, $2, $3, $4, $5, $6)`,
-        [initialBotConfig.swearingLevel, initialBotConfig.autoDetectPsychotype, initialBotConfig.activePersonality, initialBotConfig.welcomeTemplate, initialBotConfig.foundingYear, null]
+        [initialBotConfig.swearingLevel, initialBotConfig.autoDetectPsychotype, initialBotConfig.activePersonality, initialBotConfig.welcomeTemplate, 1993, null]
       );
-      cacheBotConfig = { ...initialBotConfig };
+      cacheBotConfig = { ...initialBotConfig, foundingYear: 1993 };
     } else {
       const r = resBC.rows[0];
+      const dbYr = Number(r.founding_year);
+      // Auto-migrate legacy 2018 to official 1993 founding year
+      const activeFoundingYear = (!dbYr || dbYr === 2018) ? 1993 : dbYr;
+      if (dbYr === 2018) {
+        await pool.query("UPDATE bot_config SET founding_year = 1993 WHERE id = 1").catch(() => {});
+      }
       cacheBotConfig = {
         swearingLevel: r.swearing_level,
         autoDetectPsychotype: Boolean(r.auto_detect_psychotype),
         activePersonality: r.active_personality,
         welcomeTemplate: r.welcome_template,
-        foundingYear: Number(r.founding_year),
+        foundingYear: activeFoundingYear,
         customLogo: r.custom_logo || null
       };
     }
