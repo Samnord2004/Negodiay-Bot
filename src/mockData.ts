@@ -117,15 +117,15 @@ export const PSYCHOTYPES: PsychotypeMeta[] = [
 export const initialParticipants: Participant[] = [
   {
     id: "3",
-    name: "Лёха Навигатор",
-    nickname: "navigator_alex",
-    psychotype: "Душнила-контролёр",
-    avatar: "📐",
+    name: "Капитан команды",
+    nickname: "Captain",
+    psychotype: "Весельчак-балагур",
+    avatar: "",
     paidAmount: 8500,
     totalCost: 8500,
     debtAmount: 0,
     joined: true,
-    birthday: "1989-09-09",
+    birthday: "1988-06-15",
     joinedYear: 2018,
     skippedYears: [],
     gender: "male",
@@ -199,15 +199,15 @@ export const initialTasks: TaskItem[] = [
     id: "t1",
     title: "Починить генератор (дым валит чёрный, походу надо менять свечу и слить старый бензин)",
     assigneeId: "3",
-    assigneeName: "Лёха Навигатор",
+    assigneeName: "Капитан команды",
     deadline: "2026-06-10",
     isCompleted: false
   },
   {
     id: "t2",
-    title: "Не забыть взять палатки (особенно большую 4-местную Лёхи Навигатора, иначе спать на сырых шишках)",
+    title: "Не забыть взять палатки (особенно большую 4-местную, иначе спать на сырых шишках)",
     assigneeId: "3",
-    assigneeName: "Лёха Навигатор",
+    assigneeName: "Капитан команды",
     deadline: "2026-06-11",
     isCompleted: true
   },
@@ -215,7 +215,7 @@ export const initialTasks: TaskItem[] = [
     id: "t3",
     title: "Закупить сочный курдюк, баранину и хорошую зиру на коронный лесной плов",
     assigneeId: "3",
-    assigneeName: "Лёха Навигатор",
+    assigneeName: "Капитан команды",
     deadline: "2026-06-12",
     isCompleted: false
   },
@@ -223,7 +223,7 @@ export const initialTasks: TaskItem[] = [
     id: "t4",
     title: "Брызгалки от клещей купить (самые зверские, 20 штук)",
     assigneeId: "3",
-    assigneeName: "Лёха Навигатор",
+    assigneeName: "Капитан команды",
     deadline: "2026-06-08",
     isCompleted: false
   }
@@ -268,13 +268,13 @@ export const initialGroceryItems: GroceryItem[] = [
 ];
 
 export const initialInventoryItems: InventoryItem[] = [
-  { id: "inv1", name: "Казан чугунный походный (20 литров)", condition: "нормальное", responsibleName: "Лёха Навигатор" },
-  { id: "inv2", name: "Бензогенератор барахлящий (требует свечу)", condition: "пришло в негодность", responsibleName: "Лёха Навигатор" },
-  { id: "inv3", name: "Укупорный тент защитный 4x6м", condition: "нормальное", responsibleName: "Лёха Навигатор" },
-  { id: "inv4", name: "Гитара походная шестиструнная (но без струны 'ми')", condition: "нормальное", responsibleName: "Лёха Навигатор" },
-  { id: "inv5", name: "Костровые треноги и цепи для котла", condition: "нормальное", responsibleName: "Лёха Навигатор" },
-  { id: "inv6", name: "Большой надувной матрас в палатку", condition: "нормальное", responsibleName: "Лёха Навигатор" },
-  { id: "inv7", name: "Портативная Bluetooth колонка с музлом", condition: "нормальное", responsibleName: "Лёха Навигатор" }
+  { id: "inv1", name: "Казан чугунный походный (20 литров)", condition: "нормальное", responsibleName: "Капитан команды" },
+  { id: "inv2", name: "Бензогенератор барахлящий (требует свечу)", condition: "пришло в негодность", responsibleName: "Капитан команды" },
+  { id: "inv3", name: "Укупорный тент защитный 4x6м", condition: "нормальное", responsibleName: "Капитан команды" },
+  { id: "inv4", name: "Гитара походная шестиструнная (но без струны 'ми')", condition: "нормальное", responsibleName: "Капитан команды" },
+  { id: "inv5", name: "Костровые треноги и цепи для котла", condition: "нормальное", responsibleName: "Капитан команды" },
+  { id: "inv6", name: "Большой надувной матрас в палатку", condition: "нормальное", responsibleName: "Капитан команды" },
+  { id: "inv7", name: "Портативная Bluetooth колонка с музлом", condition: "нормальное", responsibleName: "Капитан команды" }
 ];
 
 export const ORIENTEERING_SIGNS_SVG = `data:image/svg+xml,${encodeURIComponent(`
@@ -655,11 +655,11 @@ export const initialDocuments: TeamDocument[] = [
 
 export const initialFundRecords: FundRecord[] = [
   // 2026 records for Captain
-  { id: "fund_3_1", participantId: "3", participantName: "Лёха Навигатор", participantNickname: "navigator_alex", year: 2026, month: 1, amount: 500, isPaid: true, paidAt: "2026-01-01", note: "Годовой аванс" },
-  { id: "fund_3_2", participantId: "3", participantName: "Лёха Навигатор", participantNickname: "navigator_alex", year: 2026, month: 2, amount: 500, isPaid: true, paidAt: "2026-01-01", note: "Годовой аванс" },
-  { id: "fund_3_3", participantId: "3", participantName: "Лёха Навигатор", participantNickname: "navigator_alex", year: 2026, month: 3, amount: 500, isPaid: true, paidAt: "2026-01-01", note: "Годовой аванс" },
-  { id: "fund_3_4", participantId: "3", participantName: "Лёха Навигатор", participantNickname: "navigator_alex", year: 2026, month: 4, amount: 500, isPaid: true, paidAt: "2026-01-01", note: "Годовой аванс" },
-  { id: "fund_3_5", participantId: "3", participantName: "Лёха Навигатор", participantNickname: "navigator_alex", year: 2026, month: 5, amount: 500, isPaid: true, paidAt: "2026-01-01", note: "Годовой аванс" }
+  { id: "fund_3_1", participantId: "3", participantName: "Капитан команды", participantNickname: "Captain", year: 2026, month: 1, amount: 500, isPaid: true, paidAt: "2026-01-01", note: "Годовой аванс" },
+  { id: "fund_3_2", participantId: "3", participantName: "Капитан команды", participantNickname: "Captain", year: 2026, month: 2, amount: 500, isPaid: true, paidAt: "2026-01-01", note: "Годовой аванс" },
+  { id: "fund_3_3", participantId: "3", participantName: "Капитан команды", participantNickname: "Captain", year: 2026, month: 3, amount: 500, isPaid: true, paidAt: "2026-01-01", note: "Годовой аванс" },
+  { id: "fund_3_4", participantId: "3", participantName: "Капитан команды", participantNickname: "Captain", year: 2026, month: 4, amount: 500, isPaid: true, paidAt: "2026-01-01", note: "Годовой аванс" },
+  { id: "fund_3_5", participantId: "3", participantName: "Капитан команды", participantNickname: "Captain", year: 2026, month: 5, amount: 500, isPaid: true, paidAt: "2026-01-01", note: "Годовой аванс" }
 ];
 
 export const initialCreativityIdeas: CreativityIdea[] = [

@@ -164,6 +164,16 @@ export interface FundRecord {
   note?: string;
 }
 
+export interface FundExpense {
+  id: string;
+  title: string;
+  amount: number;
+  date: string;
+  category: string;
+  spentBy: string;
+  note?: string;
+}
+
 export type CreativityCategory = 
   | 'camp_design' 
   | 'carnival_costumes' 
@@ -308,4 +318,23 @@ export interface TeamStory {
   year?: number;
   createdAt: string;
 }
+
+export interface ThemeConfig {
+  bgColor: string;       // Background color of page
+  textColor: string;     // Primary text color
+  accentColor: string;   // Red / brand accent
+  headerBg: string;      // Header background
+  brightness: number;    // 70 - 130 %
+  contrast: number;      // 70 - 140 %
+}
+
+export const DEFAULT_THEME_CONFIG: ThemeConfig = {
+  bgColor: '#FFFBEB',
+  textColor: '#451A03',
+  accentColor: '#DC2626',
+  headerBg: '#FACC15',
+  brightness: 100,
+  contrast: 100
+};
+
 

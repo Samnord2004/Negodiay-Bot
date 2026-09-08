@@ -4,6 +4,7 @@ import {
   Search, Users, Smile, ArrowDown, Shield, Award, CheckCheck, X
 } from 'lucide-react';
 import { ChatMessage, Participant } from '../types';
+import { getSafeAvatar } from '../utils/avatar';
 
 interface InternalChatProps {
   messages: ChatMessage[];
@@ -157,6 +158,12 @@ export default function InternalChat({
               filteredMessages.map((msg) => {
                 const isMe = currentUser && (currentUser.nickname === msg.senderNickname || currentUser.name === msg.senderName);
                 const roleBadge = getParticipantRoleBadge(msg.senderNickname, msg.senderName);
+                const senderParticipant = participants.find(
+                  p => p.nickname === msg.senderNickname || p.name === msg.senderName
+                );
+                const senderAvatar = senderParticipant
+                  ? getSafeAvatar(senderParticipant.avatar, senderParticipant.gender)
+                  : getSafeAvatar(null);
 
                 return (
                   <div
@@ -168,7 +175,7 @@ export default function InternalChat({
                     {/* Avatar */}
                     <div className="w-9 h-9 rounded-full border-2 border-amber-300 bg-white overflow-hidden shrink-0 shadow-sm">
                       <img 
-                        src={`https://api.dicebear.com/7.x/bottts/svg?seed=${msg.senderNickname}`} 
+                        src={senderAvatar} 
                         alt={msg.senderName} 
                         className="w-full h-full object-cover" 
                       />
@@ -199,11 +206,11 @@ export default function InternalChat({
                       </p>
 
                       {/* Optional Attached Image */}
-                      {msg.imageUrl && (
+                      {msg.imageUrl && msg.imageUrl.trim() ? (
                         <div className="mt-2 rounded-lg overflow-hidden border border-amber-300 max-h-60">
-                          <img src={msg.imageUrl} alt="Вложение" className="w-full h-full object-cover" />
+                          <img src={msg.imageUrl.trim()} alt="Вложение" className="w-full h-full object-cover" />
                         </div>
-                      )}
+                      ) : null}
 
                       {/* Timestamp */}
                       <div className={`mt-1.5 text-[10px] flex items-center justify-end gap-1 ${
@@ -237,10 +244,10 @@ export default function InternalChat({
 
           {/* Input Area */}
           <div className="p-3 bg-white border-t-2 border-amber-300 shrink-0">
-            {previewImage && (
+            {previewImage && previewImage.trim() ? (
               <div className="mb-2 p-1.5 bg-amber-100 rounded-lg border border-amber-300 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <img src={previewImage} alt="Вложение" className="w-10 h-10 object-cover rounded" />
+                  <img src={previewImage.trim()} alt="Вложение" className="w-10 h-10 object-cover rounded" />
                   <span className="text-xs font-bold text-amber-900">Изображение прикреплено</span>
                 </div>
                 <button 
@@ -251,7 +258,7 @@ export default function InternalChat({
                   <X size={16} />
                 </button>
               </div>
-            )}
+            ) : null}
 
             {currentUser ? (
               <form onSubmit={handleSend} className="flex items-center gap-2">
@@ -326,7 +333,7 @@ export default function InternalChat({
               {participants.map(p => (
                 <div key={p.id} className="pt-1.5 pb-1 px-2 flex items-center gap-2 hover:bg-amber-50 rounded-lg">
                   <div className="relative">
-                    <img src={p.avatar} alt={p.name} className="w-8 h-8 rounded-full border border-amber-300 object-cover" />
+                    <img src={getSafeAvatar(p.avatar, p.gender)} alt={p.name} className="w-8 h-8 rounded-full border border-amber-300 object-cover" />
                     <span className="w-2 h-2 rounded-full bg-emerald-500 absolute bottom-0 right-0 border border-white"></span>
                   </div>
                   <div className="min-w-0 flex-1">

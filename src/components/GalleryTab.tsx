@@ -192,12 +192,18 @@ export default function GalleryTab({
                   className="relative aspect-video bg-amber-950/10 cursor-pointer overflow-hidden"
                   onClick={() => setActiveLightboxPhoto(photo)}
                 >
-                  <img 
-                    src={photo.imageUrl} 
-                    alt={photo.title} 
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    loading="lazy"
-                  />
+                  {photo.imageUrl && photo.imageUrl.trim() ? (
+                    <img 
+                      src={photo.imageUrl.trim()} 
+                      alt={photo.title} 
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-amber-100 text-amber-500">
+                      <ImageIcon size={32} />
+                    </div>
+                  )}
                   <div className="absolute top-2 left-2 bg-red-600 text-yellow-300 text-[11px] font-black px-2.5 py-0.5 rounded-full shadow">
                     {photo.year} год
                   </div>
@@ -299,10 +305,10 @@ export default function GalleryTab({
                       : 'border-amber-400 bg-white hover:border-red-500'
                   }`}
                 >
-                  {previewImage ? (
+                  {previewImage && previewImage.trim() ? (
                     <div className="space-y-2">
                       <img 
-                        src={previewImage} 
+                        src={previewImage.trim()} 
                         alt="Предпросмотр" 
                         className="max-h-48 mx-auto rounded-lg object-contain border border-emerald-400 shadow-sm" 
                       />
@@ -412,11 +418,13 @@ export default function GalleryTab({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="relative bg-black flex items-center justify-center max-h-[70vh]">
-              <img 
-                src={activeLightboxPhoto.imageUrl} 
-                alt={activeLightboxPhoto.title} 
-                className="max-h-[70vh] w-auto object-contain"
-              />
+              {activeLightboxPhoto.imageUrl && activeLightboxPhoto.imageUrl.trim() ? (
+                <img 
+                  src={activeLightboxPhoto.imageUrl.trim()} 
+                  alt={activeLightboxPhoto.title} 
+                  className="max-h-[70vh] w-auto object-contain"
+                />
+              ) : null}
             </div>
             
             <div className="p-4 bg-amber-900 text-yellow-100 flex items-center justify-between">

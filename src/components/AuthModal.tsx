@@ -4,6 +4,7 @@ import {
   UserCheck, AlertCircle, CheckCircle, Smartphone, Key
 } from 'lucide-react';
 import { Participant } from '../types';
+import { getSafeAvatar } from '../utils/avatar';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -11,6 +12,7 @@ interface AuthModalProps {
   currentUser: Participant | null;
   onLoginSuccess: (user: Participant) => void;
   onLogout: () => void;
+  onRegistered?: (participants: Participant[]) => void;
 }
 
 export default function AuthModal({
@@ -18,7 +20,8 @@ export default function AuthModal({
   onClose,
   currentUser,
   onLoginSuccess,
-  onLogout
+  onLogout,
+  onRegistered
 }: AuthModalProps) {
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   
@@ -42,9 +45,21 @@ export default function AuthModal({
   // Verification code step
   const [regStep, setRegStep] = useState<'details' | 'code' | 'pending'>('details');
   const [verificationCode, setVerificationCode] = useState('');
-  const [generatedCode, setGeneratedCode] = useState('');
+  const [sendingCode, setSendingCode] = useState(false);
+  const [countdown, setCountdown] = useState(0);
+  const [simulatedNotice, setSimulatedNotice] = useState('');
+  const [submittingReg, setSubmittingReg] = useState(false);
   const [regError, setRegError] = useState('');
   const [regSuccess, setRegSuccess] = useState('');
+
+  // Countdown effect
+  React.useEffect(() => {
+    if (countdown <= 0) return;
+    const timer = setInterval(() => {
+      setCountdown(prev => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [countdown]);
 
   if (!isOpen) return null;
 
@@ -104,8 +119,8 @@ export default function AuthModal({
     }
   };
 
-  const handleSendVerificationCode = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSendVerificationCode = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setRegError('');
     if (!regName.trim() || !regNickname.trim()) {
       setRegError('Укажите ФИО и позывной');
@@ -124,46 +139,73 @@ export default function AuthModal({
       return;
     }
 
-    // Generate code
-    const code = Math.floor(1000 + Math.random() * 9000).toString();
-    setGeneratedCode(code);
-    setRegStep('code');
+    setSendingCode(true);
+    const target = verificationMethod === 'email' ? regEmail.trim() : regPhone.trim();
+    try {
+      const res = await fetch('/api/auth/send-verification-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          target,
+          method: verificationMethod
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setSimulatedNotice(data.simulatedDeliveryMessage || `Код подтверждения: ${data.code}`);
+        setCountdown(60);
+        setRegStep('code');
+        setVerificationCode('');
+      } else {
+        setRegError(data.error || 'Ошибка отправки проверочного кода');
+      }
+    } catch (err) {
+      setRegError('Сбой отправки проверочного кода на сервер');
+    } finally {
+      setSendingCode(false);
+    }
   };
 
   const handleVerifyAndSubmitRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setRegError('');
-    if (verificationCode !== generatedCode && verificationCode !== '1234') {
-      setRegError(`Неверный код! (Демо-код: ${generatedCode})`);
+    if (!verificationCode.trim() || verificationCode.trim().length !== 4) {
+      setRegError('Введите 4-значный проверочный код');
       return;
     }
 
+    setSubmittingReg(true);
     try {
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: regName,
-          nickname: regNickname,
-          email: regEmail,
-          phone: regPhone,
-          password: regPassword,
-          birthday: regBirthday,
+          name: regName.trim(),
+          nickname: regNickname.trim().replace(/^@/, ''),
+          email: regEmail.trim(),
+          phone: regPhone.trim(),
+          password: regPassword.trim(),
+          birthday: regBirthday.trim(),
           gender: regGender,
           verificationMethod,
-          verificationCode,
+          verificationCode: verificationCode.trim(),
           biometricEnabled
         })
       });
       const data = await res.json();
       if (res.ok && data.success) {
         setRegStep('pending');
-        setRegSuccess(data.message);
+        setRegSuccess(data.message || 'Заявка принята!');
+        if (data.participants && onRegistered) {
+          onRegistered(data.participants);
+        }
       } else {
-        setRegError(data.error || 'Ошибка при регистрации');
+        setRegError(data.error || 'Неверный код подтверждения');
       }
     } catch (err) {
       setRegError('Сбой отправки заявки на сервер');
+    } finally {
+      setSubmittingReg(false);
     }
   };
 
@@ -192,7 +234,7 @@ export default function AuthModal({
           <div className="p-6 space-y-4">
             <div className="flex items-center gap-4 bg-white p-4 rounded-xl border-2 border-amber-300 shadow-sm">
               <img 
-                src={currentUser.avatar} 
+                src={getSafeAvatar(currentUser.avatar, currentUser.gender)} 
                 alt={currentUser.name} 
                 className="w-16 h-16 rounded-full border-2 border-red-500 bg-amber-100 object-cover" 
               />
@@ -529,9 +571,14 @@ export default function AuthModal({
 
                     <button
                       type="submit"
-                      className="w-full py-3 bg-red-600 hover:bg-red-700 text-yellow-300 font-black uppercase text-xs rounded-xl shadow-md transition-all mt-2"
+                      disabled={sendingCode}
+                      className="w-full py-3 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-yellow-300 font-black uppercase text-xs rounded-xl shadow-md transition-all mt-2 flex items-center justify-center gap-2"
                     >
-                      Получить код подтверждения ({verificationMethod === 'sms' ? 'SMS' : 'E-mail'})
+                      {sendingCode ? (
+                        <span>Отправка кода...</span>
+                      ) : (
+                        <span>Получить код подтверждения ({verificationMethod === 'sms' ? 'SMS' : 'E-mail'})</span>
+                      )}
                     </button>
                   </form>
                 )}
@@ -539,28 +586,56 @@ export default function AuthModal({
                 {/* Step 2: Code verification */}
                 {regStep === 'code' && (
                   <form onSubmit={handleVerifyAndSubmitRegister} className="space-y-4">
+                    
+                    {/* Simulated SMS / Email Delivery Banner */}
+                    {simulatedNotice && (
+                      <div className="p-3 bg-emerald-50 border-2 border-emerald-500 rounded-2xl flex items-start gap-2.5 text-xs text-emerald-950 shadow-xs animate-in fade-in">
+                        <Smartphone className="w-5 h-5 text-emerald-700 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-black text-emerald-900">{simulatedNotice}</p>
+                          <p className="text-[11px] text-emerald-700 mt-0.5">Код действителен в течение 5 минут</p>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="text-center p-3 bg-yellow-100 border border-yellow-400 rounded-xl">
                       <p className="text-xs font-bold text-amber-950">
-                        Код отправлен на {verificationMethod === 'sms' ? regPhone : regEmail}
-                      </p>
-                      <p className="text-xs text-red-600 font-black mt-1">
-                        (Для тестирования введите код: <span className="underline">{generatedCode}</span> или 1234)
+                        Проверочный 4-значный код отправлен на {verificationMethod === 'sms' ? regPhone : regEmail}
                       </p>
                     </div>
 
                     <div>
                       <label className="block text-xs font-black uppercase text-amber-900 mb-1 text-center">
-                        Введите 4-значный код
+                        Введите проверочный код
                       </label>
                       <input
                         type="text"
                         maxLength={4}
                         required
+                        autoFocus
                         value={verificationCode}
-                        onChange={(e) => setVerificationCode(e.target.value)}
+                        onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ''))}
                         placeholder="••••"
                         className="w-48 mx-auto block text-center tracking-widest text-2xl font-black py-2 bg-white border-3 border-amber-300 focus:border-red-500 rounded-xl text-amber-950"
                       />
+                    </div>
+
+                    {/* Resend Code Action */}
+                    <div className="text-center">
+                      {countdown > 0 ? (
+                        <p className="text-[11px] font-bold text-stone-500">
+                          Запросить новый код можно через <span className="text-red-600 font-black">{countdown}</span> сек
+                        </p>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={sendingCode}
+                          onClick={() => handleSendVerificationCode()}
+                          className="text-xs font-black text-red-600 hover:text-red-700 underline uppercase"
+                        >
+                          {sendingCode ? 'Отправка нового кода...' : 'Запросить код повторно'}
+                        </button>
+                      )}
                     </div>
 
                     <div className="flex gap-2">
@@ -573,9 +648,10 @@ export default function AuthModal({
                       </button>
                       <button
                         type="submit"
-                        className="flex-2 py-2.5 bg-red-600 hover:bg-red-700 text-yellow-300 font-black uppercase text-xs rounded-xl shadow-md"
+                        disabled={submittingReg || verificationCode.length !== 4}
+                        className="flex-2 py-2.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-yellow-300 font-black uppercase text-xs rounded-xl shadow-md"
                       >
-                        Подтвердить и отправить заявку
+                        {submittingReg ? 'Проверка кода...' : 'Подтвердить и отправить заявку'}
                       </button>
                     </div>
                   </form>

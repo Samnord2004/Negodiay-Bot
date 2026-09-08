@@ -8,6 +8,7 @@ import {
   getParticipants,
   saveParticipants,
   addOrUpdateParticipant,
+  deleteParticipant,
   approveParticipant,
   rejectParticipant,
   updateParticipantRole,
@@ -16,6 +17,8 @@ import {
   registerNewParticipant,
   getExcursions,
   saveExcursions,
+  addOrUpdateExcursion,
+  deleteExcursion,
   getTasks,
   saveTasks,
   getMenuItems,
@@ -43,6 +46,7 @@ import {
   getFundRecords,
   saveFundRecords,
   updateFundRecord,
+  upsertFundRecord,
   getCreativityIdeas,
   addCreativityIdea,
   updateCreativityIdea,
@@ -193,9 +197,9 @@ async function generateBotResponseInternal(body: any): Promise<any> {
 
   // 5. "Кто с Негодяем дрался..."
   if (msgLower.includes("кто с негодяем дрался") || msgLower.includes("негодяем дрался") || msgLower.includes("кто дрался")) {
-    let answerText = "🌲👊 Кто с Негодяем дрался — тот в крапиве обосрался! С нашей командой шутки плохи, порвём за своих!";
+    let answerText = "🌲👊 Кто с Негодяем дрался, тот и поломался! С нашей командой шутки плохи, победа за Негодяями!";
     if (swearingLevel === "low") {
-      answerText = "🌲👊 Кто с Негодяем дрался — тот без штанов остался! С нашей командой шутки плохи, победа за нами!";
+      answerText = "🌲👊 Кто с Негодяем спорил — тот в лесу заблудился! С нашей командой шутки плохи, победа за нами!";
     }
     return {
       text: answerText,
@@ -205,9 +209,23 @@ async function generateBotResponseInternal(body: any): Promise<any> {
     };
   }
 
-  // 6. "Давай Негодяй"
+  // 6. "Пизда на глаза"
+  if (msgLower.includes("пизда на глаза") || msgLower.includes("на глаза") || msgLower.includes("глаза")) {
+    let answerText = "😳👀 Пизда на глаза! Вот это поворот в лагере Негодяев! Держи хвост пистолетом и кружку наготове!";
+    if (swearingLevel === "low") {
+      answerText = "😳👀 Опаньки на глаза! Вот это сюрприз в лагере! Держи хвост пистолетом и кружку наготове!";
+    }
+    return {
+      text: answerText,
+      detectedPsychotype: "Весельчак-балагур",
+      detectedPsychotypeExplanation: "Культовое командное восклицание 'Пизда на глаза'!",
+      adapterStyleUsed: "Фирменное восклицание Негодяев"
+    };
+  }
+
+  // 7. "Давай Негодяй"
   if (msgLower.includes("давай негодяй") || msgLower.includes("давай, негодяй")) {
-    let answerText = "🔥 Давай Негодяй — жги, гуляй, наливай и не унывай! Вперёд в тайгу, навстречу костровому угару!";
+    let answerText = "🔥 Давай Негодяй — жги, гуляй, наливай и не унывай! Вперёд в тайгу, навстречу костровому угару! 🍻";
     return {
       text: answerText,
       detectedPsychotype: "Весельчак-балагур",
@@ -570,22 +588,75 @@ app.post("/api/sync", (req, res) => {
   }
 });
 
+// Verification codes cache: target -> { code, expiresAt, attempts }
+const activeVerificationCodes = new Map<string, { code: string; target: string; expiresAt: number; attempts: number }>();
+
 // Auth & Registration
-app.post("/api/auth/register", (req, res) => {
+app.post("/api/auth/send-verification-code", (req, res) => {
+  const { target, method } = req.body;
+  if (!target || typeof target !== "string" || target.trim().length === 0) {
+    return res.status(400).json({ success: false, error: "Укажите номер телефона или e-mail" });
+  }
+
+  const cleanTarget = target.trim().toLowerCase();
+  // Generate 4-digit code
+  const code = Math.floor(1000 + Math.random() * 9000).toString();
+  const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
+
+  activeVerificationCodes.set(cleanTarget, {
+    code,
+    target: cleanTarget,
+    expiresAt,
+    attempts: 0
+  });
+
+  const methodLabel = method === "email" ? "на электронную почту" : "по СМС";
+  console.log(`[AUTH] Sent verification code ${code} ${methodLabel} to ${cleanTarget}`);
+
+  return res.json({
+    success: true,
+    message: `Код подтверждения отправлен ${methodLabel} на ${target}`,
+    code, // Returned for transparent preview notification
+    expiresAt
+  });
+});
+
+app.post("/api/auth/register", async (req, res) => {
   const { name, nickname, email, phone, password, verificationMethod, verificationCode, biometricEnabled, avatar } = req.body;
-  if (!name || !nickname) {
+  if (!name || !name.trim() || !nickname || !nickname.trim()) {
     return res.status(400).json({ success: false, error: "Укажите имя и позывной" });
   }
-  
-  if (verificationCode && verificationCode.length !== 4 && verificationCode !== "1234") {
-    return res.status(400).json({ success: false, error: "Неверный код подтверждения" });
+
+  const target = (verificationMethod === "email" ? email : phone)?.trim().toLowerCase();
+  if (!target) {
+    return res.status(400).json({ success: false, error: "Укажите телефон или email для верификации" });
   }
+
+  const stored = activeVerificationCodes.get(target);
+  if (!stored) {
+    return res.status(400).json({ success: false, error: "Пожалуйста, сначала запросите проверочный код" });
+  }
+  if (Date.now() > stored.expiresAt) {
+    activeVerificationCodes.delete(target);
+    return res.status(400).json({ success: false, error: "Срок действия кода подтверждения истёк. Запросите новый код." });
+  }
+  if (stored.code !== verificationCode?.trim()) {
+    stored.attempts += 1;
+    if (stored.attempts >= 5) {
+      activeVerificationCodes.delete(target);
+      return res.status(400).json({ success: false, error: "Превышено количество попыток. Запросите новый код." });
+    }
+    return res.status(400).json({ success: false, error: "Неверный код подтверждения. Проверьте код и попробуйте снова." });
+  }
+
+  // Code verified successfully
+  activeVerificationCodes.delete(target);
 
   const newId = "user_" + Date.now();
   const newParticipant = {
     id: newId,
-    name,
-    nickname,
+    name: name.trim(),
+    nickname: nickname.trim().replace(/^@/, ''),
     psychotype: "Новичок-энтузиаст",
     avatar: avatar || "",
     paidAmount: 0,
@@ -596,19 +667,88 @@ app.post("/api/auth/register", (req, res) => {
     skippedYears: [],
     gender: "male" as const,
     role: "member" as const,
-    email: email || "",
-    phone: phone || "",
+    email: email ? email.trim() : "",
+    phone: phone ? phone.trim() : "",
     password: password || "123",
     accountStatus: "pending" as const, // Requires captain approval!
     biometricEnabled: Boolean(biometricEnabled)
   };
 
-  registerNewParticipant(newParticipant);
+  await registerNewParticipant(newParticipant);
   res.json({
     success: true,
     message: "Заявка на регистрацию принята! Ожидайте подтверждения от Капитана команды.",
-    user: newParticipant
+    user: newParticipant,
+    participants: getParticipants()
   });
+});
+
+// Excursions (Слёты и сборы команды) CRUD Endpoints
+app.get("/api/excursions", (req, res) => {
+  res.json(getExcursions());
+});
+
+app.post("/api/excursions", async (req, res) => {
+  try {
+    const { title, date, location, description, costPerPerson, costBoys, costGirls, isActive } = req.body;
+    if (!title || !title.trim()) {
+      return res.status(400).json({ success: false, error: "Название слёта обязательно" });
+    }
+    const newEx = {
+      id: req.body.id || "ex_" + Date.now(),
+      title: title.trim(),
+      date: date || new Date().toISOString().split("T")[0],
+      location: location ? location.trim() : "Лесная поляна",
+      description: description || "",
+      costPerPerson: Number(costBoys) || Number(costPerPerson) || 0,
+      costBoys: Number(costBoys) || 0,
+      costGirls: Number(costGirls) || 0,
+      isActive: isActive !== undefined ? Boolean(isActive) : true
+    };
+    await addOrUpdateExcursion(newEx);
+    res.json({ success: true, message: "Сбор успешно сохранён", excursion: newEx, excursions: getExcursions() });
+  } catch (err: any) {
+    console.error("Error creating excursion:", err);
+    res.status(500).json({ success: false, error: "Ошибка при сохранении слёта" });
+  }
+});
+
+app.put("/api/excursions/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, date, location, description, costPerPerson, costBoys, costGirls, isActive } = req.body;
+    const current = getExcursions().find(e => e.id === id);
+    if (!current) {
+      return res.status(404).json({ success: false, error: "Слёт не найден" });
+    }
+    const updated = {
+      ...current,
+      title: title !== undefined ? title.trim() : current.title,
+      date: date !== undefined ? date : current.date,
+      location: location !== undefined ? location.trim() : current.location,
+      description: description !== undefined ? description : current.description,
+      costPerPerson: costBoys !== undefined ? Number(costBoys) : (costPerPerson !== undefined ? Number(costPerPerson) : current.costPerPerson),
+      costBoys: costBoys !== undefined ? Number(costBoys) : current.costBoys,
+      costGirls: costGirls !== undefined ? Number(costGirls) : current.costGirls,
+      isActive: isActive !== undefined ? Boolean(isActive) : current.isActive
+    };
+    await addOrUpdateExcursion(updated);
+    res.json({ success: true, message: "Слёт успешно обновлён", excursion: updated, excursions: getExcursions() });
+  } catch (err: any) {
+    console.error("Error updating excursion:", err);
+    res.status(500).json({ success: false, error: "Ошибка обновления слёта" });
+  }
+});
+
+app.delete("/api/excursions/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    await deleteExcursion(id);
+    res.json({ success: true, message: "Слёт успешно удалён", excursions: getExcursions() });
+  } catch (err: any) {
+    console.error("Error deleting excursion:", err);
+    res.status(500).json({ success: false, error: "Ошибка удаления слёта" });
+  }
 });
 
 app.post("/api/auth/login", (req, res) => {
@@ -710,17 +850,17 @@ app.post("/api/auth/toggle-biometrics", (req, res) => {
 });
 
 // Update personal user profile
-app.post("/api/user/update-profile", (req, res) => {
+app.post("/api/user/update-profile", async (req, res) => {
   const { userId, name, nickname, email, phone, avatar, birthday, joinedYear, psychotype, gender } = req.body;
   if (!userId) {
     return res.status(400).json({ success: false, error: "userId обязателен" });
   }
   const participants = getParticipants();
-  let existing = participants.find(p => p.id === userId);
+  let existing = participants.find(p => p.id === userId || String(p.id) === String(userId));
   
   // Robust fallback for Captain/admin accounts if ID alias was used
   if (!existing && (userId === "admin_user" || userId === "3" || userId === "admin")) {
-    existing = participants.find(p => p.role === "admin" || p.id === "3");
+    existing = participants.find(p => p.role === "admin" || p.id === "3" || String(p.id) === "3");
   }
 
   // If user was not found by ID (e.g. client registered locally or restored state)
@@ -764,35 +904,104 @@ app.post("/api/user/update-profile", (req, res) => {
     avatar: cleanAvatar,
     birthday: birthday !== undefined ? birthday : existing.birthday,
     joinedYear: joinedYear !== undefined && !isNaN(Number(joinedYear)) ? Number(joinedYear) : existing.joinedYear,
+    skippedYears: req.body.skippedYears !== undefined 
+      ? (Array.isArray(req.body.skippedYears) ? req.body.skippedYears.map(Number).filter(n => !isNaN(n)) : [])
+      : (existing.skippedYears || []),
     psychotype: psychotype !== undefined ? psychotype : existing.psychotype,
     gender: gender === "female" ? ("female" as const) : ("male" as const)
   };
 
-  addOrUpdateParticipant(updated);
-  res.json({ success: true, message: "Профиль успешно обновлен", user: updated });
+  await addOrUpdateParticipant(updated);
+  res.json({ success: true, message: "Профиль успешно обновлен", user: updated, participants: getParticipants() });
+});
+
+// Update skipped years specifically for participant
+app.put("/api/participants/:id/skipped-years", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { skippedYears } = req.body;
+    const participants = getParticipants();
+    const existing = participants.find(p => p.id === id);
+    if (!existing) {
+      return res.status(404).json({ success: false, error: "Участник не найден" });
+    }
+    const cleanYears = Array.isArray(skippedYears) 
+      ? Array.from(new Set(skippedYears.map(Number).filter(n => !isNaN(n) && n > 2000 && n <= 2030))).sort((a, b) => a - b)
+      : [];
+    const updated = {
+      ...existing,
+      skippedYears: cleanYears
+    };
+    await addOrUpdateParticipant(updated);
+    res.json({ success: true, message: "Пропущенные года слёта сохранены", participant: updated, participants: getParticipants() });
+  } catch (err: any) {
+    console.error("Error updating skipped years:", err);
+    res.status(500).json({ success: false, error: "Ошибка сохранения пропущенных годов" });
+  }
+});
+
+// Update participant fee & payment financials directly
+app.put("/api/participants/:id/financials", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { paidAmount, totalCost } = req.body;
+    const participants = getParticipants();
+    const existing = participants.find(p => p.id === id);
+    if (!existing) {
+      return res.status(404).json({ success: false, error: "Участник не найден" });
+    }
+    const newPaid = paidAmount !== undefined ? Math.max(0, Number(paidAmount)) : existing.paidAmount;
+    const newTotal = totalCost !== undefined ? Math.max(0, Number(totalCost)) : existing.totalCost;
+    const newDebt = Math.max(0, newTotal - newPaid);
+    const updated = {
+      ...existing,
+      paidAmount: newPaid,
+      totalCost: newTotal,
+      debtAmount: newDebt
+    };
+    await addOrUpdateParticipant(updated);
+    res.json({ success: true, message: "Финансы участника обновлены", participant: updated, participants: getParticipants() });
+  } catch (err: any) {
+    console.error("Error updating financials:", err);
+    res.status(500).json({ success: false, error: "Ошибка сохранения взносов" });
+  }
 });
 
 // Admin Moderation
-app.post("/api/admin/approve-user", (req, res) => {
-  const { userId } = req.body;
-  approveParticipant(userId);
-  res.json({ success: true, message: "Участник успешно одобрен!" });
+app.get("/api/admin/pending-users", (req, res) => {
+  const pending = getParticipants().filter(p => p.accountStatus === "pending");
+  res.json({ success: true, pendingUsers: pending });
 });
 
-app.post("/api/admin/reject-user", (req, res) => {
+app.post("/api/admin/approve-user", async (req, res) => {
   const { userId } = req.body;
-  rejectParticipant(userId);
-  res.json({ success: true, message: "Заявка участника отклонена" });
+  if (!userId) return res.status(400).json({ success: false, error: "userId обязателен" });
+  await approveParticipant(userId);
+  res.json({ success: true, message: "Участник успешно одобрен!", participants: getParticipants() });
 });
 
-app.post("/api/admin/set-role", (req, res) => {
+app.post("/api/admin/reject-user", async (req, res) => {
+  const { userId } = req.body;
+  if (!userId) return res.status(400).json({ success: false, error: "userId обязателен" });
+  await rejectParticipant(userId);
+  res.json({ success: true, message: "Заявка участника отклонена", participants: getParticipants() });
+});
+
+app.post("/api/admin/delete-user", async (req, res) => {
+  const { userId } = req.body;
+  if (!userId) return res.status(400).json({ success: false, error: "userId обязателен" });
+  await deleteParticipant(userId);
+  res.json({ success: true, message: "Участник удален из списка", participants: getParticipants() });
+});
+
+app.post("/api/admin/set-role", async (req, res) => {
   const { userId, role } = req.body;
   const validRoles = ["admin", "treasurer", "foreman", "designer", "assistant_captain", "keeper", "chef", "member"];
   if (!validRoles.includes(role)) {
     return res.status(400).json({ success: false, error: "Недопустимая роль" });
   }
-  updateParticipantRole(userId, role);
-  res.json({ success: true, message: `Роль успешно изменена на ${role}` });
+  await updateParticipantRole(userId, role);
+  res.json({ success: true, message: `Роль успешно изменена на ${role}`, participants: getParticipants() });
 });
 
 app.post("/api/admin/login", (req, res) => {
@@ -885,15 +1094,82 @@ app.get("/api/fund", (req, res) => {
   res.json(getFundRecords());
 });
 
+app.post("/api/fund", (req, res) => {
+  try {
+    const { id, participantId, participantName, participantNickname, year, month, amount, isPaid, paidAt, note } = req.body;
+    if (!participantId || !year || !month) {
+      return res.status(400).json({ success: false, error: "Укажите участника, год и месяц" });
+    }
+
+    const savedRecord = upsertFundRecord({
+      id,
+      participantId,
+      participantName: participantName || "Участник",
+      participantNickname: participantNickname || "negodyai",
+      year: Number(year),
+      month: Number(month),
+      amount: amount !== undefined ? Number(amount) : 500,
+      isPaid: Boolean(isPaid),
+      paidAt: paidAt || (isPaid ? new Date().toISOString().split("T")[0] : undefined),
+      note: note || ""
+    });
+
+    res.json({ 
+      success: true, 
+      record: savedRecord, 
+      fundRecords: getFundRecords() 
+    });
+  } catch (err: any) {
+    console.error("Fund save error:", err);
+    res.status(500).json({ success: false, error: "Ошибка при сохранении взноса в фонд" });
+  }
+});
+
 app.post("/api/fund/update", (req, res) => {
-  const { id, isPaid, note, paidAt, amount } = req.body;
-  updateFundRecord(id, {
-    isPaid: Boolean(isPaid),
-    paidAt: isPaid ? (paidAt || new Date().toISOString().split("T")[0]) : undefined,
-    note: note || "",
-    amount: amount ? Number(amount) : undefined
-  });
-  res.json({ success: true, fundRecords: getFundRecords() });
+  try {
+    const { id, participantId, participantName, participantNickname, year, month, isPaid, note, paidAt, amount } = req.body;
+    if (id) {
+      updateFundRecord(id, {
+        isPaid: Boolean(isPaid),
+        paidAt: isPaid ? (paidAt || new Date().toISOString().split("T")[0]) : undefined,
+        note: note || "",
+        amount: amount !== undefined ? Number(amount) : undefined
+      });
+    } else if (participantId && year && month) {
+      upsertFundRecord({
+        participantId,
+        participantName: participantName || "",
+        participantNickname: participantNickname || "",
+        year: Number(year),
+        month: Number(month),
+        amount: amount !== undefined ? Number(amount) : 500,
+        isPaid: Boolean(isPaid),
+        paidAt: isPaid ? (paidAt || new Date().toISOString().split("T")[0]) : undefined,
+        note: note || ""
+      });
+    }
+    res.json({ success: true, fundRecords: getFundRecords() });
+  } catch (err: any) {
+    console.error("Fund update error:", err);
+    res.status(500).json({ success: false, error: "Ошибка при обновлении взноса" });
+  }
+});
+
+// Logo update endpoint
+app.post("/api/bot-config/logo", (req, res) => {
+  try {
+    const { customLogo } = req.body;
+    const current = getBotConfig();
+    const updated = {
+      ...current,
+      customLogo: customLogo || null
+    };
+    saveBotConfig(updated);
+    res.json({ success: true, customLogo: updated.customLogo, botConfig: updated });
+  } catch (err: any) {
+    console.error("Logo update error:", err);
+    res.status(500).json({ success: false, error: "Ошибка при сохранении логотипа" });
+  }
 });
 
 // Creativity & Ideas
@@ -984,6 +1260,34 @@ app.put("/api/stories/:id", (req, res) => {
 app.delete("/api/stories/:id", (req, res) => {
   deleteStory(req.params.id);
   res.json({ success: true, stories: getStories() });
+});
+
+// Bot Debt Nudge endpoint ("Пнуть" должника в общем чате)
+app.post("/api/chat/nudge", async (req, res) => {
+  try {
+    const { debtorId, debtorName, debtorNickname, debtAmount } = req.body;
+    const cleanNick = debtorNickname ? debtorNickname.replace(/^@/, '') : '';
+    const mention = cleanNick ? `@${cleanNick}` : (debtorName || "Участник");
+    
+    // Exact requested text: "..... почему не платишь бля, за тобой должок числиться. Если не хочешь в палатку к Буркуту, бегом вносить платёж"
+    const nudgeText = `${mention}, почему не платишь бля, за тобой должок числиться. Если не хочешь в палатку к Буркуту, бегом вносить платёж!`;
+    
+    const botMsg = {
+      id: "bot_nudge_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6),
+      senderName: "Бот Максимка",
+      senderNickname: "negodyai_bot",
+      senderPsychotype: "ИИ Главный Негодяй",
+      text: nudgeText,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      isBot: true
+    };
+
+    addMessage(botMsg);
+    res.json({ success: true, botMessage: botMsg, messages: getMessages() });
+  } catch (err: any) {
+    console.error("Nudge debtor error:", err);
+    res.status(500).json({ success: false, error: "Ошибка отправки пинка" });
+  }
 });
 
 // Participant internal chat message (with integrated Bot Maximka support)
@@ -1147,8 +1451,8 @@ function generateMockNegodyaiResponse(
   if (msgLower.includes("кто с негодяем дрался") || msgLower.includes("негодяем дрался") || msgLower.includes("кто дрался")) {
     return {
       text: swearingLevel === "low" 
-        ? "Кто с Негодяем дрался — тот без штанов остался! 🌲👊 С нашей командой шутки плохи, победа за нами!" 
-        : "Кто с Негодяем дрался — тот в крапиве обосрался! 🌲👊 С нашей командой шутки плохи, порвём за своих!",
+        ? "Кто с Негодяем спорил — тот в лесу заблудился! 🌲👊 С нашей командой шутки плохи, победа за нами!" 
+        : "Кто с Негодяем дрался, тот и поломался! 🌲👊 С нашей командой шутки плохи, порвём за своих!",
       detectedPsychotype: "Бунтарь-анархист",
       detectedPsychotypeExplanation: "Фирменная Негодяйская боевая поговорка!",
       adapterStyleUsed: "Боевой клич Негодяев"

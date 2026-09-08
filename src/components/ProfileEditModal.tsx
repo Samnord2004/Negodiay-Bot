@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { Participant, ROLE_DEFINITIONS } from '../types';
 import { PSYCHOTYPES } from '../mockData';
+import { compressImage } from '../utils/imageCompressor';
 
 interface ProfileEditModalProps {
   isOpen: boolean;
@@ -25,21 +26,25 @@ export default function ProfileEditModal({
   const [phone, setPhone] = useState('');
   const [birthday, setBirthday] = useState('');
   const [joinedYear, setJoinedYear] = useState<number>(2018);
+  const [skippedYears, setSkippedYears] = useState<number[]>([]);
   const [gender, setGender] = useState<'male' | 'female'>('male');
   const [psychotype, setPsychotype] = useState('');
   const [avatar, setAvatar] = useState('');
   const [loading, setLoading] = useState(false);
+  const [compressing, setCompressing] = useState(false);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
+  // Only initialize form fields when modal is opened to avoid background polling overwriting edits
   useEffect(() => {
-    if (currentUser) {
+    if (isOpen && currentUser) {
       setName(currentUser.name || '');
       setNickname(currentUser.nickname || '');
       setEmail(currentUser.email || '');
       setPhone(currentUser.phone || '');
       setBirthday(currentUser.birthday || '');
       setJoinedYear(currentUser.joinedYear || 2018);
+      setSkippedYears(Array.isArray(currentUser.skippedYears) ? currentUser.skippedYears : []);
       setGender(currentUser.gender || 'male');
       setPsychotype(currentUser.psychotype || PSYCHOTYPES[0]?.name || 'Весельчак-балагур');
       // Purge any legacy dicebear bot avatar
@@ -48,25 +53,39 @@ export default function ProfileEditModal({
       setError('');
       setSuccessMsg('');
     }
-  }, [currentUser, isOpen]);
+  }, [isOpen]);
 
   if (!isOpen || !currentUser) return null;
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 2.5 * 1024 * 1024) {
-        setError('Размер изображения не должен превышать 2.5 МБ');
-        return;
+    if (!file) return;
+
+    // Reset input so selecting the same file again triggers onChange
+    e.target.value = '';
+
+    setCompressing(true);
+    setError('');
+    try {
+      // Compress and optimize avatar to 384x384 JPEG (~25-40KB)
+      const compressed = await compressImage(file, 384, 0.85);
+      setAvatar(compressed);
+    } catch (err: any) {
+      console.error('Avatar compression error:', err);
+      // Fallback: read directly if canvas fails
+      try {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          if (reader.result) {
+            setAvatar(reader.result as string);
+          }
+        };
+        reader.readAsDataURL(file);
+      } catch (e2) {
+        setError('Не удалось обработать изображение');
       }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (reader.result) {
-          setAvatar(reader.result as string);
-          setError('');
-        }
-      };
-      reader.readAsDataURL(file);
+    } finally {
+      setCompressing(false);
     }
   };
 
@@ -97,6 +116,7 @@ export default function ProfileEditModal({
           phone: phone.trim(),
           birthday: birthday.trim(),
           joinedYear: Number(joinedYear) || 2018,
+          skippedYears: skippedYears.filter(y => !isNaN(y)),
           gender,
           psychotype,
           avatar
@@ -190,29 +210,43 @@ export default function ProfileEditModal({
             </label>
             <div className="flex flex-col sm:flex-row items-center gap-3">
               <div className="relative shrink-0">
-                {avatar && (avatar.startsWith('http') || avatar.startsWith('data:image/')) && !avatar.includes('dicebear.com/7.x/bottts') ? (
+                {avatar && avatar.trim() && !avatar.includes('dicebear.com/7.x/bottts') ? (
                   <img
-                    src={avatar}
+                    src={avatar.trim()}
                     alt="Avatar preview"
                     className="w-20 h-20 rounded-2xl border-2 border-amber-500 object-cover bg-amber-100 shadow"
-                    onError={() => setAvatar('')}
                   />
                 ) : (
                   <div className="w-20 h-20 rounded-2xl border-2 border-amber-500 bg-amber-200 flex flex-col items-center justify-center text-amber-950 font-black shadow text-2xl">
                     {name.trim() ? name.trim().charAt(0).toUpperCase() : <User size={32} className="text-amber-800" />}
                   </div>
                 )}
+                {compressing && (
+                  <div className="absolute inset-0 bg-black/40 rounded-2xl flex items-center justify-center text-white">
+                    <RefreshCw size={20} className="animate-spin" />
+                  </div>
+                )}
               </div>
 
               <div className="flex-1 space-y-2 w-full">
                 <div className="flex items-center gap-2">
-                  <label className="flex-1 px-3 py-2 bg-amber-200 hover:bg-amber-300 border border-amber-400 rounded-xl text-xs font-black text-amber-950 uppercase cursor-pointer flex items-center justify-center gap-1.5 transition-colors shadow-2xs">
-                    <Upload size={14} />
-                    <span>Загрузить фото</span>
+                  <label className={`flex-1 px-3 py-2 bg-amber-200 hover:bg-amber-300 border border-amber-400 rounded-xl text-xs font-black text-amber-950 uppercase cursor-pointer flex items-center justify-center gap-1.5 transition-colors shadow-2xs ${compressing ? 'opacity-50 pointer-events-none' : ''}`}>
+                    {compressing ? (
+                      <>
+                        <RefreshCw size={14} className="animate-spin text-red-700" />
+                        <span>Обработка...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Upload size={14} />
+                        <span>Загрузить фото</span>
+                      </>
+                    )}
                     <input
                       type="file"
                       accept="image/*"
                       onChange={handleFileUpload}
+                      disabled={compressing}
                       className="hidden"
                     />
                   </label>
@@ -341,6 +375,46 @@ export default function ProfileEditModal({
                 onChange={(e) => setJoinedYear(Number(e.target.value))}
                 className="w-full px-3 py-2 bg-white border-2 border-amber-300 focus:border-red-600 rounded-xl text-xs font-bold text-amber-950 outline-none"
               />
+            </div>
+          </div>
+
+          {/* Skipped Rally Years (Пропущенные года слёта) */}
+          <div className="bg-amber-100/70 p-3 rounded-2xl border-2 border-amber-300">
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-black uppercase text-amber-950">
+                Пропущенные года слёта команды
+              </label>
+              <span className="text-[11px] font-bold text-red-700">
+                {skippedYears.length > 0 ? `Пропущено: ${skippedYears.length} г.` : 'Без пропусков'}
+              </span>
+            </div>
+            <p className="text-[11px] text-amber-900 mb-2">
+              Отметьте года, когда вы по уважительной (или нет) причине не смогли поехать на слёт. Это учитывается в реестре и расчете стажа.
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {[2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026].map(year => {
+                const isSkipped = skippedYears.includes(year);
+                return (
+                  <button
+                    key={year}
+                    type="button"
+                    onClick={() => {
+                      if (isSkipped) {
+                        setSkippedYears(prev => prev.filter(y => y !== year));
+                      } else {
+                        setSkippedYears(prev => [...prev, year].sort((a, b) => a - b));
+                      }
+                    }}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-black border transition-all ${
+                      isSkipped
+                        ? 'bg-red-600 text-yellow-300 border-red-800 shadow-xs'
+                        : 'bg-white text-amber-950 border-amber-300 hover:bg-amber-50'
+                    }`}
+                  >
+                    {year} {isSkipped ? '✕' : ''}
+                  </button>
+                );
+              })}
             </div>
           </div>
 

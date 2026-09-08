@@ -25,12 +25,13 @@ import ContestsTab from './components/ContestsTab';
 import NavigationTabs, { TabItem } from './components/NavigationTabs';
 import TopSiteMenu from './components/TopSiteMenu';
 import ProfileEditModal from './components/ProfileEditModal';
+import { compressImage } from './utils/imageCompressor';
 
 import { 
   Participant, Excursion, ChatMessage, BotConfig, 
   TaskItem, MenuItem, GroceryItem, InventoryItem, 
   Contest, GalleryPhoto, TeamDocument, FundRecord, CreativityIdea,
-  TeamStory, UserRole, ROLE_DEFINITIONS
+  TeamStory, UserRole, ROLE_DEFINITIONS, ThemeConfig, DEFAULT_THEME_CONFIG
 } from './types';
 import { 
   initialParticipants, initialExcursions, initialMessages, 
@@ -78,6 +79,25 @@ export default function App() {
   const [creativityIdeas, setCreativityIdeas] = useState<CreativityIdea[]>(initialCreativityIdeas);
   const [stories, setStories] = useState<TeamStory[]>(INITIAL_STORIES);
 
+  // Theme & Appearance Configuration
+  const [themeConfig, setThemeConfig] = useState<ThemeConfig>(() => {
+    try {
+      const saved = localStorage.getItem('negodyai_theme_config');
+      return saved ? { ...DEFAULT_THEME_CONFIG, ...JSON.parse(saved) } : DEFAULT_THEME_CONFIG;
+    } catch {
+      return DEFAULT_THEME_CONFIG;
+    }
+  });
+
+  const handleUpdateThemeConfig = (newTheme: ThemeConfig) => {
+    setThemeConfig(newTheme);
+    try {
+      localStorage.setItem('negodyai_theme_config', JSON.stringify(newTheme));
+    } catch (e) {
+      console.warn(e);
+    }
+  };
+
   // System Toast / Notification
   const [systemToast, setSystemToast] = useState<{ message: string; type?: 'info' | 'success' | 'alert' } | null>(null);
 
@@ -86,14 +106,70 @@ export default function App() {
     setTimeout(() => setSystemToast(null), 4000);
   };
 
+  // Team Logo upload & reset with compression
+  const handleUploadLogoFile = async (file: File) => {
+    try {
+      const compressed = await compressImage(file, 512, 0.88);
+      setBotConfig(prev => ({ ...prev, customLogo: compressed }));
+      try {
+        localStorage.setItem('negodyai_custom_logo', compressed);
+      } catch (e) {
+        console.warn("Storage quota warning:", e);
+      }
+      const res = await fetch("/api/bot-config/logo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customLogo: compressed })
+      });
+      if (res.ok) {
+        showToast("✨ Логотип команды успешно обновлен и сохранен!", "success");
+      } else {
+        showToast("Логотип обновлен локально", "info");
+      }
+    } catch (err) {
+      console.error("Logo error:", err);
+      showToast("Ошибка при обработке логотипа", "alert");
+    }
+  };
+
+  const handleResetLogo = async () => {
+    setBotConfig(prev => ({ ...prev, customLogo: null }));
+    try {
+      localStorage.removeItem('negodyai_custom_logo');
+    } catch (e) {
+      console.warn(e);
+    }
+    await fetch("/api/bot-config/logo", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ customLogo: null })
+    });
+    showToast("Логотип сброшен на стандартный", "info");
+  };
+
+  // Check local logo on boot
+  useEffect(() => {
+    const localLogo = localStorage.getItem('negodyai_custom_logo');
+    if (localLogo && !botConfig.customLogo) {
+      setBotConfig(prev => ({ ...prev, customLogo: localLogo }));
+    }
+  }, []);
+
   // Sync state from server on mount and periodically
   useEffect(() => {
     let isMounted = true;
     const fetchSync = async () => {
       try {
         const res = await fetch("/api/sync");
-        if (!res.ok) return;
-        const data = await res.json();
+        const contentType = res.headers.get("content-type") || "";
+        if (!res.ok || !contentType.includes("application/json")) {
+          return;
+        }
+        const text = await res.text();
+        if (!text || text.trim().startsWith("<")) {
+          return;
+        }
+        const data = JSON.parse(text);
         if (!isMounted) return;
 
         if (data.participants) setParticipants(data.participants);
@@ -102,7 +178,13 @@ export default function App() {
         if (data.menuItems) setMenuItems(data.menuItems);
         if (data.groceryItems) setGroceryItems(data.groceryItems);
         if (data.inventoryItems) setInventoryItems(data.inventoryItems);
-        if (data.botConfig) setBotConfig(data.botConfig);
+        if (data.botConfig) {
+          const localLogo = localStorage.getItem('negodyai_custom_logo');
+          setBotConfig({
+            ...data.botConfig,
+            customLogo: data.botConfig.customLogo || localLogo || null
+          });
+        }
         if (data.contests) setContests(data.contests);
         if (data.messages) setMessages(data.messages);
         if (data.photos) setPhotos(data.photos);
@@ -110,8 +192,8 @@ export default function App() {
         if (data.fundRecords) setFundRecords(data.fundRecords);
         if (data.creativityIdeas) setCreativityIdeas(data.creativityIdeas);
         if (data.stories) setStories(data.stories);
-      } catch (err) {
-        console.error("Sync error:", err);
+      } catch {
+        // Silently ignore transient network or non-JSON payloads during server restart
       }
     };
 
@@ -157,10 +239,25 @@ export default function App() {
   // Update current user if participant data changed
   useEffect(() => {
     if (currentUser) {
-      const match = participants.find(p => p.id === currentUser.id);
+      const match = participants.find(p => p.id === currentUser.id || String(p.id) === String(currentUser.id));
       if (match) {
-        setCurrentUser(match);
-        localStorage.setItem('negodyai_active_user', JSON.stringify(match));
+        if (
+          match.name !== currentUser.name ||
+          match.avatar !== currentUser.avatar ||
+          match.role !== currentUser.role ||
+          match.nickname !== currentUser.nickname ||
+          match.psychotype !== currentUser.psychotype ||
+          match.phone !== currentUser.phone ||
+          match.email !== currentUser.email ||
+          match.birthday !== currentUser.birthday
+        ) {
+          setCurrentUser(match);
+          try {
+            localStorage.setItem('negodyai_active_user', JSON.stringify(match));
+          } catch (e) {
+            console.warn(e);
+          }
+        }
       }
     }
   }, [participants]);
@@ -271,9 +368,47 @@ export default function App() {
     }
   };
 
-  // Nudge Debtor
-  const handleNudgeDebtor = (debtor: Participant) => {
-    showToast(`Напоминание о задолженности ${debtor.debtAmount} ₽ отправлено участнику @${debtor.nickname}!`, 'alert');
+  // Nudge Debtor with Bot message in chat
+  const handleNudgeDebtor = async (debtor: Participant) => {
+    const cleanNick = debtor.nickname ? debtor.nickname.replace(/^@/, '') : '';
+    const mention = cleanNick ? `@${cleanNick}` : (debtor.name || 'Участник');
+    // Exact user requested phrase: "..... почему не платишь бля, за тобой должок числиться. Если не хочешь в палатку к Буркуту, бегом вносить платёж"
+    const phrase = `${mention}, почему не платишь бля, за тобой должок числиться. Если не хочешь в палатку к Буркуту, бегом вносить платёж!`;
+    
+    // Instant optimistic bot message in local chat
+    const botMsg: ChatMessage = {
+      id: "bot_nudge_" + Date.now(),
+      senderName: "Бот Максимка",
+      senderNickname: "negodyai_bot",
+      senderPsychotype: "ИИ Главный Негодяй",
+      text: phrase,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      isBot: true
+    };
+    setMessages(prev => [...prev, botMsg]);
+
+    showToast(`⚡ Бот Максимка пнул ${debtor.name} в общем чате!`, 'alert');
+
+    try {
+      const res = await fetch("/api/chat/nudge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          debtorId: debtor.id,
+          debtorName: debtor.name,
+          debtorNickname: debtor.nickname,
+          debtAmount: debtor.debtAmount
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.messages) {
+          setMessages(data.messages);
+        }
+      }
+    } catch (err) {
+      console.error("Error nudging debtor:", err);
+    }
   };
 
   // Story Handlers
@@ -372,56 +507,51 @@ export default function App() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#FFFBEB] text-amber-950 flex flex-col font-sans selection:bg-red-600 selection:text-yellow-300">
+    <div 
+      className="min-h-screen flex flex-col font-sans selection:bg-red-600 selection:text-yellow-300 transition-all duration-200"
+      style={{
+        backgroundColor: themeConfig.bgColor,
+        color: themeConfig.textColor,
+        filter: `brightness(${themeConfig.brightness}%) contrast(${themeConfig.contrast}%)`
+      }}
+    >
       
       {/* GLOBAL HEADER */}
-      <header className="bg-yellow-400 border-b-4 border-red-600 shadow-md sticky top-0 z-30">
+      <header 
+        className="border-b-4 border-red-600 shadow-md sticky top-0 z-30 transition-colors"
+        style={{ backgroundColor: themeConfig.headerBg || '#FACC15' }}
+      >
         <div className="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-4">
           
           {/* Logo & Brand Title */}
           <div className="flex items-center gap-3">
             <div className="relative group cursor-pointer">
-              {botConfig.customLogo ? (
-                <img 
-                  src={botConfig.customLogo} 
-                  alt="Лого Негодяи" 
-                  className="w-12 h-12 object-contain bg-white border-2 border-red-600 rounded-xl p-0.5 shadow-md group-hover:opacity-85 transition-opacity"
-                  onClick={() => {
-                    const input = document.getElementById('logo-upload-input');
-                    if (input) (input as HTMLInputElement).click();
-                  }}
-                />
-              ) : (
-                <div 
-                  onClick={() => {
-                    const input = document.getElementById('logo-upload-input');
-                    if (input) (input as HTMLInputElement).click();
-                  }}
-                  className="group-hover:opacity-85 transition-opacity"
-                >
-                  <Logo size="sm" className="bg-white border-2 border-red-600 rounded-xl p-1 shadow-md shrink-0" />
-                </div>
-              )}
-              <div className="absolute -bottom-1 -right-1 bg-red-600 text-yellow-300 rounded-full p-1 border border-amber-950 shadow opacity-0 group-hover:opacity-100 transition-opacity">
-                <Edit size={10} />
-              </div>
               <input
-                id="logo-upload-input"
+                id="header-logo-upload-input"
                 type="file"
                 accept="image/*"
                 className="hidden"
                 onChange={(e) => {
                   const file = e.target.files?.[0];
-                  if (file) {
-                    const reader = new FileReader();
-                    reader.onloadend = () => {
-                      setBotConfig(prev => ({ ...prev, customLogo: reader.result as string }));
-                      showToast("✨ Логотип команды обновлен!", "success");
-                    };
-                    reader.readAsDataURL(file);
-                  }
+                  if (file) handleUploadLogoFile(file);
                 }}
               />
+              <label htmlFor="header-logo-upload-input" className="cursor-pointer block relative">
+                {botConfig.customLogo && botConfig.customLogo.trim() ? (
+                  <img 
+                    src={botConfig.customLogo.trim()} 
+                    alt="Лого Негодяи" 
+                    className="w-12 h-12 object-contain bg-white border-2 border-red-600 rounded-xl p-0.5 shadow-md group-hover:opacity-85 transition-opacity"
+                  />
+                ) : (
+                  <div className="group-hover:opacity-85 transition-opacity">
+                    <Logo size="sm" className="bg-white border-2 border-red-600 rounded-xl p-1 shadow-md shrink-0" />
+                  </div>
+                )}
+                <div className="absolute -bottom-1 -right-1 bg-red-600 text-yellow-300 rounded-full p-1 border border-amber-950 shadow opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Edit size={10} />
+                </div>
+              </label>
             </div>
 
             <div>
@@ -453,6 +583,11 @@ export default function App() {
               onOpenAuth={() => setIsAuthModalOpen(true)}
               onLogout={handleLogout}
               pendingApprovalsCount={pendingApprovalsCount}
+              themeConfig={themeConfig}
+              onUpdateThemeConfig={handleUpdateThemeConfig}
+              customLogo={botConfig.customLogo}
+              onUploadLogo={handleUploadLogoFile}
+              onResetLogo={handleResetLogo}
             />
 
             {/* Birthday Diary Alert */}
@@ -525,6 +660,7 @@ export default function App() {
             participants={participants}
             excursions={excursions}
             onUpdateParticipants={setParticipants}
+            onUpdateExcursions={setExcursions}
             onNudgeDebtor={handleNudgeDebtor}
             onNavigateToTab={handleNavigate}
             tasks={tasks}
@@ -622,8 +758,28 @@ export default function App() {
             currentUser={currentUser}
             isAdmin={currentUser?.role === 'admin'}
             isTreasurer={currentUser?.role === 'treasurer' || currentUser?.role === 'admin'}
-            onPaymentToggled={(rec) => setFundRecords(prev => prev.map(r => r.id === rec.id ? { ...r, isPaid: !r.isPaid } : r))}
+            onPaymentToggled={(rec) => {
+              setFundRecords(prev => {
+                const idx = prev.findIndex(r => r.id === rec.id || (r.participantId === rec.participantId && r.year === rec.year && r.month === rec.month));
+                if (idx >= 0) {
+                  const updated = [...prev];
+                  updated[idx] = rec;
+                  return updated;
+                }
+                return [rec, ...prev];
+              });
+            }}
+            onUpdateFundRecords={(records) => setFundRecords(records)}
             onSetTreasurer={(pId) => handleSetRole(pId, 'treasurer')}
+            onSwitchUser={(user) => {
+              setCurrentUser(user);
+              try {
+                localStorage.setItem('negodyai_active_user', JSON.stringify(user));
+              } catch (e) {
+                console.warn(e);
+              }
+              showToast(`Вход выполнен под аккаунтом: ${user.name}`, 'success');
+            }}
           />
         )}
 
@@ -686,8 +842,12 @@ export default function App() {
         currentUser={currentUser}
         onProfileUpdated={(updated) => {
           setCurrentUser(updated);
-          localStorage.setItem('negodyai_active_user', JSON.stringify(updated));
-          setParticipants(prev => prev.map(p => p.id === updated.id ? updated : p));
+          try {
+            localStorage.setItem('negodyai_active_user', JSON.stringify(updated));
+          } catch (e) {
+            console.warn('localStorage save warning:', e);
+          }
+          setParticipants(prev => prev.map(p => (p.id === updated.id || String(p.id) === String(updated.id)) ? updated : p));
           showToast('Личные данные успешно сохранены!', 'success');
         }}
       />
@@ -698,6 +858,9 @@ export default function App() {
         currentUser={currentUser}
         onLoginSuccess={handleLoginSuccess}
         onLogout={handleLogout}
+        onRegistered={(updated) => {
+          setParticipants(updated);
+        }}
       />
 
       <SecurityModal

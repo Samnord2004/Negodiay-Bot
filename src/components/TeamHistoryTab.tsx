@@ -319,21 +319,21 @@ export default function TeamHistoryTab({
                 </div>
 
                 {/* Photo Gallery Grid (if photos present) */}
-                {story.photos && story.photos.length > 0 && (
+                {story.photos && story.photos.filter(p => p && p.trim()).length > 0 && (
                   <div className="space-y-2 pt-2">
                     <h4 className="text-xs font-black uppercase text-amber-950 flex items-center gap-1.5">
                       <ImageIcon size={14} className="text-red-600" />
-                      Фотоархив к истории ({story.photos.length}):
+                      Фотоархив к истории ({story.photos.filter(p => p && p.trim()).length}):
                     </h4>
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
-                      {story.photos.map((photo, pIdx) => (
+                      {story.photos.filter(p => p && p.trim()).map((photo, pIdx) => (
                         <div
                           key={pIdx}
-                          onClick={() => setLightboxImage(photo)}
+                          onClick={() => setLightboxImage(photo.trim())}
                           className="group relative h-28 sm:h-36 rounded-2xl overflow-hidden border-2 border-amber-300 shadow-sm cursor-pointer hover:border-red-500 transition-all"
                         >
                           <img
-                            src={photo}
+                            src={photo.trim()}
                             alt={`${story.title} фото ${pIdx + 1}`}
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                             loading="lazy"
@@ -348,21 +348,22 @@ export default function TeamHistoryTab({
                 )}
 
                 {/* Video Gallery / Player (if videos present) */}
-                {story.videos && story.videos.length > 0 && (
+                {story.videos && story.videos.filter(v => v && v.trim()).length > 0 && (
                   <div className="space-y-2 pt-2">
                     <h4 className="text-xs font-black uppercase text-amber-950 flex items-center gap-1.5">
                       <Video size={14} className="text-red-600" />
-                      Видеоматериалы ({story.videos.length}):
+                      Видеоматериалы ({story.videos.filter(v => v && v.trim()).length}):
                     </h4>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {story.videos.map((videoUrl, vIdx) => {
-                        const isEmbed = videoUrl.includes('youtube.com') || videoUrl.includes('youtu.be') || videoUrl.includes('vk.com') || videoUrl.includes('rutube.ru');
+                      {story.videos.filter(v => v && v.trim()).map((videoUrl, vIdx) => {
+                        const trimmedVideo = videoUrl.trim();
+                        const isEmbed = trimmedVideo.includes('youtube.com') || trimmedVideo.includes('youtu.be') || trimmedVideo.includes('vk.com') || trimmedVideo.includes('rutube.ru');
                         return (
                           <div key={vIdx} className="rounded-2xl overflow-hidden border-2 border-amber-400 bg-stone-950 shadow-md">
                             {isEmbed ? (
                               <div className="aspect-video w-full">
                                 <iframe
-                                  src={videoUrl}
+                                  src={trimmedVideo}
                                   title={`Видео ${vIdx + 1} - ${story.title}`}
                                   className="w-full h-full"
                                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -372,7 +373,7 @@ export default function TeamHistoryTab({
                             ) : (
                               <div className="aspect-video w-full flex items-center justify-center bg-black">
                                 <video
-                                  src={videoUrl}
+                                  src={trimmedVideo}
                                   controls
                                   className="w-full h-full object-contain"
                                 />
@@ -532,11 +533,11 @@ export default function TeamHistoryTab({
                   </button>
                 </div>
 
-                {formPhotos.length > 0 && (
+                {formPhotos && formPhotos.filter(p => p && p.trim()).length > 0 && (
                   <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 pt-1">
-                    {formPhotos.map((p, idx) => (
+                    {formPhotos.filter(p => p && p.trim()).map((p, idx) => (
                       <div key={idx} className="relative h-16 rounded-xl overflow-hidden border border-amber-400 group">
-                        <img src={p} alt="thumb" className="w-full h-full object-cover" />
+                        <img src={p.trim()} alt="thumb" className="w-full h-full object-cover" />
                         <button
                           type="button"
                           onClick={() => setFormPhotos(formPhotos.filter((_, i) => i !== idx))}
@@ -638,7 +639,7 @@ export default function TeamHistoryTab({
       )}
 
       {/* LIGHTBOX MODAL */}
-      {lightboxImage && (
+      {lightboxImage && lightboxImage.trim() ? (
         <div 
           onClick={() => setLightboxImage(null)}
           className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4 cursor-pointer"
@@ -651,12 +652,12 @@ export default function TeamHistoryTab({
             <X size={24} />
           </button>
           <img
-            src={lightboxImage}
+            src={lightboxImage.trim()}
             alt="Enlarged"
             className="max-h-[88vh] max-w-[92vw] object-contain rounded-2xl shadow-2xl border-2 border-amber-400"
           />
         </div>
-      )}
+      ) : null}
 
     </div>
   );

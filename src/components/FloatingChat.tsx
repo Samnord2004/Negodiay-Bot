@@ -262,15 +262,15 @@ export default function FloatingChat({
                           )}
 
                           {/* Image Attachment */}
-                          {msg.imageUrl && (
+                          {msg.imageUrl && msg.imageUrl.trim() ? (
                             <div className="rounded-xl overflow-hidden border-2 border-amber-500/50 max-h-56 bg-stone-950">
                               <img
-                                src={msg.imageUrl}
+                                src={msg.imageUrl.trim()}
                                 alt="Вложение бота"
                                 className="w-full h-full object-contain p-1"
                               />
                             </div>
-                          )}
+                          ) : null}
 
                           {/* Other Attachments */}
                           {msg.attachments && msg.attachments.length > 0 && (
@@ -333,15 +333,15 @@ export default function FloatingChat({
                       >
                         {msg.text && <p className="whitespace-pre-wrap">{msg.text}</p>}
 
-                        {msg.imageUrl && (
+                        {msg.imageUrl && msg.imageUrl.trim() ? (
                           <div className="mt-1.5 rounded-xl overflow-hidden border border-stone-600 max-h-48">
                             <img
-                              src={msg.imageUrl}
+                              src={msg.imageUrl.trim()}
                               alt="Attachment"
                               className="w-full h-full object-cover"
                             />
                           </div>
-                        )}
+                        ) : null}
                       </div>
                     </div>
                   );

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Award, Plus, Trash, Trophy, Users, Calendar, FileText, CheckCircle2, ChevronDown, ChevronUp, Eye, X } from 'lucide-react';
 import { Contest, Participant } from '../types';
+import { getSafeAvatar } from '../utils/avatar';
 
 interface ContestsTabProps {
   contests: Contest[];
@@ -310,7 +311,7 @@ export default function ContestsTab({
                       className="flex items-center gap-2 px-3 py-1.5 bg-white border-2 border-amber-300 rounded-xl shadow-2xs"
                     >
                       <img
-                        src={m.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=80&q=80'}
+                        src={getSafeAvatar(m.avatar, m.gender)}
                         alt={m.name}
                         className="w-6 h-6 rounded-full object-cover border border-amber-400 shrink-0"
                       />

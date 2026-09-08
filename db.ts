@@ -267,6 +267,8 @@ export async function initDb() {
       DELETE FROM messages WHERE sender_name IN ('Андрюха Хорёк', 'Иришка Булочка', 'Михалыч Лесник', 'Саня Запевала');
       DELETE FROM fund_records WHERE participant_id IN ('1', '2', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20') AND participant_id != '3';
       UPDATE participants SET avatar = '' WHERE avatar LIKE '%dicebear.com/7.x/bottts%';
+      -- Fix legacy Captain name if still stuck as 'Лёха Навигатор'
+      UPDATE participants SET name = 'Капитан команды', nickname = 'Captain' WHERE id = '3' AND (name = 'Лёха Навигатор' OR nickname = 'navigator_alex');
     `);
 
     // Load or seed Participants
@@ -647,37 +649,22 @@ export function getParticipants(): Participant[] {
   return cacheParticipants;
 }
 
-export function saveParticipants(participants: Participant[]) {
-  cacheParticipants = [...participants];
-  (async () => {
-    try {
-      for (const p of participants) {
-        await pool.query(
-          `INSERT INTO participants (id, name, nickname, psychotype, avatar, paid_amount, total_cost, debt_amount, joined, birthday, joined_year, skipped_years, gender, role, email, phone, password, account_status, biometric_enabled)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
-           ON CONFLICT (id) DO UPDATE SET
-           name = EXCLUDED.name, nickname = EXCLUDED.nickname, psychotype = EXCLUDED.psychotype, avatar = EXCLUDED.avatar,
-           paid_amount = EXCLUDED.paid_amount, total_cost = EXCLUDED.total_cost, debt_amount = EXCLUDED.debt_amount,
-           joined = EXCLUDED.joined, birthday = EXCLUDED.birthday, joined_year = EXCLUDED.joined_year,
-           skipped_years = EXCLUDED.skipped_years, gender = EXCLUDED.gender,
-           role = EXCLUDED.role, email = EXCLUDED.email, phone = EXCLUDED.phone, password = EXCLUDED.password,
-           account_status = EXCLUDED.account_status, biometric_enabled = EXCLUDED.biometric_enabled`,
-          [p.id, p.name, p.nickname, p.psychotype, p.avatar, p.paidAmount, p.totalCost, p.debtAmount, p.joined, p.birthday || null, p.joinedYear, JSON.stringify(p.skippedYears), p.gender, p.role || 'member', p.email || '', p.phone || '', p.password || '123', p.accountStatus || 'active', p.biometricEnabled || false]
-        );
-      }
-    } catch (e) {
-      console.error("PSQL saveParticipants error:", e);
+export async function saveParticipants(participants: Participant[]) {
+  const map = new Map<string, Participant>();
+  for (const p of cacheParticipants) {
+    map.set(p.id, p);
+  }
+  for (const p of participants) {
+    const existing = map.get(p.id);
+    if (existing) {
+      map.set(p.id, { ...existing, ...p });
+    } else {
+      map.set(p.id, p);
     }
-  })();
-}
-
-export function addOrUpdateParticipant(p: Participant) {
-  const index = cacheParticipants.findIndex(x => x.id === p.id);
-  if (index >= 0) cacheParticipants[index] = p;
-  else cacheParticipants.push(p);
-
-  (async () => {
-    try {
+  }
+  cacheParticipants = Array.from(map.values());
+  try {
+    for (const p of cacheParticipants) {
       await pool.query(
         `INSERT INTO participants (id, name, nickname, psychotype, avatar, paid_amount, total_cost, debt_amount, joined, birthday, joined_year, skipped_years, gender, role, email, phone, password, account_status, biometric_enabled)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
@@ -688,45 +675,100 @@ export function addOrUpdateParticipant(p: Participant) {
          skipped_years = EXCLUDED.skipped_years, gender = EXCLUDED.gender,
          role = EXCLUDED.role, email = EXCLUDED.email, phone = EXCLUDED.phone, password = EXCLUDED.password,
          account_status = EXCLUDED.account_status, biometric_enabled = EXCLUDED.biometric_enabled`,
-        [p.id, p.name, p.nickname, p.psychotype, p.avatar, p.paidAmount, p.totalCost, p.debtAmount, p.joined, p.birthday || null, p.joinedYear, JSON.stringify(p.skippedYears), p.gender, p.role || 'member', p.email || '', p.phone || '', p.password || '123', p.accountStatus || 'active', p.biometricEnabled || false]
+        [p.id, p.name, p.nickname, p.psychotype || 'Весельчак-балагур', p.avatar || '', p.paidAmount || 0, p.totalCost || 0, p.debtAmount || 0, p.joined !== false, p.birthday || null, p.joinedYear || 2018, JSON.stringify(p.skippedYears || []), p.gender || 'boy', p.role || 'member', p.email || '', p.phone || '', p.password || '123', p.accountStatus || 'active', p.biometricEnabled || false]
       );
-    } catch (e) {
-      console.error("PSQL addOrUpdateParticipant error:", e);
     }
-  })();
+  } catch (e) {
+    console.error("PSQL saveParticipants error:", e);
+  }
+}
+
+export async function addOrUpdateParticipant(p: Participant) {
+  const index = cacheParticipants.findIndex(x => x.id === p.id);
+  if (index >= 0) cacheParticipants[index] = p;
+  else cacheParticipants.push(p);
+
+  try {
+    await pool.query(
+      `INSERT INTO participants (id, name, nickname, psychotype, avatar, paid_amount, total_cost, debt_amount, joined, birthday, joined_year, skipped_years, gender, role, email, phone, password, account_status, biometric_enabled)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+       ON CONFLICT (id) DO UPDATE SET
+       name = EXCLUDED.name, nickname = EXCLUDED.nickname, psychotype = EXCLUDED.psychotype, avatar = EXCLUDED.avatar,
+       paid_amount = EXCLUDED.paid_amount, total_cost = EXCLUDED.total_cost, debt_amount = EXCLUDED.debt_amount,
+       joined = EXCLUDED.joined, birthday = EXCLUDED.birthday, joined_year = EXCLUDED.joined_year,
+       skipped_years = EXCLUDED.skipped_years, gender = EXCLUDED.gender,
+       role = EXCLUDED.role, email = EXCLUDED.email, phone = EXCLUDED.phone, password = EXCLUDED.password,
+       account_status = EXCLUDED.account_status, biometric_enabled = EXCLUDED.biometric_enabled`,
+      [p.id, p.name, p.nickname, p.psychotype || 'Весельчак-балагур', p.avatar || '', p.paidAmount || 0, p.totalCost || 0, p.debtAmount || 0, p.joined !== false, p.birthday || null, p.joinedYear || 2018, JSON.stringify(p.skippedYears || []), p.gender || 'boy', p.role || 'member', p.email || '', p.phone || '', p.password || '123', p.accountStatus || 'active', p.biometricEnabled || false]
+    );
+  } catch (e) {
+    console.error("PSQL addOrUpdateParticipant error:", e);
+  }
+}
+
+export async function deleteParticipant(id: string) {
+  cacheParticipants = cacheParticipants.filter(p => p.id !== id);
+  try {
+    await pool.query("DELETE FROM participants WHERE id = $1", [id]);
+  } catch (e) {
+    console.error("PSQL deleteParticipant error:", e);
+  }
 }
 
 export function getExcursions(): Excursion[] {
   return cacheExcursions;
 }
 
-export function saveExcursions(excursions: Excursion[]) {
+export async function saveExcursions(excursions: Excursion[]) {
   const unique = Array.from(new Map(excursions.map(e => [e.id, e])).values());
   cacheExcursions = [...unique];
-  (async () => {
-    const client = await pool.connect();
-    try {
-      await client.query("BEGIN");
-      await client.query("DELETE FROM excursions");
-      for (const e of unique) {
-        await client.query(
-          `INSERT INTO excursions (id, title, date, location, description, cost_per_person, cost_boys, cost_girls, is_active)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-           ON CONFLICT (id) DO UPDATE SET
-           title = EXCLUDED.title, date = EXCLUDED.date, location = EXCLUDED.location,
-           description = EXCLUDED.description, cost_per_person = EXCLUDED.cost_per_person,
-           cost_boys = EXCLUDED.cost_boys, cost_girls = EXCLUDED.cost_girls, is_active = EXCLUDED.is_active`,
-          [e.id, e.title, e.date, e.location, e.description, e.costPerPerson, e.costBoys, e.costGirls, e.isActive]
-        );
-      }
-      await client.query("COMMIT");
-    } catch (e) {
-      await client.query("ROLLBACK");
-      console.error("PSQL saveExcursions error:", e);
-    } finally {
-      client.release();
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("DELETE FROM excursions");
+    for (const e of unique) {
+      await client.query(
+        `INSERT INTO excursions (id, title, date, location, description, cost_per_person, cost_boys, cost_girls, is_active)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [e.id, e.title, e.date, e.location, e.description, e.costPerPerson, e.costBoys, e.costGirls, e.isActive]
+      );
     }
-  })();
+    await client.query("COMMIT");
+  } catch (e) {
+    await client.query("ROLLBACK");
+    console.error("PSQL saveExcursions error:", e);
+  } finally {
+    client.release();
+  }
+}
+
+export async function addOrUpdateExcursion(e: Excursion) {
+  const idx = cacheExcursions.findIndex(x => x.id === e.id);
+  if (idx >= 0) cacheExcursions[idx] = e;
+  else cacheExcursions.push(e);
+
+  try {
+    await pool.query(
+      `INSERT INTO excursions (id, title, date, location, description, cost_per_person, cost_boys, cost_girls, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       ON CONFLICT (id) DO UPDATE SET
+       title = EXCLUDED.title, date = EXCLUDED.date, location = EXCLUDED.location,
+       description = EXCLUDED.description, cost_per_person = EXCLUDED.cost_per_person,
+       cost_boys = EXCLUDED.cost_boys, cost_girls = EXCLUDED.cost_girls, is_active = EXCLUDED.is_active`,
+      [e.id, e.title, e.date, e.location, e.description, e.costPerPerson, e.costBoys, e.costGirls, e.isActive]
+    );
+  } catch (err) {
+    console.error("PSQL addOrUpdateExcursion error:", err);
+  }
+}
+
+export async function deleteExcursion(id: string) {
+  cacheExcursions = cacheExcursions.filter(x => x.id !== id);
+  try {
+    await pool.query("DELETE FROM excursions WHERE id = $1", [id]);
+  } catch (err) {
+    console.error("PSQL deleteExcursion error:", err);
+  }
 }
 
 export function getTasks(): TaskItem[] {
@@ -997,59 +1039,51 @@ export function saveAdminPassword(password: string) {
 }
 
 // Participant Auth & Admin Moderation
-export function approveParticipant(id: string) {
+export async function approveParticipant(id: string) {
   const p = cacheParticipants.find(x => x.id === id);
   if (p) {
     p.accountStatus = "active";
-    (async () => {
-      try {
-        await pool.query("UPDATE participants SET account_status = 'active' WHERE id = $1", [id]);
-      } catch (e) {
-        console.error("PSQL approveParticipant error:", e);
-      }
-    })();
+    try {
+      await pool.query("UPDATE participants SET account_status = 'active' WHERE id = $1", [id]);
+    } catch (e) {
+      console.error("PSQL approveParticipant error:", e);
+    }
   }
 }
 
-export function rejectParticipant(id: string) {
+export async function rejectParticipant(id: string) {
   const p = cacheParticipants.find(x => x.id === id);
   if (p) {
     p.accountStatus = "rejected";
-    (async () => {
-      try {
-        await pool.query("UPDATE participants SET account_status = 'rejected' WHERE id = $1", [id]);
-      } catch (e) {
-        console.error("PSQL rejectParticipant error:", e);
-      }
-    })();
+    try {
+      await pool.query("UPDATE participants SET account_status = 'rejected' WHERE id = $1", [id]);
+    } catch (e) {
+      console.error("PSQL rejectParticipant error:", e);
+    }
   }
 }
 
-export function updateParticipantRole(id: string, role: UserRole) {
+export async function updateParticipantRole(id: string, role: UserRole) {
   const p = cacheParticipants.find(x => x.id === id);
   if (p) {
     p.role = role;
-    (async () => {
-      try {
-        await pool.query("UPDATE participants SET role = $1 WHERE id = $2", [role, id]);
-      } catch (e) {
-        console.error("PSQL updateParticipantRole error:", e);
-      }
-    })();
+    try {
+      await pool.query("UPDATE participants SET role = $1 WHERE id = $2", [role, id]);
+    } catch (e) {
+      console.error("PSQL updateParticipantRole error:", e);
+    }
   }
 }
 
-export function updateParticipantPassword(id: string, newPass: string) {
+export async function updateParticipantPassword(id: string, newPass: string) {
   const p = cacheParticipants.find(x => x.id === id);
   if (p) {
     p.password = newPass;
-    (async () => {
-      try {
-        await pool.query("UPDATE participants SET password = $1 WHERE id = $2", [newPass, id]);
-      } catch (e) {
-        console.error("PSQL updateParticipantPassword error:", e);
-      }
-    })();
+    try {
+      await pool.query("UPDATE participants SET password = $1 WHERE id = $2", [newPass, id]);
+    } catch (e) {
+      console.error("PSQL updateParticipantPassword error:", e);
+    }
   }
 }
 
@@ -1067,20 +1101,31 @@ export function updateParticipantBiometrics(id: string, enabled: boolean) {
   }
 }
 
-export function registerNewParticipant(p: Participant) {
-  cacheParticipants.push(p);
-  (async () => {
-    try {
-      await pool.query(
-        `INSERT INTO participants (id, name, nickname, psychotype, avatar, paid_amount, total_cost, debt_amount, joined, birthday, joined_year, skipped_years, gender, role, email, phone, password, account_status, biometric_enabled)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
-         ON CONFLICT (id) DO NOTHING`,
-        [p.id, p.name, p.nickname, p.psychotype, p.avatar, p.paidAmount, p.totalCost, p.debtAmount, p.joined, p.birthday || null, p.joinedYear, JSON.stringify(p.skippedYears), p.gender, p.role || 'member', p.email || '', p.phone || '', p.password || '123', p.accountStatus || 'pending', p.biometricEnabled || false]
-      );
-    } catch (e) {
-      console.error("PSQL registerNewParticipant error:", e);
-    }
-  })();
+export async function registerNewParticipant(p: Participant) {
+  const idx = cacheParticipants.findIndex(x => x.id === p.id);
+  if (idx >= 0) {
+    cacheParticipants[idx] = p;
+  } else {
+    cacheParticipants.push(p);
+  }
+  try {
+    await pool.query(
+      `INSERT INTO participants (id, name, nickname, psychotype, avatar, paid_amount, total_cost, debt_amount, joined, birthday, joined_year, skipped_years, gender, role, email, phone, password, account_status, biometric_enabled)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+       ON CONFLICT (id) DO UPDATE SET
+         name = EXCLUDED.name,
+         nickname = EXCLUDED.nickname,
+         avatar = EXCLUDED.avatar,
+         email = EXCLUDED.email,
+         phone = EXCLUDED.phone,
+         password = EXCLUDED.password,
+         account_status = EXCLUDED.account_status,
+         biometric_enabled = EXCLUDED.biometric_enabled`,
+      [p.id, p.name, p.nickname, p.psychotype, p.avatar, p.paidAmount, p.totalCost, p.debtAmount, p.joined, p.birthday || null, p.joinedYear, JSON.stringify(p.skippedYears), p.gender, p.role || 'member', p.email || '', p.phone || '', p.password || '123', p.accountStatus || 'pending', p.biometricEnabled || false]
+    );
+  } catch (e) {
+    console.error("PSQL registerNewParticipant error:", e);
+  }
 }
 
 // Gallery Photos
@@ -1197,6 +1242,80 @@ export function saveFundRecords(records: FundRecord[]) {
       console.error("PSQL saveFundRecords error:", e);
     }
   })();
+}
+
+export function upsertFundRecord(data: {
+  id?: string;
+  participantId: string;
+  participantName: string;
+  participantNickname: string;
+  year: number;
+  month: number;
+  amount?: number;
+  isPaid: boolean;
+  paidAt?: string;
+  note?: string;
+}): FundRecord {
+  const existingIdx = cacheFundRecords.findIndex(
+    f => (data.id && f.id === data.id) || (f.participantId === data.participantId && f.year === data.year && f.month === data.month)
+  );
+
+  let finalRec: FundRecord;
+  if (existingIdx >= 0) {
+    finalRec = {
+      ...cacheFundRecords[existingIdx],
+      participantName: data.participantName || cacheFundRecords[existingIdx].participantName,
+      participantNickname: data.participantNickname || cacheFundRecords[existingIdx].participantNickname,
+      amount: data.amount !== undefined ? Number(data.amount) : (cacheFundRecords[existingIdx].amount || 500),
+      isPaid: data.isPaid,
+      paidAt: data.paidAt !== undefined ? data.paidAt : (data.isPaid ? new Date().toISOString().split("T")[0] : undefined),
+      note: data.note !== undefined ? data.note : (cacheFundRecords[existingIdx].note || "")
+    };
+    cacheFundRecords[existingIdx] = finalRec;
+  } else {
+    finalRec = {
+      id: data.id || `fund_${data.participantId}_${data.year}_${data.month}`,
+      participantId: data.participantId,
+      participantName: data.participantName,
+      participantNickname: data.participantNickname,
+      year: data.year,
+      month: data.month,
+      amount: data.amount !== undefined ? Number(data.amount) : 500,
+      isPaid: data.isPaid,
+      paidAt: data.paidAt || (data.isPaid ? new Date().toISOString().split("T")[0] : undefined),
+      note: data.note || ""
+    };
+    cacheFundRecords.push(finalRec);
+  }
+
+  (async () => {
+    try {
+      await pool.query(
+        `INSERT INTO fund_records (id, participant_id, participant_name, participant_nickname, year, month, amount, is_paid, paid_at, note)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         ON CONFLICT (id) DO UPDATE SET
+         participant_name = EXCLUDED.participant_name, participant_nickname = EXCLUDED.participant_nickname,
+         year = EXCLUDED.year, month = EXCLUDED.month, amount = EXCLUDED.amount,
+         is_paid = EXCLUDED.is_paid, paid_at = EXCLUDED.paid_at, note = EXCLUDED.note`,
+        [
+          finalRec.id,
+          finalRec.participantId,
+          finalRec.participantName,
+          finalRec.participantNickname,
+          finalRec.year,
+          finalRec.month,
+          finalRec.amount,
+          finalRec.isPaid,
+          finalRec.paidAt || null,
+          finalRec.note || ""
+        ]
+      );
+    } catch (e) {
+      console.error("PSQL upsertFundRecord error:", e);
+    }
+  })();
+
+  return finalRec;
 }
 
 export function updateFundRecord(id: string, updates: Partial<FundRecord>) {

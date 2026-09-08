@@ -1,14 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Settings, Users, CheckSquare, Coffee, Package, Award, 
   Plus, Trash, Edit, CheckCircle, AlertTriangle, Shield, 
-  Brain, Sliders, UserCheck, UserX, Key, Calendar, MapPin
+  Brain, Sliders, UserCheck, UserX, Key, Calendar, MapPin, RefreshCw, Flame, Bot
 } from 'lucide-react';
 import { 
   Participant, TaskItem, MenuItem, GroceryItem, 
   InventoryItem, Contest, Excursion, BotConfig, InventoryCondition,
   UserRole, ROLE_DEFINITIONS
 } from '../types';
+import { getSafeAvatar } from '../utils/avatar';
 import { PSYCHOTYPES } from '../mockData';
 
 interface AdminPanelProps {
@@ -62,7 +63,31 @@ export default function AdminPanel({
   onRejectUser,
   onSetRole
 }: AdminPanelProps) {
-  const [activeTab, setActiveTab] = useState<'pending' | 'roles' | 'psychotypes' | 'tasks' | 'menu' | 'inventory' | 'contests' | 'excursions'>('pending');
+  const [activeTab, setActiveTab] = useState<'pending' | 'roles' | 'teamSettings' | 'tasks' | 'menu' | 'inventory' | 'contests' | 'excursions'>('pending');
+
+  // Team parameters & Bot config (Captain control)
+  const [foundingYear, setFoundingYear] = useState<number>(botConfig.foundingYear || 2018);
+  const [swearingLevel, setSwearingLevel] = useState<'low' | 'medium' | 'high'>(botConfig.swearingLevel || 'medium');
+  const [autoDetect, setAutoDetect] = useState<boolean>(botConfig.autoDetectPsychotype ?? true);
+  const [isSavedTeamConfig, setIsSavedTeamConfig] = useState(false);
+
+  useEffect(() => {
+    if (botConfig.foundingYear) setFoundingYear(botConfig.foundingYear);
+    if (botConfig.swearingLevel) setSwearingLevel(botConfig.swearingLevel);
+    if (botConfig.autoDetectPsychotype !== undefined) setAutoDetect(botConfig.autoDetectPsychotype);
+  }, [botConfig]);
+
+  const handleSaveTeamConfig = (overrides?: Partial<BotConfig>) => {
+    const updated: BotConfig = {
+      ...botConfig,
+      foundingYear: overrides?.foundingYear !== undefined ? overrides.foundingYear : foundingYear,
+      swearingLevel: overrides?.swearingLevel !== undefined ? overrides.swearingLevel : swearingLevel,
+      autoDetectPsychotype: overrides?.autoDetectPsychotype !== undefined ? overrides.autoDetectPsychotype : autoDetect
+    };
+    onUpdateBotConfig(updated);
+    setIsSavedTeamConfig(true);
+    setTimeout(() => setIsSavedTeamConfig(false), 2500);
+  };
 
   // Task form
   const [showAddTask, setShowAddTask] = useState(false);
@@ -88,8 +113,12 @@ export default function AdminPanel({
   const [inventoryCondition, setInventoryCondition] = useState<InventoryCondition>('нормальное');
   const [inventoryResponsible, setInventoryResponsible] = useState(participants[0]?.name || 'Ответственный');
 
-  // Excursion form
+  // Excursion state & forms
   const [showAddExcursion, setShowAddExcursion] = useState(false);
+  const [editingExcursion, setEditingExcursion] = useState<Excursion | null>(null);
+  const [isSavingExcursion, setIsSavingExcursion] = useState(false);
+  const [isRefreshingPending, setIsRefreshingPending] = useState(false);
+
   const [newExcursion, setNewExcursion] = useState({
     title: '',
     date: '',
@@ -100,6 +129,131 @@ export default function AdminPanel({
   });
 
   const pendingUsers = participants.filter(p => p.accountStatus === 'pending');
+
+  const handleRefreshPending = async () => {
+    setIsRefreshingPending(true);
+    try {
+      const res = await fetch('/api/sync');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.participants) {
+          onUpdateParticipants(data.participants);
+        }
+      }
+    } catch (err) {
+      console.error("Refresh pending error:", err);
+    } finally {
+      setIsRefreshingPending(false);
+    }
+  };
+
+  const handleCreateExcursion = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newExcursion.title.trim()) return;
+    setIsSavingExcursion(true);
+    try {
+      const payload = {
+        title: newExcursion.title.trim(),
+        date: newExcursion.date || new Date().toISOString().split('T')[0],
+        location: newExcursion.location.trim() || 'Лесная поляна',
+        description: newExcursion.description.trim(),
+        costPerPerson: Number(newExcursion.costBoys),
+        costBoys: Number(newExcursion.costBoys),
+        costGirls: Number(newExcursion.costGirls),
+        isActive: true
+      };
+      const res = await fetch('/api/excursions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.excursions) {
+          onUpdateExcursions(data.excursions);
+        } else {
+          onUpdateExcursions([...excursions, { id: 'ex_' + Date.now(), ...payload }]);
+        }
+        setShowAddExcursion(false);
+        setNewExcursion({
+          title: '',
+          date: '',
+          location: '',
+          description: '',
+          costBoys: 5000,
+          costGirls: 3500
+        });
+      }
+    } catch (err) {
+      console.error("Create excursion error:", err);
+    } finally {
+      setIsSavingExcursion(false);
+    }
+  };
+
+  const handleSaveEditExcursion = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingExcursion) return;
+    setIsSavingExcursion(true);
+    try {
+      const res = await fetch(`/api/excursions/${editingExcursion.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editingExcursion)
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.excursions) {
+          onUpdateExcursions(data.excursions);
+        } else {
+          onUpdateExcursions(excursions.map(ex => ex.id === editingExcursion.id ? editingExcursion : ex));
+        }
+        setEditingExcursion(null);
+      }
+    } catch (err) {
+      console.error("Update excursion error:", err);
+    } finally {
+      setIsSavingExcursion(false);
+    }
+  };
+
+  const handleDeleteExcursion = async (id: string) => {
+    try {
+      const res = await fetch(`/api/excursions/${id}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.excursions) {
+          onUpdateExcursions(data.excursions);
+        } else {
+          onUpdateExcursions(excursions.filter(e => e.id !== id));
+        }
+      }
+    } catch (err) {
+      console.error("Delete excursion error:", err);
+    }
+  };
+
+  const handleToggleExcursionActive = async (ex: Excursion) => {
+    try {
+      const res = await fetch(`/api/excursions/${ex.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isActive: !ex.isActive })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.excursions) {
+          onUpdateExcursions(data.excursions);
+        } else {
+          onUpdateExcursions(excursions.map(e => e.id === ex.id ? { ...e, isActive: !e.isActive } : e));
+        }
+      }
+    } catch (err) {
+      console.error("Toggle excursion error:", err);
+    }
+  };
 
   if (!isAdmin) {
     return (
@@ -125,8 +279,8 @@ export default function AdminPanel({
   return (
     <div className="bg-white border-4 border-red-600 rounded-3xl p-4 sm:p-6 shadow-xl space-y-6">
       
-      {/* Top Header with Status & Logout */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-4 border-b-2 border-amber-200">
+      {/* Top Header with Status & Team Parameters */}
+      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 pb-4 border-b-2 border-amber-200">
         <div>
           <div className="flex items-center gap-2">
             <span className="bg-red-600 text-yellow-300 text-xs font-black uppercase px-2.5 py-0.5 rounded-full border border-amber-950">
@@ -141,15 +295,40 @@ export default function AdminPanel({
           <h2 className="text-xl sm:text-2xl font-black text-red-600 uppercase mt-1">
             Штаб управления туристической командой «Негодяи»
           </h2>
+          <p className="text-xs text-amber-900 font-bold mt-0.5">
+            Год основания: <span className="text-red-600 font-black">{foundingYear}</span> • Возраст команды: <span className="text-red-600 font-black">{Math.max(1, new Date().getFullYear() - foundingYear)} лет</span>
+          </p>
         </div>
 
-        <button
-          type="button"
-          onClick={onLogout}
-          className="px-4 py-2 bg-amber-100 hover:bg-red-600 hover:text-white text-red-700 font-black text-xs uppercase rounded-xl border-2 border-red-300 transition-colors shrink-0"
-        >
-          Выйти из админки 🚪
-        </button>
+        {/* Quick Founding Year Input for Captain */}
+        <div className="bg-amber-50 border-2 border-amber-400 rounded-2xl p-3 flex items-center gap-3 shadow-xs">
+          <div className="flex flex-col text-left">
+            <label className="text-[10px] font-black uppercase text-amber-950 flex items-center gap-1">
+              <span>Год основания команды:</span>
+            </label>
+            <span className="text-[9px] text-amber-800 font-bold">
+              (заполняет капитан)
+            </span>
+          </div>
+          <input
+            type="number"
+            min="1970"
+            max={new Date().getFullYear()}
+            value={foundingYear}
+            onChange={(e) => {
+              const val = parseInt(e.target.value) || 2018;
+              setFoundingYear(val);
+              handleSaveTeamConfig({ foundingYear: val });
+            }}
+            className="w-24 px-2.5 py-1.5 bg-white border-2 border-amber-400 rounded-xl font-black text-amber-950 text-sm text-center shadow-inner focus:outline-none focus:border-red-600"
+            title="Год основания команды (управляет возрастом команды на сайте)"
+          />
+          {isSavedTeamConfig && (
+            <span className="text-xs text-green-700 font-black flex items-center gap-1">
+              <CheckCircle size={14} /> Сохранено
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Admin Tabs */}
@@ -157,7 +336,7 @@ export default function AdminPanel({
         {[
           { id: 'pending', label: `Заявки (${pendingUsers.length})`, icon: UserCheck, alert: pendingUsers.length > 0 },
           { id: 'roles', label: 'Роли & Казначей', icon: Shield },
-          { id: 'psychotypes', label: 'Психотипы & ИИ', icon: Brain },
+          { id: 'teamSettings', label: 'Параметры команды', icon: Settings },
           { id: 'tasks', label: 'Задачи слёта', icon: CheckSquare },
           { id: 'menu', label: 'Меню и Продукты', icon: Coffee },
           { id: 'inventory', label: 'Инвентарь', icon: Package },
@@ -188,14 +367,26 @@ export default function AdminPanel({
       {/* TAB 1: PENDING REGISTRATIONS */}
       {activeTab === 'pending' && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <h3 className="font-black text-base uppercase text-red-600 flex items-center gap-2">
               <UserCheck size={18} />
               Подтверждение регистрации участников
             </h3>
-            <span className="text-xs font-bold text-amber-900">
-              Ожидают проверки: {pendingUsers.length}
-            </span>
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-bold text-amber-900">
+                Ожидают проверки: {pendingUsers.length}
+              </span>
+              <button
+                type="button"
+                onClick={handleRefreshPending}
+                disabled={isRefreshingPending}
+                className="px-3 py-1 bg-amber-200 hover:bg-amber-300 text-amber-950 font-black text-xs uppercase rounded-xl border border-amber-400 flex items-center gap-1.5 shadow-2xs transition-colors"
+                title="Обновить список заявок с сервера"
+              >
+                <RefreshCw size={13} className={isRefreshingPending ? 'animate-spin text-red-600' : 'text-red-600'} />
+                <span>{isRefreshingPending ? 'Обновление...' : 'Обновить'}</span>
+              </button>
+            </div>
           </div>
 
           {pendingUsers.length === 0 ? (
@@ -209,7 +400,7 @@ export default function AdminPanel({
               {pendingUsers.map(p => (
                 <div key={p.id} className="bg-amber-50 border-2 border-amber-400 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
                   <div className="flex items-center gap-3">
-                    <img src={p.avatar} alt={p.name} className="w-12 h-12 rounded-full border-2 border-amber-400 bg-white" />
+                    <img src={getSafeAvatar(p.avatar, p.gender)} alt={p.name} className="w-12 h-12 rounded-full border-2 border-amber-400 bg-white object-cover" />
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="font-black text-amber-950 text-sm">{p.name}</span>
@@ -313,7 +504,7 @@ export default function AdminPanel({
                   return (
                     <tr key={p.id} className="hover:bg-amber-50/80 transition-colors">
                       <td className="p-3 font-bold text-amber-950 flex items-center gap-2">
-                        <img src={p.avatar} alt={p.name} className="w-7 h-7 rounded-full border border-amber-300 object-cover" />
+                        <img src={getSafeAvatar(p.avatar, p.gender)} alt={p.name} className="w-7 h-7 rounded-full border border-amber-300 object-cover" />
                         <div>
                           <span>{p.name}</span>
                           <div className="text-[10px] text-stone-500 font-normal">{p.email || p.phone}</div>
@@ -363,129 +554,150 @@ export default function AdminPanel({
         </div>
       )}
 
-      {/* TAB 3: PSYCHOTYPES & AI COEFFICIENTS (Relocated into Admin panel!) */}
-      {activeTab === 'psychotypes' && (
+      {/* TAB 3: TEAM SETTINGS & BOT CONFIG (CAPTAIN EXCLUSIVE) */}
+      {activeTab === 'teamSettings' && (
         <div className="space-y-6">
-          <div className="bg-yellow-50 border-3 border-amber-400 rounded-2xl p-5">
-            <h3 className="font-black text-lg uppercase text-red-600 flex items-center gap-2 mb-2">
-              <Brain size={20} className="text-red-600" />
-              Коэффициенты и Тональность ИИ (Психотипы)
+          <div className="flex items-center justify-between">
+            <h3 className="font-black text-base uppercase text-red-600 flex items-center gap-2">
+              <Settings size={18} />
+              Параметры команды и настройка ИИ-Бота (Штаб Капитана)
             </h3>
-            <p className="text-xs text-amber-800 mb-4 font-medium leading-relaxed">
-              Блок управления психотипами, походным лексиконом и чувствительностью ИИ перенесен в панель Капитана команды по правилам конфиденциальности команды.
-            </p>
+            {isSavedTeamConfig && (
+              <span className="text-xs text-green-700 font-black bg-green-100 border border-green-300 px-3 py-1 rounded-xl flex items-center gap-1.5 animate-bounce">
+                <CheckCircle size={14} /> Параметры успешно сохранены!
+              </span>
+            )}
+          </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              
-              {/* Swearing Level Slider */}
-              <div className="bg-white p-4 rounded-xl border-2 border-amber-300 shadow-sm space-y-3">
-                <label className="block text-xs uppercase font-black text-amber-950">
-                  Уровень матершинных выражений (лексикон ИИ):
-                </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {(['low', 'medium', 'high'] as const).map(lvl => (
-                    <button
-                      key={lvl}
-                      type="button"
-                      onClick={() => onUpdateBotConfig({ ...botConfig, swearingLevel: lvl })}
-                      className={`text-xs font-black py-2 rounded-xl transition-all uppercase ${
-                        botConfig.swearingLevel === lvl
-                          ? 'bg-red-600 text-yellow-300 shadow-md scale-105'
-                          : 'bg-amber-100 text-amber-800 hover:bg-amber-200'
-                      }`}
-                    >
-                      {lvl === 'low' ? 'Мягкий' : lvl === 'medium' ? 'Сочный' : 'Покос'}
-                    </button>
-                  ))}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Card 1: Team Founding Year */}
+            <div className="bg-amber-50 border-2 border-amber-400 rounded-2xl p-5 space-y-4 shadow-sm">
+              <div className="flex items-center gap-2.5 pb-2 border-b border-amber-200">
+                <div className="p-2 bg-red-600 text-yellow-300 rounded-xl">
+                  <Calendar size={20} />
                 </div>
-                <p className="text-[11px] text-amber-700 font-medium">
-                  {botConfig.swearingLevel === 'low' && 'Без мата. ИИ выражается любя: "засранцы", "косячники".'}
-                  {botConfig.swearingLevel === 'medium' && 'Умеренное дружеское использование ("бля", "пиздец", "нахуй").'}
-                  {botConfig.swearingLevel === 'high' && 'Максимальный угар. Сочные народные ругательства, юмор у костра ("За пизду бля!", "Ахуенно!").'}
+                <div>
+                  <h4 className="font-black text-sm uppercase text-amber-950">
+                    Год основания команды
+                  </h4>
+                  <p className="text-[11px] font-bold text-amber-800">
+                    Официальный параметр, который заполняет капитан команды
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-xs font-black text-amber-950 uppercase">
+                  Укажите год основания туристической команды:
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="number"
+                    min="1970"
+                    max={new Date().getFullYear()}
+                    value={foundingYear}
+                    onChange={(e) => setFoundingYear(parseInt(e.target.value) || 2018)}
+                    className="w-32 px-3 py-2 bg-white border-2 border-amber-400 focus:border-red-600 rounded-xl text-base font-black text-amber-950 text-center shadow-inner outline-none"
+                  />
+                  <div className="text-xs font-bold text-amber-950 bg-amber-200/80 px-3 py-2 rounded-xl border border-amber-300">
+                    Возраст команды: <span className="text-red-700 font-black text-sm">{Math.max(1, new Date().getFullYear() - foundingYear)} лет</span>
+                  </div>
+                </div>
+                <p className="text-[11px] text-stone-600 leading-relaxed pt-1">
+                  💡 На основе этого значения рассчитывается юбилейный стаж команды «НЕГОДЯИ» на главной странице, в шапке сайта, подвале и статистических сводках.
                 </p>
               </div>
 
-              {/* Auto detect & founding year */}
-              <div className="bg-white p-4 rounded-xl border-2 border-amber-300 shadow-sm space-y-3 flex flex-col justify-between">
-                <div>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={botConfig.autoDetectPsychotype}
-                      onChange={(e) => onUpdateBotConfig({ ...botConfig, autoDetectPsychotype: e.target.checked })}
-                      className="w-4 h-4 text-red-600 border-2 border-red-500 rounded accent-red-600"
-                    />
-                    <span className="text-xs font-black text-amber-950 uppercase">
-                      Автодетект Психотипа в диалогах
-                    </span>
-                  </label>
-                  <p className="text-[11px] text-amber-700 mt-1 font-medium">
-                    ИИ автоматически распознает стиль общения и корректирует психотип участника.
-                  </p>
-                </div>
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => handleSaveTeamConfig({ foundingYear })}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-yellow-300 font-black text-xs uppercase rounded-xl shadow transition-transform active:scale-95 flex items-center gap-1.5"
+                >
+                  <CheckCircle size={14} /> Сохранить год основания
+                </button>
+              </div>
+            </div>
 
-                <div className="bg-amber-50 p-2.5 rounded-lg border border-amber-300 flex items-center justify-between">
-                  <span className="text-xs font-black text-amber-950 uppercase">Год основания команды:</span>
-                  <input
-                    type="number"
-                    min="1980"
-                    max={new Date().getFullYear()}
-                    value={botConfig.foundingYear || 2018}
-                    onChange={(e) => onUpdateBotConfig({ ...botConfig, foundingYear: Number(e.target.value) || 2018 })}
-                    className="w-20 px-2 py-1 bg-white border border-amber-400 rounded text-center text-xs font-black text-red-700"
-                  />
+            {/* Card 2: AI Bot & Psychotypes Configuration */}
+            <div className="bg-amber-50 border-2 border-amber-400 rounded-2xl p-5 space-y-4 shadow-sm">
+              <div className="flex items-center gap-2.5 pb-2 border-b border-amber-200">
+                <div className="p-2 bg-red-600 text-yellow-300 rounded-xl">
+                  <Bot size={20} />
+                </div>
+                <div>
+                  <h4 className="font-black text-sm uppercase text-amber-950">
+                    ИИ-Бот Максимка и психотипы
+                  </h4>
+                  <p className="text-[11px] font-bold text-amber-800">
+                    Поведение помощника и ролевая адаптация под участников
+                  </p>
                 </div>
               </div>
 
-            </div>
-          </div>
-
-          {/* Reference of Psychotypes */}
-          <div className="space-y-2">
-            <h4 className="font-black text-sm uppercase text-amber-950">Справочник доступных психотипов команды:</h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-              {PSYCHOTYPES.map(pt => (
-                <div key={pt.name} className="bg-amber-50 border border-amber-300 rounded-xl p-3">
-                  <span className="font-black text-xs text-red-700 uppercase block">{pt.name}</span>
-                  <p className="text-[11px] text-amber-900 mt-1 leading-tight font-medium">{pt.description}</p>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-black text-amber-950 uppercase mb-1">
+                    Уровень крепких выражений (мат бота):
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { id: 'low', label: 'Без мата', desc: 'Приличный походный' },
+                      { id: 'medium', label: 'Умеренно', desc: 'С перчинкой «бля»' },
+                      { id: 'high', label: 'Хардкор', desc: 'Полный походный угар' }
+                    ].map(lvl => (
+                      <button
+                        key={lvl.id}
+                        type="button"
+                        onClick={() => {
+                          setSwearingLevel(lvl.id as any);
+                          handleSaveTeamConfig({ swearingLevel: lvl.id as any });
+                        }}
+                        className={`p-2 rounded-xl border text-center transition-all ${
+                          swearingLevel === lvl.id
+                            ? 'bg-red-600 text-yellow-300 border-amber-950 font-black shadow-md'
+                            : 'bg-white text-amber-950 border-amber-300 hover:bg-amber-100 font-bold'
+                        }`}
+                      >
+                        <div className="text-xs uppercase">{lvl.label}</div>
+                        <div className="text-[9px] opacity-80">{lvl.desc}</div>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              ))}
-            </div>
-          </div>
 
-          {/* Update Member Psychotypes in table */}
-          <div className="space-y-2 pt-2">
-            <h4 className="font-black text-sm uppercase text-amber-950">Назначение психотипов участникам:</h4>
-            <div className="overflow-x-auto rounded-xl border border-amber-300">
-              <table className="w-full text-left text-xs bg-white">
-                <thead className="bg-amber-100 font-black text-amber-950">
-                  <tr>
-                    <th className="p-2.5">Участник</th>
-                    <th className="p-2.5">Психотип</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-amber-100">
-                  {participants.map(p => (
-                    <tr key={p.id}>
-                      <td className="p-2.5 font-bold text-amber-950">{p.name} (@{p.nickname})</td>
-                      <td className="p-2.5">
-                        <select
-                          value={p.psychotype}
-                          onChange={(e) => {
-                            const newPsychotype = e.target.value;
-                            onUpdateParticipants(participants.map(part => part.id === p.id ? { ...part, psychotype: newPsychotype } : part));
-                          }}
-                          className="bg-amber-50 border border-amber-400 rounded px-2 py-1 text-xs font-bold text-amber-950"
-                        >
-                          {PSYCHOTYPES.map(pt => (
-                            <option key={pt.name} value={pt.name}>{pt.name}</option>
-                          ))}
-                        </select>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                <div className="pt-2 border-t border-amber-200">
+                  <label className="flex items-start gap-2.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={autoDetect}
+                      onChange={(e) => {
+                        setAutoDetect(e.target.checked);
+                        handleSaveTeamConfig({ autoDetectPsychotype: e.target.checked });
+                      }}
+                      className="mt-1 w-4 h-4 accent-red-600 rounded cursor-pointer"
+                    />
+                    <div className="text-xs">
+                      <span className="font-black text-amber-950 block">
+                        Автоопределение психотипов в чате
+                      </span>
+                      <span className="text-[11px] text-stone-600 block leading-tight mt-0.5">
+                        Бот Максимка анализирует характер реплик участников и подстраивает шутки под их слабости (Excel-занудство, страх медведей, любовь к плову, песни у костра).
+                      </span>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => handleSaveTeamConfig()}
+                  className="px-4 py-2 bg-amber-200 hover:bg-amber-300 text-amber-950 font-black text-xs uppercase rounded-xl border border-amber-400 transition-colors"
+                >
+                  Применить все настройки
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1049,11 +1261,11 @@ export default function AdminPanel({
                     )}
                   </div>
 
-                  {c.imageUrl && (
+                  {c.imageUrl && c.imageUrl.trim() ? (
                     <div className="mt-2 w-24 h-16 rounded border border-amber-300 overflow-hidden">
-                      <img src={c.imageUrl} alt={c.title} className="w-full h-full object-cover" />
+                      <img src={c.imageUrl.trim()} alt={c.title} className="w-full h-full object-cover" />
                     </div>
-                  )}
+                  ) : null}
                 </div>
               );
             })}
@@ -1061,127 +1273,314 @@ export default function AdminPanel({
         </div>
       )}
 
-      {/* TAB 8: EXCURSIONS / RALLY EXPENSES */}
+      {/* TAB 7: EXCURSIONS / RALLY EXPENSES */}
       {activeTab === 'excursions' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="font-black text-base uppercase text-red-600 flex items-center gap-2">
               <Calendar size={18} />
-              Слёты и Взносы на Поход
+              Слёты и Взносы на Поход ({excursions.length})
             </h3>
             <button
               type="button"
-              onClick={() => setShowAddExcursion(!showAddExcursion)}
-              className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-yellow-300 font-black text-xs uppercase rounded-xl shadow flex items-center gap-1"
+              onClick={() => {
+                setEditingExcursion(null);
+                setShowAddExcursion(!showAddExcursion);
+              }}
+              className="px-3.5 py-1.5 bg-red-600 hover:bg-red-700 text-yellow-300 font-black text-xs uppercase rounded-xl shadow flex items-center gap-1.5 transition-colors"
             >
-              <Plus size={14} /> Добавить сбор
+              <Plus size={14} /> <span>Добавить сбор</span>
             </button>
           </div>
 
+          {/* Form: Add New Excursion */}
           {showAddExcursion && (
             <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (!newExcursion.title.trim()) return;
-                const created: Excursion = {
-                  id: 'ex_' + Date.now(),
-                  title: newExcursion.title.trim(),
-                  date: newExcursion.date || new Date().toISOString().split('T')[0],
-                  location: newExcursion.location || 'Лесная поляна',
-                  description: newExcursion.description,
-                  costPerPerson: Number(newExcursion.costBoys),
-                  costBoys: Number(newExcursion.costBoys),
-                  costGirls: Number(newExcursion.costGirls),
-                  isActive: true
-                };
-                onUpdateExcursions([...excursions, created]);
-                setShowAddExcursion(false);
-              }}
-              className="bg-amber-50 border-2 border-amber-400 rounded-2xl p-4 space-y-3"
+              onSubmit={handleCreateExcursion}
+              className="bg-amber-50 border-2 border-amber-400 rounded-2xl p-4 space-y-3 shadow-sm animate-in fade-in"
             >
+              <h4 className="font-black text-xs uppercase text-red-700">Создание нового сбора команды</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[10px] font-black text-amber-950 uppercase mb-1">Название сбора:</label>
+                  <label className="block text-[10px] font-black text-amber-950 uppercase mb-1">Название сбора / слёта:</label>
                   <input
                     type="text"
                     required
                     value={newExcursion.title}
                     onChange={(e) => setNewExcursion(prev => ({ ...prev, title: e.target.value }))}
-                    className="w-full px-3 py-2 bg-white border border-amber-300 rounded-xl text-xs font-bold text-amber-950"
+                    placeholder="Например: Большой Осенний Слёт Негодяев 2026"
+                    className="w-full px-3 py-2 bg-white border border-amber-300 rounded-xl text-xs font-bold text-amber-950 focus:border-red-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-black text-amber-950 uppercase mb-1">Локация:</label>
+                  <label className="block text-[10px] font-black text-amber-950 uppercase mb-1">Локация проведения:</label>
                   <input
                     type="text"
                     required
                     value={newExcursion.location}
                     onChange={(e) => setNewExcursion(prev => ({ ...prev, location: e.target.value }))}
-                    className="w-full px-3 py-2 bg-white border border-amber-300 rounded-xl text-xs font-bold text-amber-950"
+                    placeholder="Например: Лесное урочище, оз. Светлое"
+                    className="w-full px-3 py-2 bg-white border border-amber-300 rounded-xl text-xs font-bold text-amber-950 focus:border-red-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-amber-950 uppercase mb-1">Дата проведения:</label>
+                  <input
+                    type="date"
+                    value={newExcursion.date}
+                    onChange={(e) => setNewExcursion(prev => ({ ...prev, date: e.target.value }))}
+                    className="w-full px-3 py-2 bg-white border border-amber-300 rounded-xl text-xs font-bold text-amber-950 focus:border-red-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-amber-950 uppercase mb-1">Описание сбора (необязательно):</label>
+                  <input
+                    type="text"
+                    value={newExcursion.description}
+                    onChange={(e) => setNewExcursion(prev => ({ ...prev, description: e.target.value }))}
+                    placeholder="Программа, план, что берем..."
+                    className="w-full px-3 py-2 bg-white border border-amber-300 rounded-xl text-xs font-bold text-amber-950 focus:border-red-500"
                   />
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-amber-950 uppercase mb-1">Взнос с парней (₽):</label>
                   <input
                     type="number"
+                    min="0"
+                    step="100"
                     value={newExcursion.costBoys}
                     onChange={(e) => setNewExcursion(prev => ({ ...prev, costBoys: Number(e.target.value) }))}
-                    className="w-full px-3 py-2 bg-white border border-amber-300 rounded-xl text-xs font-bold text-amber-950"
+                    className="w-full px-3 py-2 bg-white border border-amber-300 rounded-xl text-xs font-bold text-amber-950 focus:border-red-500"
                   />
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-amber-950 uppercase mb-1">Взнос с девушек (₽):</label>
                   <input
                     type="number"
+                    min="0"
+                    step="100"
                     value={newExcursion.costGirls}
                     onChange={(e) => setNewExcursion(prev => ({ ...prev, costGirls: Number(e.target.value) }))}
-                    className="w-full px-3 py-2 bg-white border border-amber-300 rounded-xl text-xs font-bold text-amber-950"
+                    className="w-full px-3 py-2 bg-white border border-amber-300 rounded-xl text-xs font-bold text-amber-950 focus:border-red-500"
                   />
                 </div>
               </div>
-              <div className="flex justify-end gap-2">
-                <button type="button" onClick={() => setShowAddExcursion(false)} className="px-3 py-1 bg-amber-200 text-amber-900 rounded-lg text-xs font-bold">Отмена</button>
-                <button type="submit" className="px-4 py-1 bg-red-600 text-yellow-300 rounded-lg text-xs font-black uppercase shadow">Сохранить</button>
+              <div className="flex justify-end gap-2 pt-2 border-t border-amber-200">
+                <button 
+                  type="button" 
+                  onClick={() => setShowAddExcursion(false)} 
+                  className="px-3.5 py-1.5 bg-amber-200 hover:bg-amber-300 text-amber-900 rounded-xl text-xs font-bold transition-colors"
+                >
+                  Отмена
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={isSavingExcursion}
+                  className="px-5 py-1.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-yellow-300 rounded-xl text-xs font-black uppercase shadow transition-colors"
+                >
+                  {isSavingExcursion ? 'Сохранение...' : 'Сохранить сбор'}
+                </button>
               </div>
             </form>
           )}
 
-          <div className="space-y-3">
-            {excursions.map(ex => (
-              <div key={ex.id} className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 flex items-center justify-between">
-                <div>
-                  <h4 className="font-black text-sm uppercase text-amber-950">{ex.title}</h4>
-                  <p className="text-xs text-amber-800">
-                    📍 {ex.location} • 📅 {ex.date}
-                  </p>
-                  <div className="text-xs font-bold text-amber-900 mt-1">
-                    Парни: <span className="text-blue-700">{ex.costBoys || ex.costPerPerson} ₽</span> | 
-                    Девушки: <span className="text-pink-700">{ex.costGirls || Math.round(ex.costPerPerson * 0.7)} ₽</span>
-                  </div>
+          {/* Modal: Edit Existing Excursion */}
+          {editingExcursion && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
+              <div className="bg-amber-50 border-4 border-red-600 rounded-3xl p-5 sm:p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b-2 border-amber-200">
+                  <h4 className="font-black text-base uppercase text-amber-950 flex items-center gap-2">
+                    <Edit size={18} className="text-red-600" />
+                    <span>Редактирование слёта и взносов</span>
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={() => setEditingExcursion(null)}
+                    className="text-amber-800 hover:text-red-600 font-black text-sm px-2 py-1 rounded-lg hover:bg-amber-200"
+                  >
+                    ✕ Закрыть
+                  </button>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onUpdateExcursions(excursions.map(e => e.id === ex.id ? { ...e, isActive: !e.isActive } : e));
-                    }}
-                    className={`px-3 py-1 rounded-xl text-xs font-black uppercase shadow ${
-                      ex.isActive ? 'bg-emerald-600 text-white' : 'bg-amber-200 text-amber-900'
-                    }`}
-                  >
-                    {ex.isActive ? 'Активен' : 'В архиве'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onUpdateExcursions(excursions.filter(e => e.id !== ex.id))}
-                    className="p-1.5 text-red-500 hover:text-red-700"
-                  >
-                    <Trash size={16} />
-                  </button>
-                </div>
+                <form onSubmit={handleSaveEditExcursion} className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div>
+                      <label className="block text-xs font-black text-amber-950 uppercase mb-1">Название сбора:</label>
+                      <input
+                        type="text"
+                        required
+                        value={editingExcursion.title}
+                        onChange={(e) => setEditingExcursion({ ...editingExcursion, title: e.target.value })}
+                        className="w-full px-3 py-2 bg-white border-2 border-amber-300 rounded-xl text-xs font-bold text-amber-950 focus:border-red-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-black text-amber-950 uppercase mb-1">Локация проведения:</label>
+                      <input
+                        type="text"
+                        required
+                        value={editingExcursion.location}
+                        onChange={(e) => setEditingExcursion({ ...editingExcursion, location: e.target.value })}
+                        className="w-full px-3 py-2 bg-white border-2 border-amber-300 rounded-xl text-xs font-bold text-amber-950 focus:border-red-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-black text-amber-950 uppercase mb-1">Дата проведения:</label>
+                      <input
+                        type="text"
+                        value={editingExcursion.date}
+                        onChange={(e) => setEditingExcursion({ ...editingExcursion, date: e.target.value })}
+                        className="w-full px-3 py-2 bg-white border-2 border-amber-300 rounded-xl text-xs font-bold text-amber-950 focus:border-red-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-black text-amber-950 uppercase mb-1">Описание слёта:</label>
+                      <input
+                        type="text"
+                        value={editingExcursion.description || ''}
+                        onChange={(e) => setEditingExcursion({ ...editingExcursion, description: e.target.value })}
+                        className="w-full px-3 py-2 bg-white border-2 border-amber-300 rounded-xl text-xs font-bold text-amber-950 focus:border-red-500 outline-none"
+                      />
+                    </div>
+                    <div className="bg-blue-50/80 p-3 rounded-2xl border-2 border-blue-200">
+                      <label className="block text-xs font-black text-blue-950 uppercase mb-1">Взнос с парней (₽):</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="100"
+                        value={editingExcursion.costBoys ?? editingExcursion.costPerPerson}
+                        onChange={(e) => setEditingExcursion({ 
+                          ...editingExcursion, 
+                          costBoys: Number(e.target.value),
+                          costPerPerson: Number(e.target.value)
+                        })}
+                        className="w-full px-3 py-2 bg-white border-2 border-blue-300 rounded-xl text-xs font-bold text-blue-950 focus:border-blue-600 outline-none"
+                      />
+                    </div>
+                    <div className="bg-pink-50/80 p-3 rounded-2xl border-2 border-pink-200">
+                      <label className="block text-xs font-black text-pink-950 uppercase mb-1">Взнос с девушек (₽):</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="100"
+                        value={editingExcursion.costGirls ?? Math.round(editingExcursion.costPerPerson * 0.7)}
+                        onChange={(e) => setEditingExcursion({ 
+                          ...editingExcursion, 
+                          costGirls: Number(e.target.value) 
+                        })}
+                        className="w-full px-3 py-2 bg-white border-2 border-pink-300 rounded-xl text-xs font-bold text-pink-950 focus:border-pink-600 outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t-2 border-amber-200">
+                    <label className="flex items-center gap-2 cursor-pointer bg-white px-3 py-2 rounded-xl border border-amber-300">
+                      <input
+                        type="checkbox"
+                        checked={editingExcursion.isActive}
+                        onChange={(e) => setEditingExcursion({ ...editingExcursion, isActive: e.target.checked })}
+                        className="w-4 h-4 text-red-600 accent-red-600 rounded"
+                      />
+                      <span className="text-xs font-black text-amber-950 uppercase">Слёт активен (актуальный сбор)</span>
+                    </label>
+
+                    <div className="flex items-center gap-2 justify-end">
+                      <button 
+                        type="button" 
+                        onClick={() => setEditingExcursion(null)} 
+                        className="px-4 py-2 bg-amber-200 hover:bg-amber-300 text-amber-900 rounded-xl text-xs font-bold transition-colors"
+                      >
+                        Отмена
+                      </button>
+                      <button 
+                        type="submit" 
+                        disabled={isSavingExcursion}
+                        className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-black uppercase shadow-md transition-colors"
+                      >
+                        {isSavingExcursion ? 'Сохранение...' : 'Сохранить изменения'}
+                      </button>
+                    </div>
+                  </div>
+                </form>
               </div>
-            ))}
+            </div>
+          )}
+
+          <div className="space-y-3">
+            {excursions.length === 0 ? (
+              <div className="bg-amber-50 rounded-2xl p-6 text-center border-2 border-dashed border-amber-300 text-stone-600 text-xs">
+                Пока нет созданных сборов. Нажмите «Добавить сбор» выше, чтобы создать первый слёт команды.
+              </div>
+            ) : (
+              excursions.map(ex => (
+                <div key={ex.id} className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="font-black text-sm uppercase text-amber-950">{ex.title}</h4>
+                      {ex.isActive ? (
+                        <span className="bg-emerald-600 text-white text-[10px] font-black uppercase px-2 py-0.5 rounded-full">
+                          Активный слёт
+                        </span>
+                      ) : (
+                        <span className="bg-stone-300 text-stone-700 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full">
+                          В архиве
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-amber-800 mt-0.5">
+                      📍 {ex.location} • 📅 {ex.date}
+                    </p>
+                    {ex.description && (
+                      <p className="text-[11px] text-stone-600 mt-0.5 italic">{ex.description}</p>
+                    )}
+                    <div className="text-xs font-bold text-amber-900 mt-1 flex items-center gap-2">
+                      <span>Парни: <strong className="text-blue-700 font-black">{ex.costBoys || ex.costPerPerson} ₽</strong></span>
+                      <span>•</span>
+                      <span>Девушки: <strong className="text-pink-700 font-black">{ex.costGirls || Math.round(ex.costPerPerson * 0.7)} ₽</strong></span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAddExcursion(false);
+                        setEditingExcursion(ex);
+                      }}
+                      className="px-3.5 py-2 bg-yellow-400 hover:bg-yellow-500 text-amber-950 rounded-xl text-xs font-black uppercase shadow-xs border-2 border-amber-500 flex items-center gap-1.5 transition-all"
+                      title="Редактировать слёт и взносы"
+                    >
+                      <Edit size={14} className="text-red-700" />
+                      <span>Редактировать</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleToggleExcursionActive(ex)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase shadow-2xs transition-colors ${
+                        ex.isActive ? 'bg-stone-200 text-stone-800 hover:bg-stone-300' : 'bg-emerald-600 text-white hover:bg-emerald-700'
+                      }`}
+                      title={ex.isActive ? 'Переместить в архив' : 'Активировать сбор'}
+                    >
+                      {ex.isActive ? 'В архив' : 'Активировать'}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm(`Удалить слёт «${ex.title}»?`)) {
+                          handleDeleteExcursion(ex.id);
+                        }
+                      }}
+                      className="p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Удалить слёт"
+                    >
+                      <Trash size={16} />
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       )}

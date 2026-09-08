@@ -3,9 +3,12 @@ import {
   Menu, X, User, ChevronDown, LogOut, Lock, Cake, 
   BookOpen, Tent, CheckSquare, Coffee, Package, Trophy, 
   Image as ImageIcon, FolderArchive, Coins, Palette, Shield, 
-  Edit3, Sparkles, MessageSquare, ExternalLink, ArrowRight
+  Edit3, Sparkles, MessageSquare, ExternalLink, ArrowRight,
+  Compass
 } from 'lucide-react';
-import { Participant, ROLE_DEFINITIONS } from '../types';
+import { Participant, ROLE_DEFINITIONS, ThemeConfig } from '../types';
+import { getSafeAvatar } from '../utils/avatar';
+import AppearanceTab from './AppearanceTab';
 
 interface TopSiteMenuProps {
   currentUser: Participant | null;
@@ -17,6 +20,11 @@ interface TopSiteMenuProps {
   onOpenAuth: () => void;
   onLogout: () => void;
   pendingApprovalsCount?: number;
+  themeConfig: ThemeConfig;
+  onUpdateThemeConfig: (newTheme: ThemeConfig) => void;
+  customLogo?: string | null;
+  onUploadLogo: (file: File) => void;
+  onResetLogo: () => void;
 }
 
 export default function TopSiteMenu({
@@ -28,9 +36,15 @@ export default function TopSiteMenu({
   onOpenBirthdays,
   onOpenAuth,
   onLogout,
-  pendingApprovalsCount = 0
+  pendingApprovalsCount = 0,
+  themeConfig,
+  onUpdateThemeConfig,
+  customLogo,
+  onUploadLogo,
+  onResetLogo
 }: TopSiteMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [menuTab, setMenuTab] = useState<'nav' | 'appearance'>('nav');
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Close when clicking outside
@@ -103,7 +117,7 @@ export default function TopSiteMenu({
           aria-modal="true"
           aria-label="Главное меню сайта и навигация"
           onClick={(e) => e.stopPropagation()}
-          className="fixed z-50 top-3 bottom-3 right-2 sm:right-4 md:right-6 w-[calc(100vw-16px)] sm:w-[420px] max-w-[440px] bg-amber-50 border-4 border-amber-600 rounded-3xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-right-3 duration-200 flex flex-col"
+          className="fixed z-50 top-[64px] sm:top-[70px] right-2 sm:right-4 md:right-6 w-[calc(100vw-16px)] sm:w-[380px] max-w-[390px] max-h-[min(620px,calc(100vh-85px))] bg-amber-50 border-4 border-amber-600 rounded-3xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150 flex flex-col"
         >
           
           {/* Header Bar */}
@@ -111,7 +125,7 @@ export default function TopSiteMenu({
             <div className="flex items-center gap-2">
               <span className="text-lg">🧭</span>
               <h3 className="font-black text-xs uppercase tracking-tight text-white leading-tight">
-                Навигация & Профиль Негодяя
+                {menuTab === 'appearance' ? 'Оформление & Логотип' : 'Навигация & Профиль Негодяя'}
               </h3>
             </div>
             <button
@@ -123,9 +137,47 @@ export default function TopSiteMenu({
             </button>
           </div>
 
+          {/* Top Level Menu Switcher: Sections vs Appearance */}
+          <div className="flex border-b-2 border-amber-300 bg-amber-200/80 p-1.5 gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => setMenuTab('nav')}
+              className={`flex-1 py-1.5 px-3 rounded-xl text-xs font-black uppercase transition-all flex items-center justify-center gap-1.5 ${
+                menuTab === 'nav'
+                  ? 'bg-red-600 text-yellow-300 shadow-xs'
+                  : 'text-amber-950 hover:bg-amber-100'
+              }`}
+            >
+              <Compass size={14} />
+              <span>Разделы</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setMenuTab('appearance')}
+              className={`flex-1 py-1.5 px-3 rounded-xl text-xs font-black uppercase transition-all flex items-center justify-center gap-1.5 ${
+                menuTab === 'appearance'
+                  ? 'bg-red-600 text-yellow-300 shadow-xs'
+                  : 'text-amber-950 hover:bg-amber-100'
+              }`}
+            >
+              <Palette size={14} />
+              <span>Оформление</span>
+            </button>
+          </div>
+
           <div className="overflow-y-auto p-4 space-y-4 flex-1 scrollbar-thin">
-            
-            {/* 1. USER PROFILE SECTION */}
+            {menuTab === 'appearance' ? (
+              <AppearanceTab
+                themeConfig={themeConfig}
+                onUpdateThemeConfig={onUpdateThemeConfig}
+                customLogo={customLogo}
+                onUploadLogo={onUploadLogo}
+                onResetLogo={onResetLogo}
+              />
+            ) : (
+              <>
+                {/* 1. USER PROFILE SECTION */}
             <div className="bg-white border-2 border-amber-300 rounded-2xl p-3.5 shadow-sm space-y-3">
               <div className="flex items-center justify-between border-b border-amber-100 pb-2">
                 <span className="text-[10px] font-black uppercase text-amber-800 tracking-wider flex items-center gap-1">
@@ -142,7 +194,7 @@ export default function TopSiteMenu({
                 <div className="space-y-3">
                   <div className="flex items-center gap-3">
                     <img
-                      src={currentUser.avatar}
+                      src={getSafeAvatar(currentUser.avatar, currentUser.gender)}
                       alt={currentUser.name}
                       className="w-12 h-12 rounded-2xl border-2 border-amber-400 object-cover bg-amber-50 shadow"
                     />
@@ -415,7 +467,7 @@ export default function TopSiteMenu({
                         )}
                       </div>
                       <div className={`text-[10px] ${activeTab === 'admin' ? 'text-yellow-100' : 'text-stone-500'}`}>
-                        Роли команды, модерация, психотипы
+                        Роли команды, модерация, слёты
                       </div>
                     </div>
                   </div>
@@ -467,6 +519,8 @@ export default function TopSiteMenu({
                   <span>Выйти с сайта</span>
                 </button>
               </div>
+            )}
+              </>
             )}
 
           </div>

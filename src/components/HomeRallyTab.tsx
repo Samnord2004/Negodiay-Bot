@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { 
   Users, Calendar, MapPin, Coins, AlertCircle, 
   CheckCircle, Plus, Send, ChevronDown, ChevronUp, Sparkles, MessageSquare,
-  CheckSquare, Coffee, Tent, Trophy, Palette
+  CheckSquare, Coffee, Tent, Trophy, Palette, Edit
 } from 'lucide-react';
 import { Participant, Excursion, TaskItem, MenuItem, GroceryItem, Contest, CreativityIdea } from '../types';
+import { getSafeAvatar } from '../utils/avatar';
 import TasksTab from './TasksTab';
 import MenuGroceriesTab from './MenuGroceriesTab';
 import ContestsTab from './ContestsTab';
@@ -16,6 +17,7 @@ interface HomeRallyTabProps {
   participants: Participant[];
   excursions: Excursion[];
   onUpdateParticipants: (p: Participant[]) => void;
+  onUpdateExcursions?: (ex: Excursion[]) => void;
   onSelectParticipantForPayment?: (p: Participant) => void;
   onNudgeDebtor: (p: Participant) => void;
   onNavigateToTab: (tab: string) => void;
@@ -43,6 +45,7 @@ export default function HomeRallyTab({
   participants,
   excursions,
   onUpdateParticipants,
+  onUpdateExcursions,
   onNudgeDebtor,
   onNavigateToTab,
   tasks = [],
@@ -67,6 +70,18 @@ export default function HomeRallyTab({
   const [expandedParticipantId, setExpandedParticipantId] = useState<string | null>(null);
   const [paymentAmount, setPaymentAmount] = useState<number>(1000);
   const [selectedForPay, setSelectedForPay] = useState<string | null>(null);
+  
+  // Excursion editing state
+  const [editingExcursion, setEditingExcursion] = useState<Excursion | null>(null);
+  const [isSavingExcursion, setIsSavingExcursion] = useState(false);
+
+  // Skipped years editing state
+  const [editingSkippedParticipant, setEditingSkippedParticipant] = useState<Participant | null>(null);
+  const [tempSkippedYears, setTempSkippedYears] = useState<number[]>([]);
+  const [isSavingSkippedYears, setIsSavingSkippedYears] = useState(false);
+
+  // Debtor nudging feedback
+  const [nudgingId, setNudgingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (activeSubTab) {
@@ -121,6 +136,58 @@ export default function HomeRallyTab({
       word = 'года';
     }
     return `${positiveYears} ${word}`;
+  };
+
+  const handleSaveExcursion = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingExcursion) return;
+    setIsSavingExcursion(true);
+    try {
+      const res = await fetch(`/api/excursions/${editingExcursion.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editingExcursion)
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.excursions && onUpdateExcursions) {
+          onUpdateExcursions(data.excursions);
+        } else if (onUpdateExcursions) {
+          onUpdateExcursions(excursions.map(ex => ex.id === editingExcursion.id ? editingExcursion : ex));
+        }
+        setEditingExcursion(null);
+      }
+    } catch (err) {
+      console.error("Excursion update failed:", err);
+    } finally {
+      setIsSavingExcursion(false);
+    }
+  };
+
+  const handleSaveSkippedYears = async () => {
+    if (!editingSkippedParticipant) return;
+    setIsSavingSkippedYears(true);
+    try {
+      const cleanYears = tempSkippedYears.filter(y => !isNaN(y)).sort((a, b) => a - b);
+      const res = await fetch(`/api/participants/${editingSkippedParticipant.id}/skipped-years`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ skippedYears: cleanYears })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.participant) {
+          onUpdateParticipants(participants.map(p => p.id === data.participant.id ? data.participant : p));
+        } else {
+          onUpdateParticipants(participants.map(p => p.id === editingSkippedParticipant.id ? { ...p, skippedYears: cleanYears } : p));
+        }
+        setEditingSkippedParticipant(null);
+      }
+    } catch (err) {
+      console.error("Skipped years update error:", err);
+    } finally {
+      setIsSavingSkippedYears(false);
+    }
   };
 
   return (
@@ -293,7 +360,7 @@ export default function HomeRallyTab({
                     )}
                   </div>
 
-                  <div className="mt-4 pt-3 border-t-2 border-amber-200 flex items-center justify-between">
+                  <div className="mt-4 pt-3 border-t-2 border-amber-200 flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-3 text-xs font-black">
                       <span className="bg-blue-100 text-blue-900 px-2 py-1 rounded-lg border border-blue-300">
                         🧑 Парни: {ex.costBoys || ex.costPerPerson} ₽
@@ -302,6 +369,18 @@ export default function HomeRallyTab({
                         👩 Девчули: {ex.costGirls || Math.round(ex.costPerPerson * 0.7)} ₽
                       </span>
                     </div>
+
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => setEditingExcursion({ ...ex })}
+                        className="px-3 py-1.5 bg-yellow-400 hover:bg-yellow-500 text-amber-950 font-black text-xs uppercase rounded-xl border-2 border-amber-500 flex items-center gap-1.5 shadow-xs transition-all"
+                        title="Редактировать слёт и взносы"
+                      >
+                        <Edit size={14} className="text-red-700" />
+                        <span>Редактировать</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -344,7 +423,7 @@ export default function HomeRallyTab({
                         {/* Participant Avatar & Name */}
                         <td className="p-3">
                           <div className="flex items-center gap-2.5">
-                            <img src={p.avatar} alt={p.name} className="w-9 h-9 rounded-full border-2 border-amber-400 bg-white object-cover" />
+                            <img src={getSafeAvatar(p.avatar, p.gender)} alt={p.name} className="w-9 h-9 rounded-full border-2 border-amber-400 bg-white object-cover" />
                             <div>
                               <p className="font-black text-sm text-amber-950 leading-tight">{p.name}</p>
                               <span className="text-[11px] font-bold text-red-600">@{p.nickname}</span>
@@ -376,9 +455,55 @@ export default function HomeRallyTab({
                           )}
                         </td>
 
-                        {/* Team Age */}
-                        <td className="p-3 font-bold text-amber-950">
-                          {getTeamYearsText(p.joinedYear || 2018, p.skippedYears)}
+                        {/* Team Age & Skipped Years */}
+                        <td className="p-3">
+                          <div className="font-bold text-amber-950 flex items-center gap-1.5 flex-wrap">
+                            <span>{getTeamYearsText(p.joinedYear || 2018, p.skippedYears)}</span>
+                            <span className="text-[11px] text-amber-800 font-medium">(с {p.joinedYear || 2018} г.)</span>
+                          </div>
+
+                          {/* Skipped Years display */}
+                          {p.skippedYears && p.skippedYears.length > 0 ? (
+                            <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                              <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-950 border border-amber-300 px-2 py-0.5 rounded-md text-[11px] font-bold">
+                                <span>Пропущено слётов:</span>
+                                <strong className="text-red-700 font-black">{p.skippedYears.slice().sort((a,b)=>a-b).join(', ')}</strong>
+                                <span className="text-[10px] text-amber-700">({p.skippedYears.length} г.)</span>
+                              </span>
+                              {(isAdmin || currentUser?.id === p.id) && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingSkippedParticipant(p);
+                                    setTempSkippedYears(Array.isArray(p.skippedYears) ? [...p.skippedYears] : []);
+                                  }}
+                                  className="text-[10px] text-red-600 hover:text-red-800 underline font-black"
+                                  title="Изменить пропущенные года слёта"
+                                >
+                                  ред.
+                                </button>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="mt-1 flex items-center gap-1.5">
+                              <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-md text-[10px] font-bold">
+                                🎖️ Без пропусков
+                              </span>
+                              {(isAdmin || currentUser?.id === p.id) && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingSkippedParticipant(p);
+                                    setTempSkippedYears([]);
+                                  }}
+                                  className="text-[10px] text-amber-700 hover:text-red-700 underline font-medium"
+                                  title="Указать пропущенные слёты"
+                                >
+                                  + пропуск
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </td>
 
                         {/* Birthday */}
@@ -415,11 +540,17 @@ export default function HomeRallyTab({
                             {isDebtor && (
                               <button
                                 type="button"
-                                onClick={() => onNudgeDebtor(p)}
-                                className="px-2.5 py-1 bg-yellow-400 hover:bg-yellow-500 text-amber-950 font-black text-[10px] uppercase rounded-lg shadow-xs border border-amber-500"
-                                title="Отправить напоминание о взносе"
+                                onClick={async () => {
+                                  setNudgingId(p.id);
+                                  await onNudgeDebtor(p);
+                                  setTimeout(() => setNudgingId(null), 2500);
+                                }}
+                                disabled={nudgingId === p.id}
+                                className="px-2.5 py-1 bg-yellow-400 hover:bg-yellow-500 active:scale-95 text-amber-950 font-black text-[10px] uppercase rounded-lg shadow-xs border border-amber-500 flex items-center gap-1 transition-all disabled:opacity-80"
+                                title="Отправить напоминание о взносе в чат от лица Бота Максимки"
                               >
-                                Пнуть ⚡
+                                <span>⚡</span>
+                                <span>{nudgingId === p.id ? 'Пнули! ⚡' : 'Пнуть ⚡'}</span>
                               </button>
                             )}
                             <button
@@ -520,6 +651,221 @@ export default function HomeRallyTab({
             onCommentAdded={onCommentAdded}
             onStatusChanged={onStatusChanged}
           />
+        </div>
+      )}
+
+      {/* MODAL: EDIT EXCURSION */}
+      {editingExcursion && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-amber-50 border-4 border-red-600 rounded-3xl p-5 sm:p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b-2 border-amber-200">
+              <h4 className="font-black text-base uppercase text-amber-950 flex items-center gap-2">
+                <Edit size={18} className="text-red-600" />
+                <span>Редактирование слёта и взносов</span>
+              </h4>
+              <button
+                type="button"
+                onClick={() => setEditingExcursion(null)}
+                className="text-amber-800 hover:text-red-600 font-black text-sm px-2 py-1 rounded-lg hover:bg-amber-200"
+              >
+                ✕ Закрыть
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveExcursion} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div>
+                  <label className="block text-xs font-black text-amber-950 uppercase mb-1">Название сбора:</label>
+                  <input
+                    type="text"
+                    required
+                    value={editingExcursion.title}
+                    onChange={(e) => setEditingExcursion({ ...editingExcursion, title: e.target.value })}
+                    className="w-full px-3 py-2 bg-white border-2 border-amber-300 rounded-xl text-xs font-bold text-amber-950 focus:border-red-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-black text-amber-950 uppercase mb-1">Локация проведения:</label>
+                  <input
+                    type="text"
+                    required
+                    value={editingExcursion.location}
+                    onChange={(e) => setEditingExcursion({ ...editingExcursion, location: e.target.value })}
+                    className="w-full px-3 py-2 bg-white border-2 border-amber-300 rounded-xl text-xs font-bold text-amber-950 focus:border-red-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-black text-amber-950 uppercase mb-1">Дата проведения:</label>
+                  <input
+                    type="text"
+                    value={editingExcursion.date}
+                    onChange={(e) => setEditingExcursion({ ...editingExcursion, date: e.target.value })}
+                    className="w-full px-3 py-2 bg-white border-2 border-amber-300 rounded-xl text-xs font-bold text-amber-950 focus:border-red-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-black text-amber-950 uppercase mb-1">Описание слёта:</label>
+                  <input
+                    type="text"
+                    value={editingExcursion.description || ''}
+                    onChange={(e) => setEditingExcursion({ ...editingExcursion, description: e.target.value })}
+                    className="w-full px-3 py-2 bg-white border-2 border-amber-300 rounded-xl text-xs font-bold text-amber-950 focus:border-red-500 outline-none"
+                  />
+                </div>
+                <div className="bg-blue-50/80 p-3 rounded-2xl border-2 border-blue-200">
+                  <label className="block text-xs font-black text-blue-950 uppercase mb-1">Взнос с парней (₽):</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="100"
+                    value={editingExcursion.costBoys ?? editingExcursion.costPerPerson}
+                    onChange={(e) => setEditingExcursion({ 
+                      ...editingExcursion, 
+                      costBoys: Number(e.target.value),
+                      costPerPerson: Number(e.target.value)
+                    })}
+                    className="w-full px-3 py-2 bg-white border-2 border-blue-300 rounded-xl text-xs font-bold text-blue-950 focus:border-blue-600 outline-none"
+                  />
+                </div>
+                <div className="bg-pink-50/80 p-3 rounded-2xl border-2 border-pink-200">
+                  <label className="block text-xs font-black text-pink-950 uppercase mb-1">Взнос с девушек (₽):</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="100"
+                    value={editingExcursion.costGirls ?? Math.round(editingExcursion.costPerPerson * 0.7)}
+                    onChange={(e) => setEditingExcursion({ 
+                      ...editingExcursion, 
+                      costGirls: Number(e.target.value) 
+                    })}
+                    className="w-full px-3 py-2 bg-white border-2 border-pink-300 rounded-xl text-xs font-bold text-pink-950 focus:border-pink-600 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t-2 border-amber-200">
+                <label className="flex items-center gap-2 cursor-pointer bg-white px-3 py-2 rounded-xl border border-amber-300">
+                  <input
+                    type="checkbox"
+                    checked={editingExcursion.isActive}
+                    onChange={(e) => setEditingExcursion({ ...editingExcursion, isActive: e.target.checked })}
+                    className="w-4 h-4 text-red-600 accent-red-600 rounded"
+                  />
+                  <span className="text-xs font-black text-amber-950 uppercase">Слёт активен (актуальный сбор)</span>
+                </label>
+
+                <div className="flex items-center gap-2 justify-end">
+                  <button 
+                    type="button" 
+                    onClick={() => setEditingExcursion(null)} 
+                    className="px-4 py-2 bg-amber-200 hover:bg-amber-300 text-amber-900 rounded-xl text-xs font-bold transition-colors"
+                  >
+                    Отмена
+                  </button>
+                  <button 
+                    type="submit" 
+                    disabled={isSavingExcursion}
+                    className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-black uppercase shadow-md transition-colors"
+                  >
+                    {isSavingExcursion ? 'Сохранение...' : 'Сохранить изменения'}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: EDIT SKIPPED YEARS */}
+      {editingSkippedParticipant && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-amber-50 border-4 border-amber-500 rounded-3xl p-5 sm:p-6 w-full max-w-lg shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b-2 border-amber-200">
+              <h4 className="font-black text-base uppercase text-amber-950 flex items-center gap-2">
+                <span>🏕️ Пропущенные года слёта</span>
+              </h4>
+              <button
+                type="button"
+                onClick={() => setEditingSkippedParticipant(null)}
+                className="text-amber-800 hover:text-red-600 font-black text-sm px-2 py-1 rounded-lg hover:bg-amber-200"
+              >
+                ✕ Закрыть
+              </button>
+            </div>
+
+            <div className="bg-white p-3.5 rounded-2xl border-2 border-amber-300 flex items-center gap-3">
+              <img
+                src={getSafeAvatar(editingSkippedParticipant.avatar, editingSkippedParticipant.gender)}
+                alt={editingSkippedParticipant.name}
+                className="w-12 h-12 rounded-xl object-cover border-2 border-amber-400"
+              />
+              <div>
+                <div className="font-black text-sm text-amber-950">{editingSkippedParticipant.name}</div>
+                <div className="text-xs text-amber-700 font-bold">
+                  @{editingSkippedParticipant.nickname} • в команде с {editingSkippedParticipant.joinedYear || 2018} г.
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black uppercase text-amber-950">
+                  Выберите года, когда участник пропустил слёт:
+                </span>
+                <span className="text-xs font-black text-red-700">
+                  {tempSkippedYears.length > 0 ? `Пропусков: ${tempSkippedYears.length}` : 'Без пропусков'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                {[2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026].map(year => {
+                  const isSkipped = tempSkippedYears.includes(year);
+                  return (
+                    <button
+                      key={year}
+                      type="button"
+                      onClick={() => {
+                        if (isSkipped) {
+                          setTempSkippedYears(prev => prev.filter(y => y !== year));
+                        } else {
+                          setTempSkippedYears(prev => [...prev, year].sort((a, b) => a - b));
+                        }
+                      }}
+                      className={`py-2 px-3 rounded-xl text-xs font-black border-2 transition-all ${
+                        isSkipped
+                          ? 'bg-red-600 text-yellow-300 border-red-800 shadow-xs'
+                          : 'bg-white text-amber-950 border-amber-300 hover:bg-amber-100'
+                      }`}
+                    >
+                      {year} {isSkipped ? '✕ Пропуск' : '✓ Был'}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <p className="text-[11px] text-amber-800 italic pt-1">
+                Расчёт стажа: {getTeamYearsText(editingSkippedParticipant.joinedYear || 2018, tempSkippedYears)} чистой верности команде.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t-2 border-amber-200">
+              <button
+                type="button"
+                onClick={() => setEditingSkippedParticipant(null)}
+                className="px-4 py-2 bg-amber-200 hover:bg-amber-300 text-amber-900 rounded-xl text-xs font-bold transition-colors"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                disabled={isSavingSkippedYears}
+                onClick={handleSaveSkippedYears}
+                className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-black uppercase shadow-md transition-colors"
+              >
+                {isSavingSkippedYears ? 'Сохранение...' : 'Сохранить пропуски'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

@@ -273,11 +273,11 @@ export default function CreativityTab({
                   </p>
 
                   {/* Optional Image */}
-                  {idea.imageUrl && (
+                  {idea.imageUrl && idea.imageUrl.trim() ? (
                     <div className="mb-3 rounded-xl overflow-hidden border-2 border-amber-200 aspect-video bg-amber-50">
-                      <img src={idea.imageUrl} alt={idea.title} className="w-full h-full object-cover" />
+                      <img src={idea.imageUrl.trim()} alt={idea.title} className="w-full h-full object-cover" />
                     </div>
-                  )}
+                  ) : null}
 
                   {/* Materials & Budget estimation */}
                   {idea.materialsBudget && (
@@ -465,9 +465,9 @@ export default function CreativityTab({
                   onClick={() => fileInputRef.current?.click()}
                   className="border-2 border-dashed border-amber-400 hover:border-red-500 rounded-xl p-3 text-center cursor-pointer bg-white"
                 >
-                  {previewImage ? (
+                  {previewImage && previewImage.trim() ? (
                     <div className="space-y-1">
-                      <img src={previewImage} alt="Эскиз" className="max-h-32 mx-auto rounded object-contain" />
+                      <img src={previewImage.trim()} alt="Эскиз" className="max-h-32 mx-auto rounded object-contain" />
                       <p className="text-[11px] font-bold text-emerald-700">Нажмите для замены</p>
                     </div>
                   ) : (
