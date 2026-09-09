@@ -6,7 +6,7 @@ import {
   TrendingUp, Wallet, Lock, Unlock, ArrowDownCircle, ArrowUpCircle
 } from 'lucide-react';
 import { FundRecord, Participant, FundExpense } from '../types';
-import { getSafeAvatar } from '../utils/avatar';
+import { getSafeAvatar, getParticipantAvatar } from '../utils/avatar';
 
 interface FundTabProps {
   fundRecords: FundRecord[];
@@ -564,7 +564,7 @@ export default function FundTab({
           <div className="flex items-center gap-3">
             {currentTreasurer && (
               <img 
-                src={getSafeAvatar(currentTreasurer.avatar, currentTreasurer.gender)} 
+                src={getParticipantAvatar(currentTreasurer)} 
                 alt={currentTreasurer.name} 
                 className="w-13 h-13 rounded-full border-3 border-emerald-500 bg-amber-100 object-cover shrink-0" 
               />
@@ -689,7 +689,7 @@ export default function FundTab({
                   <tr key={p.id} className="hover:bg-amber-50/60 transition-colors">
                     <td className="px-4 py-2.5 sticky left-0 bg-white z-10 flex items-center gap-2.5">
                       <img 
-                        src={getSafeAvatar(p.avatar, p.gender)} 
+                        src={getParticipantAvatar(p)} 
                         alt={p.name} 
                         className="w-8 h-8 rounded-full border border-amber-300 bg-amber-100 object-cover shrink-0" 
                       />

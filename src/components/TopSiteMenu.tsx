@@ -7,7 +7,7 @@ import {
   Compass
 } from 'lucide-react';
 import { Participant, ROLE_DEFINITIONS, ThemeConfig } from '../types';
-import { getSafeAvatar } from '../utils/avatar';
+import { getSafeAvatar, getParticipantAvatar } from '../utils/avatar';
 import AppearanceTab from './AppearanceTab';
 
 interface TopSiteMenuProps {
@@ -194,7 +194,7 @@ export default function TopSiteMenu({
                 <div className="space-y-3">
                   <div className="flex items-center gap-3">
                     <img
-                      src={getSafeAvatar(currentUser.avatar, currentUser.gender)}
+                      src={getParticipantAvatar(currentUser)}
                       alt={currentUser.name}
                       className="w-12 h-12 rounded-2xl border-2 border-amber-400 object-cover bg-amber-50 shadow"
                     />

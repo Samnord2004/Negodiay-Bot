@@ -1,6 +1,9 @@
-import React, { useState } from 'react';
-import { Shield, Lock, Fingerprint, Smartphone, Mail, UserPlus, LogIn, AlertTriangle, CheckCircle, Flame } from 'lucide-react';
-import { Participant, AccountStatus } from '../types';
+import React, { useState, useEffect } from 'react';
+import { 
+  Shield, Lock, Fingerprint, Smartphone, Mail, UserPlus, 
+  LogIn, AlertTriangle, CheckCircle, Flame, Key, RefreshCw, ArrowLeft, Send
+} from 'lucide-react';
+import { Participant } from '../types';
 import Logo from './Logo';
 
 interface TeamAuthGateProps {
@@ -8,6 +11,7 @@ interface TeamAuthGateProps {
   onLogin: (user: Participant) => void;
   onLogout: () => void;
   participants: Participant[];
+  customLogo?: string | null;
   onRegisterSuccess: (newUser: Participant) => void;
 }
 
@@ -16,26 +20,76 @@ export default function TeamAuthGate({
   onLogin,
   onLogout,
   participants,
+  customLogo,
   onRegisterSuccess
 }: TeamAuthGateProps) {
-  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [authMode, setAuthMode] = useState<'login' | 'register' | 'forgot'>('login');
+  
+  // Dynamic logo matching captain's configuration
+  const [effectiveLogo, setEffectiveLogo] = useState<string | null>(() => {
+    if (customLogo && customLogo.trim()) return customLogo.trim();
+    try {
+      const saved = localStorage.getItem('negodyai_custom_logo');
+      if (saved && saved.trim()) return saved.trim();
+    } catch (e) {}
+    return null;
+  });
+
+  useEffect(() => {
+    if (customLogo && customLogo.trim()) {
+      setEffectiveLogo(customLogo.trim());
+    } else {
+      try {
+        const saved = localStorage.getItem('negodyai_custom_logo');
+        if (saved && saved.trim()) setEffectiveLogo(saved.trim());
+      } catch (e) {}
+    }
+  }, [customLogo]);
+
+  // Sync latest logo directly from server configuration
+  useEffect(() => {
+    fetch('/api/sync')
+      .then(res => res.json())
+      .then(data => {
+        if (data?.botConfig?.customLogo) {
+          setEffectiveLogo(data.botConfig.customLogo);
+          try {
+            localStorage.setItem('negodyai_custom_logo', data.botConfig.customLogo);
+          } catch (e) {}
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Login form state
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  // Registration state
+  // Registration state (NO verification codes required, Captain approval only)
   const [regName, setRegName] = useState('');
   const [regNickname, setRegNickname] = useState('');
   const [regGender, setRegGender] = useState<'male' | 'female'>('male');
-  const [regMethod, setRegMethod] = useState<'sms' | 'email'>('sms');
-  const [regContact, setRegContact] = useState('');
+  const [regPhone, setRegPhone] = useState('');
+  const [regEmail, setRegEmail] = useState('');
+  const [regBirthday, setRegBirthday] = useState('');
   const [regPassword, setRegPassword] = useState('');
-  const [regCode, setRegCode] = useState('');
-  const [codeSent, setCodeSent] = useState(false);
   const [regBiometric, setRegBiometric] = useState(true);
   const [regError, setRegError] = useState('');
   const [regSuccessMessage, setRegSuccessMessage] = useState('');
+
+  // Password recovery state
+  const [recoveryMethod, setRecoveryMethod] = useState<'captain' | 'email'>('captain');
+  const [recoveryNickname, setRecoveryNickname] = useState('');
+  const [recoveryNote, setRecoveryNote] = useState('');
+  const [recoveryEmail, setRecoveryEmail] = useState('');
+  const [recoveryCode, setRecoveryCode] = useState('');
+  const [recoveryNewPassword, setRecoveryNewPassword] = useState('');
+  const [recoveryStep, setRecoveryStep] = useState<'request' | 'verify' | 'done'>('request');
+  const [recoveryError, setRecoveryError] = useState('');
+  const [recoverySuccess, setRecoverySuccess] = useState('');
+  const [recoveryLoading, setRecoveryLoading] = useState(false);
 
   // Handle Login
   const handleLoginSubmit = async (e: React.FormEvent) => {
@@ -106,31 +160,12 @@ export default function TeamAuthGate({
     onLogin(p);
   };
 
-  // Send verification code
-  const handleSendCode = () => {
-    if (!regContact.trim()) {
-      setRegError(regMethod === 'sms' ? 'Укажите номер телефона' : 'Укажите e-mail');
-      return;
-    }
-    setRegError('');
-    setCodeSent(true);
-    setRegCode('1234'); // Default test code
-  };
-
-  // Submit Registration
+  // Submit Registration (Completely without verification codes!)
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setRegError('');
     if (!regName.trim() || !regNickname.trim()) {
       setRegError('Заполните ФИО и позывной');
-      return;
-    }
-    if (!codeSent) {
-      setRegError('Сначала запросите код верификации');
-      return;
-    }
-    if (regCode !== '1234' && regCode.length !== 4) {
-      setRegError('Неверный код верификации');
       return;
     }
 
@@ -139,11 +174,10 @@ export default function TeamAuthGate({
       const payload = {
         name: regName.trim(),
         nickname: regNickname.trim().replace(/^@/, ''),
-        email: regMethod === 'email' ? regContact.trim() : '',
-        phone: regMethod === 'sms' ? regContact.trim() : '',
-        password: regPassword || '123',
-        verificationMethod: regMethod,
-        verificationCode: regCode,
+        email: regEmail.trim(),
+        phone: regPhone.trim(),
+        birthday: regBirthday.trim(),
+        password: regPassword.trim() || '123',
         biometricEnabled: regBiometric,
         gender: regGender
       };
@@ -163,8 +197,8 @@ export default function TeamAuthGate({
     } catch (err) {
       const fallbackUser: Participant = {
         id: 'p_' + Date.now(),
-        name: regName,
-        nickname: regNickname,
+        name: regName.trim(),
+        nickname: regNickname.trim().replace(/^@/, ''),
         psychotype: 'Новичок-энтузиаст',
         avatar: regGender === 'female' ? '💁‍♀️' : '🏕️',
         paidAmount: 0,
@@ -176,7 +210,10 @@ export default function TeamAuthGate({
         gender: regGender,
         role: 'member',
         accountStatus: 'pending',
-        biometricEnabled: regBiometric
+        biometricEnabled: regBiometric,
+        email: regEmail.trim(),
+        phone: regPhone.trim(),
+        birthday: regBirthday.trim()
       };
       setRegSuccessMessage('Заявка успешно отправлена! Ожидайте подтверждения от Капитана команды.');
       onRegisterSuccess(fallbackUser);
@@ -185,14 +222,50 @@ export default function TeamAuthGate({
     }
   };
 
+  // Submit password recovery request to Captain
+  const handleCaptainRecoverySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRecoveryError('');
+    setRecoveryLoading(true);
+    try {
+      const res = await fetch('/api/auth/request-captain-reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          identifier: recoveryNickname.trim(),
+          note: recoveryNote.trim()
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setRecoverySuccess(`Запрос принят! Сообщите Капитану или дождитесь, пока он установит новый пароль.`);
+        setRecoveryStep('done');
+      } else {
+        setRecoveryError(data.error || 'Не удалось отправить запрос');
+      }
+    } catch (err) {
+      setRecoveryError('Сбой связи с сервером');
+    } finally {
+      setRecoveryLoading(false);
+    }
+  };
+
   // If user is logged in but pending approval
   if (currentUser && currentUser.accountStatus === 'pending') {
     return (
       <div className="min-h-screen bg-gradient-to-b from-amber-950 via-stone-900 to-black text-amber-50 flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-stone-900/90 border-4 border-amber-500/80 rounded-3xl p-6 sm:p-8 shadow-2xl text-center space-y-5 backdrop-blur-md">
-          <div className="w-20 h-20 mx-auto bg-amber-500/20 border-2 border-amber-500 rounded-full flex items-center justify-center text-4xl shadow-inner">
-            ⏳
-          </div>
+          {effectiveLogo ? (
+            <img 
+              src={effectiveLogo} 
+              alt="Лого команды" 
+              className="w-20 h-20 mx-auto object-contain bg-white/95 border-2 border-amber-500 rounded-2xl p-1 shadow-lg" 
+            />
+          ) : (
+            <div className="w-20 h-20 mx-auto bg-amber-500/20 border-2 border-amber-500 rounded-full flex items-center justify-center text-4xl shadow-inner">
+              ⏳
+            </div>
+          )}
           <div className="space-y-1">
             <span className="text-[10px] font-black tracking-widest text-amber-400 uppercase bg-amber-950/60 px-3 py-1 rounded-full border border-amber-500/40">
               Статус проверки
@@ -207,7 +280,7 @@ export default function TeamAuthGate({
 
           <div className="bg-amber-950/40 border border-amber-500/30 rounded-2xl p-4 text-left text-xs space-y-2 text-amber-200">
             <p className="font-semibold leading-relaxed">
-              Ваша заявка принята в закрытый реестр <span className="text-yellow-400 font-bold">туристической команды "Негодяи"</span> и ожидает одобрения Капитаном команды.
+              Ваша заявка принята в закрытый реестр <span className="text-yellow-400 font-bold">туристической команды &laquo;Негодяи&raquo;</span> и ожидает одобрения Капитаном команды.
             </p>
             <p className="text-[11px] text-amber-300/80 font-medium">
               Информация на сайте (история команды, слёты, взносы, задачи, инвентарь и фотогалерея) станет доступна сразу после одобрения профиля.
@@ -218,9 +291,10 @@ export default function TeamAuthGate({
             <button
               type="button"
               onClick={() => window.location.reload()}
-              className="w-full bg-amber-500 hover:bg-amber-400 text-stone-950 font-black uppercase text-xs py-3 rounded-xl transition-all shadow-lg active:scale-95"
+              className="w-full bg-amber-500 hover:bg-amber-400 text-stone-950 font-black uppercase text-xs py-3 rounded-xl transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2"
             >
-              🔄 Проверить статус одобрения
+              <RefreshCw size={14} />
+              Проверить статус одобрения
             </button>
             <button
               type="button"
@@ -245,13 +319,21 @@ export default function TeamAuthGate({
       <header className="relative z-10 border-b border-stone-800 bg-stone-900/60 backdrop-blur-md px-4 py-3">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <Logo size="sm" />
+            {effectiveLogo ? (
+              <img 
+                src={effectiveLogo} 
+                alt="Логотип команды" 
+                className="w-10 h-10 object-contain bg-white border-2 border-red-600 rounded-xl p-0.5 shadow-md shrink-0" 
+              />
+            ) : (
+              <Logo size="sm" />
+            )}
             <div>
               <span className="text-[10px] uppercase font-black tracking-wider text-amber-500 block">
                 Закрытый портал
               </span>
               <h1 className="text-sm sm:text-base font-black uppercase text-yellow-400 tracking-tight leading-none">
-                туристической команды "Негодяи"
+                туристической команды &laquo;Негодяи&raquo;
               </h1>
             </div>
           </div>
@@ -264,15 +346,23 @@ export default function TeamAuthGate({
 
       {/* Center Auth Card */}
       <main className="relative z-10 flex-1 flex items-center justify-center p-4 sm:p-6 my-4">
-        <div className="max-w-md w-full bg-stone-900/95 border-2 border-amber-500/50 rounded-3xl p-6 sm:p-8 shadow-2xl backdrop-blur-xl space-y-6">
+        <div className="max-w-md w-full bg-stone-900/95 border-2 border-amber-500/50 rounded-3xl p-6 sm:p-8 shadow-2xl backdrop-blur-xl space-y-5">
           
           {/* Logo & Headline */}
           <div className="text-center space-y-2">
-            <div className="inline-flex p-3 bg-stone-950 rounded-2xl border border-amber-500/30 shadow-inner mb-1">
-              <Logo size="md" />
+            <div className="inline-flex p-2.5 bg-stone-950 rounded-2xl border border-amber-500/30 shadow-inner mb-1">
+              {effectiveLogo ? (
+                <img 
+                  src={effectiveLogo} 
+                  alt="Логотип команды «Негодяи»" 
+                  className="h-20 sm:h-24 w-32 sm:w-36 object-contain bg-white/95 rounded-xl p-1.5 border-2 border-amber-400 shadow-md" 
+                />
+              ) : (
+                <Logo size="md" />
+              )}
             </div>
             <h2 className="text-xl sm:text-2xl font-black uppercase text-yellow-400 tracking-tight">
-              туристической команды "Негодяи"
+              туристической команды &laquo;Негодяи&raquo;
             </h2>
             <p className="text-xs font-semibold text-stone-300 leading-relaxed">
               Добро пожаловать в закрытый штаб слётов. Вход и доступ к информации открыт исключительно зарегистрированным участникам.
@@ -286,7 +376,7 @@ export default function TeamAuthGate({
               onClick={() => { setAuthMode('login'); setLoginError(''); }}
               className={`py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
                 authMode === 'login'
-                  ? 'bg-amber-500 text-stone-950 shadow-md'
+                  ? 'bg-amber-500 text-stone-950 shadow-md font-black'
                   : 'text-stone-400 hover:text-stone-200'
               }`}
             >
@@ -297,7 +387,7 @@ export default function TeamAuthGate({
               onClick={() => { setAuthMode('register'); setRegError(''); }}
               className={`py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
                 authMode === 'register'
-                  ? 'bg-red-600 text-yellow-300 shadow-md'
+                  ? 'bg-red-600 text-yellow-300 shadow-md font-black'
                   : 'text-stone-400 hover:text-stone-200'
               }`}
             >
@@ -305,7 +395,7 @@ export default function TeamAuthGate({
             </button>
           </div>
 
-          {/* FORM: LOGIN */}
+          {/* FORM 1: LOGIN */}
           {authMode === 'login' && (
             <form onSubmit={handleLoginSubmit} className="space-y-4">
               {loginError && (
@@ -330,9 +420,23 @@ export default function TeamAuthGate({
               </div>
 
               <div className="space-y-1">
-                <label className="block text-[11px] uppercase font-black text-amber-400">
-                  Пароль:
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="block text-[11px] uppercase font-black text-amber-400">
+                    Пароль:
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthMode('forgot');
+                      setRecoveryNickname(identifier);
+                      setRecoveryError('');
+                      setRecoverySuccess('');
+                    }}
+                    className="text-[11px] font-bold text-amber-300 hover:text-yellow-200 underline transition-colors"
+                  >
+                    Забыли пароль?
+                  </button>
+                </div>
                 <input
                   type="password"
                   required
@@ -347,9 +451,10 @@ export default function TeamAuthGate({
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full bg-amber-500 hover:bg-amber-400 text-stone-950 font-black uppercase text-xs py-3 rounded-xl shadow-lg transition-all active:scale-95 disabled:opacity-50"
+                  className="w-full bg-amber-500 hover:bg-amber-400 text-stone-950 font-black uppercase text-xs py-3 rounded-xl shadow-lg transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
                 >
-                  {isLoading ? 'Проверка...' : 'Войти в штаб команды'}
+                  <LogIn size={15} />
+                  <span>{isLoading ? 'Проверка...' : 'Войти в штаб команды'}</span>
                 </button>
 
                 <button
@@ -388,7 +493,7 @@ export default function TeamAuthGate({
             </form>
           )}
 
-          {/* FORM: REGISTRATION */}
+          {/* FORM 2: REGISTRATION (NO VERIFICATION CODES, STRICTLY CAPTAIN MODERATION) */}
           {authMode === 'register' && (
             <form onSubmit={handleRegisterSubmit} className="space-y-3.5">
               {regError && (
@@ -404,10 +509,18 @@ export default function TeamAuthGate({
                 </div>
               )}
 
+              {/* Strict Notice: No codes, approved by Captain */}
+              <div className="bg-amber-950/50 border border-amber-500/40 rounded-xl p-2.5 text-[11px] text-amber-200 flex items-start gap-2">
+                <Shield size={16} className="text-amber-400 shrink-0 mt-0.5" />
+                <span>
+                  <strong>Проверочный код не требуется!</strong> Доступ на портал закрытый. Ваша заявка сразу поступит Капитану команды для активации профиля.
+                </span>
+              </div>
+
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block text-[10px] uppercase font-black text-amber-400 mb-1">
-                    ФИО / Имя:
+                    ФИО / Имя *:
                   </label>
                   <input
                     type="text"
@@ -415,12 +528,12 @@ export default function TeamAuthGate({
                     value={regName}
                     onChange={(e) => setRegName(e.target.value)}
                     placeholder="Иван Петров"
-                    className="w-full bg-stone-950 border border-stone-700 rounded-xl px-3 py-2 text-xs text-stone-100 font-bold outline-none"
+                    className="w-full bg-stone-950 border border-stone-700 focus:border-amber-400 rounded-xl px-3 py-2 text-xs text-stone-100 font-bold outline-none"
                   />
                 </div>
                 <div>
                   <label className="block text-[10px] uppercase font-black text-amber-400 mb-1">
-                    Позывной в команде:
+                    Позывной в команде *:
                   </label>
                   <input
                     type="text"
@@ -428,12 +541,12 @@ export default function TeamAuthGate({
                     value={regNickname}
                     onChange={(e) => setRegNickname(e.target.value)}
                     placeholder="Бармалей"
-                    className="w-full bg-stone-950 border border-stone-700 rounded-xl px-3 py-2 text-xs text-stone-100 font-bold outline-none"
+                    className="w-full bg-stone-950 border border-stone-700 focus:border-amber-400 rounded-xl px-3 py-2 text-xs text-stone-100 font-bold outline-none"
                   />
                 </div>
               </div>
 
-              {/* Gender selector */}
+              {/* Gender selector for team camping budget */}
               <div>
                 <label className="block text-[10px] uppercase font-black text-amber-400 mb-1">
                   Участие в походной смете:
@@ -464,77 +577,58 @@ export default function TeamAuthGate({
                 </div>
               </div>
 
-              {/* Verification method */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-[10px] uppercase font-black text-amber-400">
-                    Верификация контакта:
+              {/* Contact fields without codes */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[10px] uppercase font-black text-amber-400 mb-1">
+                    Телефон (для связи):
                   </label>
-                  <div className="flex gap-2 text-[10px] font-bold">
-                    <button
-                      type="button"
-                      onClick={() => { setRegMethod('sms'); setCodeSent(false); }}
-                      className={`px-2 py-0.5 rounded ${regMethod === 'sms' ? 'bg-amber-500 text-stone-950' : 'text-stone-400'}`}
-                    >
-                      СМС
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { setRegMethod('email'); setCodeSent(false); }}
-                      className={`px-2 py-0.5 rounded ${regMethod === 'email' ? 'bg-amber-500 text-stone-950' : 'text-stone-400'}`}
-                    >
-                      E-mail
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex gap-2">
                   <input
-                    type={regMethod === 'sms' ? 'tel' : 'email'}
-                    required
-                    value={regContact}
-                    onChange={(e) => setRegContact(e.target.value)}
-                    placeholder={regMethod === 'sms' ? '+7 (999) 000-00-00' : 'user@domain.com'}
-                    className="flex-1 bg-stone-950 border border-stone-700 rounded-xl px-3 py-2 text-xs text-stone-100 font-bold outline-none"
+                    type="tel"
+                    value={regPhone}
+                    onChange={(e) => setRegPhone(e.target.value)}
+                    placeholder="+7 (999) 000-00-00"
+                    className="w-full bg-stone-950 border border-stone-700 focus:border-amber-400 rounded-xl px-3 py-2 text-xs text-stone-100 font-bold outline-none"
                   />
-                  <button
-                    type="button"
-                    onClick={handleSendCode}
-                    className="px-3 py-2 bg-stone-800 hover:bg-stone-700 text-amber-300 text-xs font-bold rounded-xl whitespace-nowrap"
-                  >
-                    {codeSent ? 'Код отправлен' : 'Получить код'}
-                  </button>
                 </div>
+                <div>
+                  <label className="block text-[10px] uppercase font-black text-amber-400 mb-1">
+                    E-mail:
+                  </label>
+                  <input
+                    type="email"
+                    value={regEmail}
+                    onChange={(e) => setRegEmail(e.target.value)}
+                    placeholder="user@mail.ru"
+                    className="w-full bg-stone-950 border border-stone-700 focus:border-amber-400 rounded-xl px-3 py-2 text-xs text-stone-100 font-bold outline-none"
+                  />
+                </div>
+              </div>
 
-                {codeSent && (
-                  <div className="flex items-center gap-2 pt-1">
-                    <input
-                      type="text"
-                      maxLength={4}
-                      value={regCode}
-                      onChange={(e) => setRegCode(e.target.value)}
-                      placeholder="Код: 1234"
-                      className="w-28 text-center tracking-widest bg-stone-950 border border-amber-500 rounded-xl px-3 py-1.5 text-xs text-yellow-400 font-black outline-none"
-                    />
-                    <span className="text-[10px] text-stone-400 font-medium">
-                      (тестовый проверочный код: 1234)
-                    </span>
-                  </div>
-                )}
+              {/* Birthday */}
+              <div>
+                <label className="block text-[10px] uppercase font-black text-amber-400 mb-1">
+                  Дата рождения (для поздравлений в походе):
+                </label>
+                <input
+                  type="date"
+                  value={regBirthday}
+                  onChange={(e) => setRegBirthday(e.target.value)}
+                  className="w-full bg-stone-950 border border-stone-700 focus:border-amber-400 rounded-xl px-3 py-2 text-xs text-stone-100 font-bold outline-none"
+                />
               </div>
 
               {/* Password */}
               <div>
                 <label className="block text-[10px] uppercase font-black text-amber-400 mb-1">
-                  Придумайте пароль:
+                  Пароль для входа:
                 </label>
                 <input
                   type="password"
-                  required
                   value={regPassword}
                   onChange={(e) => setRegPassword(e.target.value)}
-                  placeholder="Минимум 4 символа"
-                  className="w-full bg-stone-950 border border-stone-700 rounded-xl px-3 py-2 text-xs text-stone-100 font-bold outline-none"
+                  placeholder="Минимум 3 символа (по умолч.: 123)"
+                  className="w-full bg-stone-950 border border-stone-700 focus:border-amber-400 rounded-xl px-3 py-2 text-xs text-stone-100 font-bold outline-none"
                 />
               </div>
 
@@ -555,11 +649,95 @@ export default function TeamAuthGate({
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full bg-red-600 hover:bg-red-500 text-yellow-300 font-black uppercase text-xs py-3 rounded-xl shadow-lg transition-all active:scale-95 disabled:opacity-50 mt-2"
+                className="w-full bg-red-600 hover:bg-red-500 text-yellow-300 font-black uppercase text-xs py-3 rounded-xl shadow-lg transition-all active:scale-95 disabled:opacity-50 mt-2 flex items-center justify-center gap-2"
               >
-                {isLoading ? 'Отправка...' : 'Подать заявку в команду'}
+                <Send size={14} />
+                <span>{isLoading ? 'Отправка заявки...' : 'Подать заявку Капитану'}</span>
               </button>
             </form>
+          )}
+
+          {/* FORM 3: FORGOT PASSWORD / PASSWORD RECOVERY */}
+          {authMode === 'forgot' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between border-b border-stone-800 pb-2">
+                <h3 className="text-sm font-black uppercase text-yellow-400 flex items-center gap-2">
+                  <Key size={16} className="text-amber-400" />
+                  Восстановление пароля
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => { setAuthMode('login'); setRecoveryError(''); setRecoverySuccess(''); }}
+                  className="text-xs text-stone-400 hover:text-stone-200 flex items-center gap-1"
+                >
+                  <ArrowLeft size={13} />
+                  <span>Назад к входу</span>
+                </button>
+              </div>
+
+              {recoveryError && (
+                <div className="bg-red-950/60 border border-red-500 text-red-200 text-xs p-3 rounded-xl flex items-center gap-2">
+                  <AlertTriangle size={16} className="text-red-400 shrink-0" />
+                  <span>{recoveryError}</span>
+                </div>
+              )}
+
+              {recoverySuccess ? (
+                <div className="bg-emerald-950/60 border border-emerald-500 text-emerald-200 text-xs p-4 rounded-xl text-center space-y-2">
+                  <CheckCircle size={28} className="text-emerald-400 mx-auto" />
+                  <p className="font-bold">{recoverySuccess}</p>
+                  <button
+                    type="button"
+                    onClick={() => { setAuthMode('login'); setRecoverySuccess(''); }}
+                    className="mt-2 px-4 py-1.5 bg-amber-500 text-stone-950 font-black text-xs uppercase rounded-xl"
+                  >
+                    Вернуться ко входу
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={handleCaptainRecoverySubmit} className="space-y-3">
+                  <p className="text-xs text-stone-300 leading-relaxed">
+                    Забыли пароль? Отправьте запрос Капитану команды. Он мгновенно установит вам новый пароль в Штабе (вкладка &laquo;Заявки&raquo;).
+                  </p>
+
+                  <div>
+                    <label className="block text-[10px] uppercase font-black text-amber-400 mb-1">
+                      Ваш позывной или ФИО *:
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={recoveryNickname}
+                      onChange={(e) => setRecoveryNickname(e.target.value)}
+                      placeholder="Например: Бармалей или Иван Петров"
+                      className="w-full bg-stone-950 border border-stone-700 focus:border-amber-400 rounded-xl px-3 py-2 text-xs text-stone-100 font-bold outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] uppercase font-black text-amber-400 mb-1">
+                      Телефон или контакт для связи (опционально):
+                    </label>
+                    <input
+                      type="text"
+                      value={recoveryNote}
+                      onChange={(e) => setRecoveryNote(e.target.value)}
+                      placeholder="+7 999 123-45-67 или сообщение"
+                      className="w-full bg-stone-950 border border-stone-700 focus:border-amber-400 rounded-xl px-3 py-2 text-xs text-stone-100 font-bold outline-none"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={recoveryLoading}
+                    className="w-full bg-red-600 hover:bg-red-500 text-yellow-300 font-black uppercase text-xs py-2.5 rounded-xl shadow transition-all flex items-center justify-center gap-1.5 mt-2"
+                  >
+                    <Send size={14} />
+                    <span>{recoveryLoading ? 'Отправка...' : 'Отправить запрос Капитану'}</span>
+                  </button>
+                </form>
+              )}
+            </div>
           )}
 
         </div>

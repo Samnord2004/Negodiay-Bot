@@ -85,6 +85,7 @@ export const ROLE_DEFINITIONS: Record<UserRole, RoleInfo> = {
 };
 
 export type AccountStatus = 'pending' | 'active' | 'rejected';
+export type AvatarSource = 'front' | 'profile';
 
 export interface Participant {
   id: string;
@@ -92,6 +93,9 @@ export interface Participant {
   nickname: string;
   psychotype: string; // e.g. "Весельчак-балагур", "Душнила-контролёр", "Паникёр-истерик", "Тихий философ", "Бунтарь-анархист"
   avatar: string;
+  photoFront?: string; // Фотография анфас
+  photoProfile?: string; // Фотография профиль
+  selectedAvatarSource?: AvatarSource; // Выбор фото для аватарки: 'front' (анфас) или 'profile' (профиль)
   paidAmount: number;
   totalCost: number;
   debtAmount: number; // calculated: totalCost - paidAmount

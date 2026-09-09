@@ -4,7 +4,7 @@ import {
   Search, Users, Smile, ArrowDown, Shield, Award, CheckCheck, X
 } from 'lucide-react';
 import { ChatMessage, Participant } from '../types';
-import { getSafeAvatar } from '../utils/avatar';
+import { getSafeAvatar, getParticipantAvatar } from '../utils/avatar';
 
 interface InternalChatProps {
   messages: ChatMessage[];
@@ -162,7 +162,7 @@ export default function InternalChat({
                   p => p.nickname === msg.senderNickname || p.name === msg.senderName
                 );
                 const senderAvatar = senderParticipant
-                  ? getSafeAvatar(senderParticipant.avatar, senderParticipant.gender)
+                  ? getParticipantAvatar(senderParticipant)
                   : getSafeAvatar(null);
 
                 return (
@@ -333,7 +333,7 @@ export default function InternalChat({
               {participants.map(p => (
                 <div key={p.id} className="pt-1.5 pb-1 px-2 flex items-center gap-2 hover:bg-amber-50 rounded-lg">
                   <div className="relative">
-                    <img src={getSafeAvatar(p.avatar, p.gender)} alt={p.name} className="w-8 h-8 rounded-full border border-amber-300 object-cover" />
+                    <img src={getParticipantAvatar(p)} alt={p.name} className="w-8 h-8 rounded-full border border-amber-300 object-cover" />
                     <span className="w-2 h-2 rounded-full bg-emerald-500 absolute bottom-0 right-0 border border-white"></span>
                   </div>
                   <div className="min-w-0 flex-1">

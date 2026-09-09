@@ -269,6 +269,11 @@ export async function initDb() {
       UPDATE participants SET avatar = '' WHERE avatar LIKE '%dicebear.com/7.x/bottts%';
       -- Fix legacy Captain name if still stuck as 'Лёха Навигатор'
       UPDATE participants SET name = 'Капитан команды', nickname = 'Captain' WHERE id = '3' AND (name = 'Лёха Навигатор' OR nickname = 'navigator_alex');
+
+      -- Migration for front/profile photos and avatar source
+      ALTER TABLE participants ADD COLUMN IF NOT EXISTS photo_front TEXT;
+      ALTER TABLE participants ADD COLUMN IF NOT EXISTS photo_profile TEXT;
+      ALTER TABLE participants ADD COLUMN IF NOT EXISTS selected_avatar_source TEXT DEFAULT 'front';
     `);
 
     // Load or seed Participants
@@ -276,9 +281,9 @@ export async function initDb() {
     if (resP.rows.length === 0) {
       for (const p of initialParticipants) {
         await pool.query(
-          `INSERT INTO participants (id, name, nickname, psychotype, avatar, paid_amount, total_cost, debt_amount, joined, birthday, joined_year, skipped_years, gender, role, email, phone, password, account_status, biometric_enabled)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19) ON CONFLICT (id) DO NOTHING`,
-          [p.id, p.name, p.nickname, p.psychotype, p.avatar, p.paidAmount, p.totalCost, p.debtAmount, p.joined, p.birthday || null, p.joinedYear, JSON.stringify(p.skippedYears), p.gender, p.role || 'admin', p.email || '', p.phone || '', p.password || 'admin', p.accountStatus || 'active', p.biometricEnabled || false]
+          `INSERT INTO participants (id, name, nickname, psychotype, avatar, photo_front, photo_profile, selected_avatar_source, paid_amount, total_cost, debt_amount, joined, birthday, joined_year, skipped_years, gender, role, email, phone, password, account_status, biometric_enabled)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22) ON CONFLICT (id) DO NOTHING`,
+          [p.id, p.name, p.nickname, p.psychotype, p.avatar, p.photoFront || null, p.photoProfile || null, p.selectedAvatarSource || 'front', p.paidAmount, p.totalCost, p.debtAmount, p.joined, p.birthday || null, p.joinedYear, JSON.stringify(p.skippedYears), p.gender, p.role || 'admin', p.email || '', p.phone || '', p.password || 'admin', p.accountStatus || 'active', p.biometricEnabled || false]
         );
       }
       cacheParticipants = [...initialParticipants];
@@ -289,6 +294,9 @@ export async function initDb() {
         nickname: r.nickname,
         psychotype: r.psychotype,
         avatar: (r.avatar && !r.avatar.includes("dicebear.com/7.x/bottts")) ? r.avatar : "",
+        photoFront: r.photo_front || undefined,
+        photoProfile: r.photo_profile || undefined,
+        selectedAvatarSource: (r.selected_avatar_source as 'front' | 'profile') || 'front',
         paidAmount: Number(r.paid_amount),
         totalCost: Number(r.total_cost),
         debtAmount: Number(r.debt_amount),
@@ -311,6 +319,20 @@ export async function initDb() {
         cacheParticipants[0].role = 'admin';
         cacheParticipants[0].password = 'admin';
         await pool.query("UPDATE participants SET role = 'admin', password = 'admin' WHERE id = $1", [cacheParticipants[0].id]);
+      }
+
+      // Ensure Andrey Samoilov (Cowboy) is in participants
+      const hasCowboy = cacheParticipants.some(p => p.id === 'cowboy_1' || p.nickname?.toLowerCase() === 'ковбой' || p.name?.toLowerCase().includes('самойлов'));
+      if (!hasCowboy) {
+        const cowboy = initialParticipants.find(p => p.id === 'cowboy_1');
+        if (cowboy) {
+          await pool.query(
+            `INSERT INTO participants (id, name, nickname, psychotype, avatar, photo_front, photo_profile, selected_avatar_source, paid_amount, total_cost, debt_amount, joined, birthday, joined_year, skipped_years, gender, role, email, phone, password, account_status, biometric_enabled)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22) ON CONFLICT (id) DO NOTHING`,
+            [cowboy.id, cowboy.name, cowboy.nickname, cowboy.psychotype, cowboy.avatar, cowboy.photoFront || null, cowboy.photoProfile || null, cowboy.selectedAvatarSource || 'front', cowboy.paidAmount, cowboy.totalCost, cowboy.debtAmount, cowboy.joined, cowboy.birthday || null, cowboy.joinedYear, JSON.stringify(cowboy.skippedYears), cowboy.gender, cowboy.role || 'admin', cowboy.email || '', cowboy.phone || '', cowboy.password || '123', cowboy.accountStatus || 'active', cowboy.biometricEnabled || false]
+          );
+          cacheParticipants.push(cowboy);
+        }
       }
     }
 
@@ -672,16 +694,17 @@ export async function saveParticipants(participants: Participant[]) {
   try {
     for (const p of cacheParticipants) {
       await pool.query(
-        `INSERT INTO participants (id, name, nickname, psychotype, avatar, paid_amount, total_cost, debt_amount, joined, birthday, joined_year, skipped_years, gender, role, email, phone, password, account_status, biometric_enabled)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+        `INSERT INTO participants (id, name, nickname, psychotype, avatar, photo_front, photo_profile, selected_avatar_source, paid_amount, total_cost, debt_amount, joined, birthday, joined_year, skipped_years, gender, role, email, phone, password, account_status, biometric_enabled)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
          ON CONFLICT (id) DO UPDATE SET
          name = EXCLUDED.name, nickname = EXCLUDED.nickname, psychotype = EXCLUDED.psychotype, avatar = EXCLUDED.avatar,
+         photo_front = EXCLUDED.photo_front, photo_profile = EXCLUDED.photo_profile, selected_avatar_source = EXCLUDED.selected_avatar_source,
          paid_amount = EXCLUDED.paid_amount, total_cost = EXCLUDED.total_cost, debt_amount = EXCLUDED.debt_amount,
          joined = EXCLUDED.joined, birthday = EXCLUDED.birthday, joined_year = EXCLUDED.joined_year,
          skipped_years = EXCLUDED.skipped_years, gender = EXCLUDED.gender,
          role = EXCLUDED.role, email = EXCLUDED.email, phone = EXCLUDED.phone, password = EXCLUDED.password,
          account_status = EXCLUDED.account_status, biometric_enabled = EXCLUDED.biometric_enabled`,
-        [p.id, p.name, p.nickname, p.psychotype || 'Весельчак-балагур', p.avatar || '', p.paidAmount || 0, p.totalCost || 0, p.debtAmount || 0, p.joined !== false, p.birthday || null, p.joinedYear || 2018, JSON.stringify(p.skippedYears || []), p.gender || 'boy', p.role || 'member', p.email || '', p.phone || '', p.password || '123', p.accountStatus || 'active', p.biometricEnabled || false]
+        [p.id, p.name, p.nickname, p.psychotype || 'Весельчак-балагур', p.avatar || '', p.photoFront || null, p.photoProfile || null, p.selectedAvatarSource || 'front', p.paidAmount || 0, p.totalCost || 0, p.debtAmount || 0, p.joined !== false, p.birthday || null, p.joinedYear || 2018, JSON.stringify(p.skippedYears || []), p.gender || 'boy', p.role || 'member', p.email || '', p.phone || '', p.password || '123', p.accountStatus || 'active', p.biometricEnabled || false]
       );
     }
   } catch (e) {
@@ -696,16 +719,17 @@ export async function addOrUpdateParticipant(p: Participant) {
 
   try {
     await pool.query(
-      `INSERT INTO participants (id, name, nickname, psychotype, avatar, paid_amount, total_cost, debt_amount, joined, birthday, joined_year, skipped_years, gender, role, email, phone, password, account_status, biometric_enabled)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+      `INSERT INTO participants (id, name, nickname, psychotype, avatar, photo_front, photo_profile, selected_avatar_source, paid_amount, total_cost, debt_amount, joined, birthday, joined_year, skipped_years, gender, role, email, phone, password, account_status, biometric_enabled)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
        ON CONFLICT (id) DO UPDATE SET
        name = EXCLUDED.name, nickname = EXCLUDED.nickname, psychotype = EXCLUDED.psychotype, avatar = EXCLUDED.avatar,
+       photo_front = EXCLUDED.photo_front, photo_profile = EXCLUDED.photo_profile, selected_avatar_source = EXCLUDED.selected_avatar_source,
        paid_amount = EXCLUDED.paid_amount, total_cost = EXCLUDED.total_cost, debt_amount = EXCLUDED.debt_amount,
        joined = EXCLUDED.joined, birthday = EXCLUDED.birthday, joined_year = EXCLUDED.joined_year,
        skipped_years = EXCLUDED.skipped_years, gender = EXCLUDED.gender,
        role = EXCLUDED.role, email = EXCLUDED.email, phone = EXCLUDED.phone, password = EXCLUDED.password,
        account_status = EXCLUDED.account_status, biometric_enabled = EXCLUDED.biometric_enabled`,
-      [p.id, p.name, p.nickname, p.psychotype || 'Весельчак-балагур', p.avatar || '', p.paidAmount || 0, p.totalCost || 0, p.debtAmount || 0, p.joined !== false, p.birthday || null, p.joinedYear || 2018, JSON.stringify(p.skippedYears || []), p.gender || 'boy', p.role || 'member', p.email || '', p.phone || '', p.password || '123', p.accountStatus || 'active', p.biometricEnabled || false]
+      [p.id, p.name, p.nickname, p.psychotype || 'Весельчак-балагур', p.avatar || '', p.photoFront || null, p.photoProfile || null, p.selectedAvatarSource || 'front', p.paidAmount || 0, p.totalCost || 0, p.debtAmount || 0, p.joined !== false, p.birthday || null, p.joinedYear || 2018, JSON.stringify(p.skippedYears || []), p.gender || 'boy', p.role || 'member', p.email || '', p.phone || '', p.password || '123', p.accountStatus || 'active', p.biometricEnabled || false]
     );
   } catch (e) {
     console.error("PSQL addOrUpdateParticipant error:", e);
@@ -714,8 +738,10 @@ export async function addOrUpdateParticipant(p: Participant) {
 
 export async function deleteParticipant(id: string) {
   cacheParticipants = cacheParticipants.filter(p => p.id !== id);
+  cacheFundRecords = cacheFundRecords.filter(f => f.participantId !== id);
   try {
     await pool.query("DELETE FROM participants WHERE id = $1", [id]);
+    await pool.query("DELETE FROM fund_records WHERE participant_id = $1", [id]);
   } catch (e) {
     console.error("PSQL deleteParticipant error:", e);
   }

@@ -4,7 +4,7 @@ import {
   Sparkles, X, ChevronRight, Clock, Heart 
 } from 'lucide-react';
 import { Participant } from '../types';
-import { getSafeAvatar } from '../utils/avatar';
+import { getSafeAvatar, getParticipantAvatar } from '../utils/avatar';
 import { getBirthdayRemainingDays, formatBirthdayShort } from '../utils/dateUtils';
 
 interface BirthdayNotificationsProps {
@@ -87,7 +87,7 @@ export default function BirthdayNotifications({
                   <div key={participant.id} className="bg-amber-950/40 p-3 rounded-lg flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <img 
-                        src={getSafeAvatar(participant.avatar, participant.gender)} 
+                        src={getParticipantAvatar(participant)} 
                         alt={participant.name} 
                         className="w-12 h-12 rounded-full border-2 border-yellow-300 bg-amber-100 object-cover" 
                       />
@@ -203,7 +203,7 @@ export default function BirthdayNotifications({
                 >
                   <div className="flex items-center gap-3">
                     <img 
-                      src={getSafeAvatar(participant.avatar, participant.gender)} 
+                      src={getParticipantAvatar(participant)} 
                       alt={participant.name} 
                       className="w-10 h-10 rounded-full border border-stone-200 bg-stone-100 object-cover" 
                     />

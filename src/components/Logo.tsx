@@ -3,15 +3,36 @@ import React from 'react';
 interface LogoProps {
   className?: string;
   size?: 'sm' | 'md' | 'lg' | 'xl';
+  customLogo?: string | null;
 }
 
-export default function Logo({ className = '', size = 'md' }: LogoProps) {
+export default function Logo({ className = '', size = 'md', customLogo }: LogoProps) {
   const sizeClasses = {
     sm: 'h-12 w-16',
     md: 'h-24 w-32',
     lg: 'h-48 w-64',
     xl: 'h-64 w-80'
   };
+
+  const activeLogo = customLogo || (() => {
+    try {
+      return localStorage.getItem('negodyai_custom_logo') || null;
+    } catch (e) {
+      return null;
+    }
+  })();
+
+  if (activeLogo && activeLogo.trim()) {
+    return (
+      <div className={`flex flex-col items-center justify-center select-none ${className}`}>
+        <img
+          src={activeLogo.trim()}
+          alt="Логотип команды Негодяи"
+          className={`${sizeClasses[size]} object-contain transition-transform duration-300 hover:scale-105`}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className={`flex flex-col items-center justify-center select-none ${className}`}>

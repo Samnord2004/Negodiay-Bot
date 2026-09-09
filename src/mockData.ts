@@ -135,6 +135,69 @@ export const initialParticipants: Participant[] = [
     accountStatus: "active",
     biometricEnabled: true,
     password: "admin"
+  },
+  {
+    id: "cowboy_1",
+    name: "Андрей Самойлов",
+    nickname: "Ковбой",
+    psychotype: "Весельчак-балагур",
+    avatar: "",
+    paidAmount: 8500,
+    totalCost: 8500,
+    debtAmount: 0,
+    joined: true,
+    birthday: "19.05.1981",
+    joinedYear: 1993,
+    skippedYears: [],
+    gender: "male",
+    role: "admin",
+    email: "ASamoilov81@gmail.com",
+    phone: "+7 916 555-43-21",
+    accountStatus: "active",
+    biometricEnabled: true,
+    password: "123"
+  },
+  {
+    id: "p_alex",
+    name: "Алексей Смирнов",
+    nickname: "Лёха Навигатор",
+    psychotype: "Душнила-контролёр",
+    avatar: "",
+    paidAmount: 8500,
+    totalCost: 8500,
+    debtAmount: 0,
+    joined: true,
+    birthday: "12.04.1985",
+    joinedYear: 2018,
+    skippedYears: [],
+    gender: "male",
+    role: "assistant_captain",
+    email: "navigator@negodyai.club",
+    phone: "+7 925 111-22-33",
+    accountStatus: "active",
+    biometricEnabled: true,
+    password: "123"
+  },
+  {
+    id: "p_irina",
+    name: "Ирина Васильева",
+    nickname: "Иришка Булочка",
+    psychotype: "Весельчак-балагур",
+    avatar: "",
+    paidAmount: 8500,
+    totalCost: 8500,
+    debtAmount: 0,
+    joined: true,
+    birthday: "05.09.1990",
+    joinedYear: 2019,
+    skippedYears: [],
+    gender: "female",
+    role: "treasurer",
+    email: "treasurer@negodyai.club",
+    phone: "+7 903 222-33-44",
+    accountStatus: "active",
+    biometricEnabled: true,
+    password: "123"
   }
 ];
 
@@ -196,36 +259,52 @@ export const initialBotConfig: BotConfig = {
 
 export const initialTasks: TaskItem[] = [
   {
-    id: "t1",
+    id: "t_cowboy_1",
     title: "Починить генератор (дым валит чёрный, походу надо менять свечу и слить старый бензин)",
-    assigneeId: "3",
-    assigneeName: "Капитан команды",
+    assigneeId: "cowboy_1",
+    assigneeName: "Андрей Самойлов (Ковбой)",
     deadline: "2026-06-10",
     isCompleted: false
   },
   {
-    id: "t2",
-    title: "Не забыть взять палатки (особенно большую 4-местную, иначе спать на сырых шишках)",
-    assigneeId: "3",
-    assigneeName: "Капитан команды",
+    id: "t_cowboy_2",
+    title: "Подготовить регламент спортивных соревнований слёта и флаги лагеря",
+    assigneeId: "cowboy_1",
+    assigneeName: "Андрей Самойлов (Ковбой)",
     deadline: "2026-06-11",
     isCompleted: true
   },
   {
-    id: "t3",
-    title: "Закупить сочный курдюк, баранину и хорошую зиру на коронный лесной плов",
-    assigneeId: "3",
-    assigneeName: "Капитан команды",
+    id: "t_cowboy_3",
+    title: "Закупить сочный курдюк, свежую баранину и зиру на коронный лесной плов Негодяев",
+    assigneeId: "cowboy_1",
+    assigneeName: "Андрей Самойлов (Ковбой)",
     deadline: "2026-06-12",
     isCompleted: false
   },
   {
-    id: "t4",
-    title: "Брызгалки от клещей купить (самые зверские, 20 штук)",
+    id: "t1",
+    title: "Проверить большую 4-местную палатку и лагерный тент",
     assigneeId: "3",
     assigneeName: "Капитан команды",
+    deadline: "2026-06-10",
+    isCompleted: true
+  },
+  {
+    id: "t2",
+    title: "Брызгалки от клещей купить (самые зверские, 20 штук на всю банду)",
+    assigneeId: "p_alex",
+    assigneeName: "Лёха Навигатор",
     deadline: "2026-06-08",
     isCompleted: false
+  },
+  {
+    id: "t3",
+    title: "Сверить ведомость ежемесячных взносов фонда и смету закупки",
+    assigneeId: "p_irina",
+    assigneeName: "Иришка Булочка",
+    deadline: "2026-06-09",
+    isCompleted: true
   }
 ];
 
@@ -268,13 +347,13 @@ export const initialGroceryItems: GroceryItem[] = [
 ];
 
 export const initialInventoryItems: InventoryItem[] = [
-  { id: "inv1", name: "Казан чугунный походный (20 литров)", condition: "нормальное", responsibleName: "Капитан команды" },
-  { id: "inv2", name: "Бензогенератор барахлящий (требует свечу)", condition: "пришло в негодность", responsibleName: "Капитан команды" },
-  { id: "inv3", name: "Укупорный тент защитный 4x6м", condition: "нормальное", responsibleName: "Капитан команды" },
-  { id: "inv4", name: "Гитара походная шестиструнная (но без струны 'ми')", condition: "нормальное", responsibleName: "Капитан команды" },
-  { id: "inv5", name: "Костровые треноги и цепи для котла", condition: "нормальное", responsibleName: "Капитан команды" },
+  { id: "inv1", name: "Казан чугунный походный (20 литров)", condition: "нормальное", responsibleName: "Андрей Самойлов (Ковбой)" },
+  { id: "inv2", name: "Бензогенератор барахлящий (требует свечу)", condition: "пришло в негодность", responsibleName: "Андрей Самойлов (Ковбой)" },
+  { id: "inv3", name: "Укупорный тент защитный 4x6м", condition: "нормальное", responsibleName: "Андрей Самойлов (Ковбой)" },
+  { id: "inv4", name: "Гитара походная шестиструнная (но без струны 'ми')", condition: "нормальное", responsibleName: "Саня Запевала" },
+  { id: "inv5", name: "Костровые треноги и цепи для котла", condition: "нормальное", responsibleName: "Лёха Навигатор" },
   { id: "inv6", name: "Большой надувной матрас в палатку", condition: "нормальное", responsibleName: "Капитан команды" },
-  { id: "inv7", name: "Портативная Bluetooth колонка с музлом", condition: "нормальное", responsibleName: "Капитан команды" }
+  { id: "inv7", name: "Портативная Bluetooth колонка с музлом", condition: "нормальное", responsibleName: "Андрей Самойлов (Ковбой)" }
 ];
 
 export const ORIENTEERING_SIGNS_SVG = `data:image/svg+xml,${encodeURIComponent(`
@@ -406,9 +485,9 @@ export const initialContests: Contest[] = [
   {
     id: "c1",
     title: "Спортивное ориентирование и знаки",
-    captainId: "3",
+    captainId: "p_alex",
     captainName: "Лёха Навигатор",
-    teamMemberIds: ["3"],
+    teamMemberIds: ["cowboy_1", "3", "p_alex"],
     place: "2-е место",
     description: "Прохождение лесного маршрута по спортивной карте с нахождением 8 контрольных пунктов (КП). Отметка производится электронными чипами. Засчитывается наименьшее время и точность.",
     schedule: "Суббота, 14:00 - Регистрация и выдача карт; 14:30 - Старт участников по очереди каждые 2 мин; 17:00 - Финиш и подсчет результатов.",
@@ -431,9 +510,9 @@ export const initialContests: Contest[] = [
   {
     id: "c2",
     title: "Туристические узлы и техника туризма",
-    captainId: "3",
-    captainName: "Лёха Навигатор",
-    teamMemberIds: ["3"],
+    captainId: "cowboy_1",
+    captainName: "Андрей Самойлов (Ковбой)",
+    teamMemberIds: ["cowboy_1", "3", "p_alex"],
     place: "1-е место",
     description: "Соревнование по правильной и скоростной вязке 6 ключевых туристических узлов (Восьмёрка, Булинь, Прямой, Прусик, Ткацкий, Выбленочный) и натягиванию навесной переправы.",
     schedule: "Суббота, 17:30 - Проверка личной обвязки и карабинов; 18:00 - Скоростная вязка узлов 'вслепую' и под счет.",
@@ -456,9 +535,9 @@ export const initialContests: Contest[] = [
   {
     id: "c3",
     title: "Музыкальный баттл у костра",
-    captainId: "3",
-    captainName: "Лёха Навигатор",
-    teamMemberIds: ["3"],
+    captainId: "cowboy_1",
+    captainName: "Андрей Самойлов (Ковбой)",
+    teamMemberIds: ["cowboy_1", "3"],
     place: "1-е место",
     description: "Баттл костровых песен под гитару. Конкурсанты исполняют походные хиты, авторские частушки и лирику. Оценивается громкость, артистизм и эмоциональный отклик команды.",
     schedule: "Суббота, 21:00 - Открытие музыкального ринга у большого ночного костра.",
@@ -467,9 +546,9 @@ export const initialContests: Contest[] = [
   {
     id: "c4",
     title: "Кулинарный шедевр из тушняка",
-    captainId: "3",
-    captainName: "Лёха Навигатор",
-    teamMemberIds: ["3"],
+    captainId: "p_irina",
+    captainName: "Иришка Булочка",
+    teamMemberIds: ["cowboy_1", "3", "p_irina"],
     place: "Призёр",
     description: "Приготовление ресторанного блюда на костре из ограниченного набора продуктов: банка тушенки ГОСТ, крупа, овощи и костровые специи.",
     schedule: "Воскресенье, 13:00 - Начало готовки у мангальной зоны.",
@@ -659,10 +738,30 @@ export const initialFundRecords: FundRecord[] = [
   { id: "fund_3_2", participantId: "3", participantName: "Капитан команды", participantNickname: "Captain", year: 2026, month: 2, amount: 500, isPaid: true, paidAt: "2026-01-01", note: "Годовой аванс" },
   { id: "fund_3_3", participantId: "3", participantName: "Капитан команды", participantNickname: "Captain", year: 2026, month: 3, amount: 500, isPaid: true, paidAt: "2026-01-01", note: "Годовой аванс" },
   { id: "fund_3_4", participantId: "3", participantName: "Капитан команды", participantNickname: "Captain", year: 2026, month: 4, amount: 500, isPaid: true, paidAt: "2026-01-01", note: "Годовой аванс" },
-  { id: "fund_3_5", participantId: "3", participantName: "Капитан команды", participantNickname: "Captain", year: 2026, month: 5, amount: 500, isPaid: true, paidAt: "2026-01-01", note: "Годовой аванс" }
+  { id: "fund_3_5", participantId: "3", participantName: "Капитан команды", participantNickname: "Captain", year: 2026, month: 5, amount: 500, isPaid: true, paidAt: "2026-01-01", note: "Годовой аванс" },
+  // 2026 records for Andrey Samoilov (Cowboy)
+  { id: "fund_cowboy_1", participantId: "cowboy_1", participantName: "Андрей Самойлов", participantNickname: "Ковбой", year: 2026, month: 1, amount: 500, isPaid: true, paidAt: "2026-01-05", note: "Членский взнос" },
+  { id: "fund_cowboy_2", participantId: "cowboy_1", participantName: "Андрей Самойлов", participantNickname: "Ковбой", year: 2026, month: 2, amount: 500, isPaid: true, paidAt: "2026-02-03", note: "Членский взнос" },
+  { id: "fund_cowboy_3", participantId: "cowboy_1", participantName: "Андрей Самойлов", participantNickname: "Ковбой", year: 2026, month: 3, amount: 500, isPaid: true, paidAt: "2026-03-01", note: "Членский взнос" },
+  { id: "fund_cowboy_4", participantId: "cowboy_1", participantName: "Андрей Самойлов", participantNickname: "Ковбой", year: 2026, month: 4, amount: 500, isPaid: true, paidAt: "2026-04-02", note: "Членский взнос" },
+  { id: "fund_cowboy_5", participantId: "cowboy_1", participantName: "Андрей Самойлов", participantNickname: "Ковбой", year: 2026, month: 5, amount: 500, isPaid: true, paidAt: "2026-05-01", note: "Членский взнос" }
 ];
 
 export const initialCreativityIdeas: CreativityIdea[] = [
+  {
+    id: "idea_cowboy_1",
+    category: "camp_design",
+    title: "Кованый флюгер с черепом Негодяев и прожектор лагеря",
+    description: "Установить на верхушке мачты лагеря вращающийся жестяной флюгер-череп и мощный диодный прожектор для ночного освещения поляны.",
+    authorId: "cowboy_1",
+    authorName: "Андрей Самойлов (Ковбой)",
+    materialsBudget: "Стальной лист, подшипник, диод 50W, провод 20м. Бюджет: ~2 800 ₽",
+    status: "approved",
+    votes: 2,
+    votedUserIds: ["cowboy_1", "3"],
+    comments: [],
+    createdAt: "2026-08-15"
+  },
   {
     id: "idea_1",
     category: "camp_design",
@@ -672,8 +771,8 @@ export const initialCreativityIdeas: CreativityIdea[] = [
     authorName: "Лёха Навигатор",
     materialsBudget: "Бревна сухостоя, джутовая веревка 50м, брезент, светодиодная лента на аккумуляторе 12В. Бюджет: ~3 500 ₽",
     status: "approved",
-    votes: 1,
-    votedUserIds: ["3"],
+    votes: 2,
+    votedUserIds: ["3", "cowboy_1"],
     comments: [],
     createdAt: "2026-08-10"
   },
@@ -686,8 +785,8 @@ export const initialCreativityIdeas: CreativityIdea[] = [
     authorName: "Лёха Навигатор",
     materialsBudget: "Мешковина 20м, перья, аквагрим походный, колокольчики, джут. Бюджет: ~2 200 ₽",
     status: "in_progress",
-    votes: 1,
-    votedUserIds: ["3"],
+    votes: 2,
+    votedUserIds: ["3", "cowboy_1"],
     comments: [],
     createdAt: "2026-08-12"
   },

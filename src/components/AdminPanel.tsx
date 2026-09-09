@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Settings, Users, CheckSquare, Coffee, Package, Award, 
-  Plus, Trash, Edit, CheckCircle, AlertTriangle, Shield, 
+  Plus, Trash, Trash2, Edit, CheckCircle, AlertTriangle, Shield, 
   Brain, Sliders, UserCheck, UserX, Key, Calendar, MapPin, RefreshCw, Flame, Bot
 } from 'lucide-react';
 import { 
@@ -9,8 +9,9 @@ import {
   InventoryItem, Contest, Excursion, BotConfig, InventoryCondition,
   UserRole, ROLE_DEFINITIONS
 } from '../types';
-import { getSafeAvatar } from '../utils/avatar';
+import { getSafeAvatar, getParticipantAvatar } from '../utils/avatar';
 import { PSYCHOTYPES } from '../mockData';
+import DeleteParticipantModal from './DeleteParticipantModal';
 
 interface AdminPanelProps {
   isAdmin: boolean;
@@ -35,6 +36,7 @@ interface AdminPanelProps {
   onUpdateBotConfig: (b: BotConfig) => void;
   onApproveUser: (userId: string) => void;
   onRejectUser: (userId: string) => void;
+  onDeleteUser?: (userId: string) => Promise<void> | void;
   onSetRole: (userId: string, role: UserRole) => void;
 }
 
@@ -61,6 +63,7 @@ export default function AdminPanel({
   onUpdateBotConfig,
   onApproveUser,
   onRejectUser,
+  onDeleteUser,
   onSetRole
 }: AdminPanelProps) {
   const [activeTab, setActiveTab] = useState<'pending' | 'roles' | 'teamSettings' | 'tasks' | 'menu' | 'inventory' | 'contests' | 'excursions'>('pending');
@@ -147,6 +150,33 @@ export default function AdminPanel({
   const [customNewPassword, setCustomNewPassword] = useState('123');
   const [isResettingPassword, setIsResettingPassword] = useState(false);
   const [resetSuccessMessage, setResetSuccessMessage] = useState<string | null>(null);
+
+  // Participant Deletion State
+  const [participantToDelete, setParticipantToDelete] = useState<Participant | null>(null);
+
+  const handleConfirmDeleteParticipant = async (id: string) => {
+    if (onDeleteUser) {
+      await onDeleteUser(id);
+    } else {
+      try {
+        const res = await fetch('/api/admin/delete-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: id })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.participants) {
+            onUpdateParticipants(data.participants);
+          } else {
+            onUpdateParticipants(participants.filter(p => p.id !== id));
+          }
+        }
+      } catch (err) {
+        console.error("Delete user error:", err);
+      }
+    }
+  };
 
   const loadResetRequests = async () => {
     setIsLoadingResetRequests(true);
@@ -495,7 +525,7 @@ export default function AdminPanel({
                       <div key={req.id} className="bg-white border-2 border-red-400 rounded-xl p-3.5 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                         <div className="flex items-center gap-3">
                           <img 
-                            src={getSafeAvatar(matchedUser?.avatar, matchedUser?.gender)} 
+                            src={getParticipantAvatar(matchedUser)} 
                             alt={req.userName} 
                             className="w-10 h-10 rounded-full border-2 border-red-500 bg-amber-100 object-cover" 
                           />
@@ -565,7 +595,7 @@ export default function AdminPanel({
                   {pendingUsers.map(p => (
                     <div key={p.id} className="bg-amber-50 border-2 border-amber-400 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
                       <div className="flex items-center gap-3">
-                        <img src={getSafeAvatar(p.avatar, p.gender)} alt={p.name} className="w-12 h-12 rounded-full border-2 border-amber-400 bg-white object-cover" />
+                        <img src={getParticipantAvatar(p)} alt={p.name} className="w-12 h-12 rounded-full border-2 border-amber-400 bg-white object-cover" />
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="font-black text-amber-950 text-sm">{p.name}</span>
@@ -587,7 +617,7 @@ export default function AdminPanel({
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2 w-full sm:w-auto">
+                      <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap">
                         <button
                           type="button"
                           onClick={() => onApproveUser(p.id)}
@@ -599,10 +629,19 @@ export default function AdminPanel({
                         <button
                           type="button"
                           onClick={() => onRejectUser(p.id)}
-                          className="px-3 py-2 bg-red-100 hover:bg-red-200 text-red-700 font-bold text-xs uppercase rounded-xl border border-red-300 transition-colors flex items-center justify-center gap-1"
+                          className="px-3 py-2 bg-amber-100 hover:bg-amber-200 text-amber-800 font-bold text-xs uppercase rounded-xl border border-amber-300 transition-colors flex items-center justify-center gap-1"
                         >
                           <UserX size={14} />
                           Отклонить
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setParticipantToDelete(p)}
+                          className="px-3 py-2 bg-red-50 hover:bg-red-600 text-red-700 hover:text-white font-bold text-xs uppercase rounded-xl border border-red-200 hover:border-red-600 transition-colors flex items-center justify-center gap-1 shadow-2xs"
+                          title="Удалить заявку и аккаунт полностью"
+                        >
+                          <Trash2 size={14} />
+                          Удалить
                         </button>
                       </div>
                     </div>
@@ -661,7 +700,7 @@ export default function AdminPanel({
                   <th className="p-3">Позывной</th>
                   <th className="p-3">Текущая роль</th>
                   <th className="p-3 min-w-[200px]">Назначить роль в команде</th>
-                  <th className="p-3 text-center">Пароль</th>
+                  <th className="p-3 text-center">Управление & Аккаунт</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-amber-100">
@@ -672,7 +711,7 @@ export default function AdminPanel({
                   return (
                     <tr key={p.id} className="hover:bg-amber-50/80 transition-colors">
                       <td className="p-3 font-bold text-amber-950 flex items-center gap-2">
-                        <img src={getSafeAvatar(p.avatar, p.gender)} alt={p.name} className="w-7 h-7 rounded-full border border-amber-300 object-cover" />
+                        <img src={getParticipantAvatar(p)} alt={p.name} className="w-7 h-7 rounded-full border border-amber-300 object-cover" />
                         <div>
                           <span>{p.name}</span>
                           <div className="text-[10px] text-stone-500 font-normal">{p.email || p.phone}</div>
@@ -714,19 +753,38 @@ export default function AdminPanel({
                         </div>
                       </td>
                       <td className="p-3 text-center">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setResetModalUser(p);
-                            setCustomNewPassword('123');
-                            setResetSuccessMessage(null);
-                          }}
-                          className="px-2.5 py-1 bg-amber-100 hover:bg-red-600 hover:text-yellow-300 text-amber-950 font-bold text-[11px] rounded-lg border border-amber-300 hover:border-red-600 inline-flex items-center gap-1 transition-colors shadow-2xs"
-                          title="Сбросить пароль участнику"
-                        >
-                          <Key size={12} className="text-red-600" />
-                          <span>Сбросить</span>
-                        </button>
+                        <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setResetModalUser(p);
+                              setCustomNewPassword('123');
+                              setResetSuccessMessage(null);
+                            }}
+                            className="px-2.5 py-1 bg-amber-100 hover:bg-amber-200 text-amber-950 font-bold text-[11px] rounded-lg border border-amber-300 inline-flex items-center gap-1 transition-colors shadow-2xs"
+                            title="Сбросить пароль участнику"
+                          >
+                            <Key size={12} className="text-red-600" />
+                            <span>Пароль</span>
+                          </button>
+
+                          {/* Delete Member Button */}
+                          {p.id !== currentUser?.id && p.id !== '3' && p.role !== 'admin' ? (
+                            <button
+                              type="button"
+                              onClick={() => setParticipantToDelete(p)}
+                              className="px-2.5 py-1 bg-red-50 hover:bg-red-600 hover:text-white text-red-700 font-bold text-[11px] rounded-lg border border-red-200 hover:border-red-600 inline-flex items-center gap-1 transition-all shadow-2xs active:scale-95"
+                              title="Удалить члена команды и полностью удалить его аккаунт"
+                            >
+                              <Trash2 size={12} />
+                              <span>Удалить</span>
+                            </button>
+                          ) : (
+                            <span className="text-[10px] text-stone-400 font-bold px-1.5 py-0.5 bg-stone-100 rounded border border-stone-200 select-none" title="Главный аккаунт Капитана защищен от удаления">
+                              👑 Главный
+                            </span>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -1797,7 +1855,7 @@ export default function AdminPanel({
             {/* Target User Info */}
             <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-3 flex items-center gap-3">
               <img
-                src={getSafeAvatar(resetModalUser.avatar, resetModalUser.gender)}
+                src={getParticipantAvatar(resetModalUser)}
                 alt={resetModalUser.name}
                 className="w-12 h-12 rounded-full border-2 border-amber-400 object-cover bg-white"
               />
@@ -1893,6 +1951,14 @@ export default function AdminPanel({
           </div>
         </div>
       )}
+
+      {/* Delete Member Confirmation Modal */}
+      <DeleteParticipantModal
+        participant={participantToDelete}
+        isOpen={!!participantToDelete}
+        onClose={() => setParticipantToDelete(null)}
+        onConfirm={handleConfirmDeleteParticipant}
+      />
 
     </div>
   );

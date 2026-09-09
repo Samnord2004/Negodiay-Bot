@@ -2,15 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { 
   Users, Calendar, MapPin, Coins, AlertCircle, 
   CheckCircle, Plus, Send, ChevronDown, ChevronUp, Sparkles, MessageSquare,
-  CheckSquare, Coffee, Tent, Trophy, Palette, Edit
+  CheckSquare, Coffee, Tent, Trophy, Palette, Edit, Trash2
 } from 'lucide-react';
 import { Participant, Excursion, TaskItem, MenuItem, GroceryItem, Contest, CreativityIdea } from '../types';
-import { getSafeAvatar } from '../utils/avatar';
+import { getSafeAvatar, getParticipantAvatar } from '../utils/avatar';
 import { formatBirthdayShort } from '../utils/dateUtils';
 import TasksTab from './TasksTab';
 import MenuGroceriesTab from './MenuGroceriesTab';
 import ContestsTab from './ContestsTab';
 import CreativityTab from './CreativityTab';
+import DeleteParticipantModal from './DeleteParticipantModal';
 
 export type HomeRallySubTab = 'overview' | 'tasks' | 'menu' | 'contests' | 'creativity';
 
@@ -38,6 +39,7 @@ interface HomeRallyTabProps {
   onStatusChanged?: (ideaId: string, status: CreativityIdea['status']) => void;
   currentUser: Participant | null;
   isAdmin: boolean;
+  onDeleteUser?: (userId: string) => Promise<void> | void;
   activeSubTab?: HomeRallySubTab;
   onSubTabChange?: (tab: HomeRallySubTab) => void;
 }
@@ -64,6 +66,7 @@ export default function HomeRallyTab({
   onStatusChanged = () => {},
   currentUser,
   isAdmin,
+  onDeleteUser,
   activeSubTab = 'overview',
   onSubTabChange
 }: HomeRallyTabProps) {
@@ -71,6 +74,7 @@ export default function HomeRallyTab({
   const [expandedParticipantId, setExpandedParticipantId] = useState<string | null>(null);
   const [paymentAmount, setPaymentAmount] = useState<number>(1000);
   const [selectedForPay, setSelectedForPay] = useState<string | null>(null);
+  const [participantToDelete, setParticipantToDelete] = useState<Participant | null>(null);
   
   // Excursion editing state
   const [editingExcursion, setEditingExcursion] = useState<Excursion | null>(null);
@@ -432,7 +436,7 @@ export default function HomeRallyTab({
                         {/* Participant Avatar & Name */}
                         <td className="p-3">
                           <div className="flex items-center gap-2.5">
-                            <img src={getSafeAvatar(p.avatar, p.gender)} alt={p.name} className="w-9 h-9 rounded-full border border-stone-200 bg-white object-cover" />
+                            <img src={getParticipantAvatar(p)} alt={p.name} className="w-9 h-9 rounded-full border border-stone-200 bg-white object-cover shadow-2xs" />
                             <div>
                               <p className="font-bold text-sm text-stone-900 leading-tight">{p.name}</p>
                               <span className="text-[11px] font-semibold text-red-600">@{p.nickname}</span>
@@ -550,7 +554,7 @@ export default function HomeRallyTab({
 
                         {/* Actions */}
                         <td className="p-3 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
+                          <div className="flex items-center justify-end gap-1.5 flex-wrap">
                             {isDebtor && (
                               <button
                                 type="button"
@@ -575,6 +579,17 @@ export default function HomeRallyTab({
                                 title="Внести оплату (казначей или капитан)"
                               >
                                 + Оплата
+                              </button>
+                            )}
+                            {isCaptain && p.id !== currentUser?.id && p.id !== '3' && p.role !== 'admin' && (
+                              <button
+                                type="button"
+                                onClick={() => setParticipantToDelete(p)}
+                                className="px-2 py-1 bg-red-50 hover:bg-red-600 text-red-700 hover:text-white font-bold text-[10px] uppercase rounded-lg border border-red-200 hover:border-red-600 flex items-center gap-1 transition-all shadow-2xs active:scale-95"
+                                title="Удалить члена команды и его аккаунт (только для Капитана)"
+                              >
+                                <Trash2 size={11} />
+                                <span className="hidden sm:inline">Удалить</span>
                               </button>
                             )}
                           </div>
@@ -885,6 +900,36 @@ export default function HomeRallyTab({
           </div>
         </div>
       )}
+
+      {/* Delete Member Confirmation Modal */}
+      <DeleteParticipantModal
+        participant={participantToDelete}
+        isOpen={!!participantToDelete}
+        onClose={() => setParticipantToDelete(null)}
+        onConfirm={async (userId) => {
+          if (onDeleteUser) {
+            await onDeleteUser(userId);
+          } else {
+            try {
+              const res = await fetch('/api/admin/delete-user', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId })
+              });
+              if (res.ok) {
+                const data = await res.json();
+                if (data.participants) {
+                  onUpdateParticipants(data.participants);
+                } else {
+                  onUpdateParticipants(participants.filter(p => p.id !== userId));
+                }
+              }
+            } catch (err) {
+              console.error("Delete user error:", err);
+            }
+          }
+        }}
+      />
 
     </div>
   );

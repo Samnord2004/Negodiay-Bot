@@ -1002,7 +1002,7 @@ app.post("/api/auth/toggle-biometrics", (req, res) => {
 
 // Update personal user profile
 app.post("/api/user/update-profile", async (req, res) => {
-  const { userId, name, nickname, email, phone, avatar, birthday, joinedYear, psychotype, gender } = req.body;
+  const { userId, name, nickname, email, phone, avatar, photoFront, photoProfile, selectedAvatarSource, birthday, joinedYear, psychotype, gender } = req.body;
   if (!userId) {
     return res.status(400).json({ success: false, error: "userId обязателен" });
   }
@@ -1022,6 +1022,9 @@ app.post("/api/user/update-profile", async (req, res) => {
       nickname: nickname || "negodyai",
       psychotype: psychotype || "Весельчак-балагур",
       avatar: "",
+      photoFront: photoFront || undefined,
+      photoProfile: photoProfile || undefined,
+      selectedAvatarSource: selectedAvatarSource || 'front',
       paidAmount: 0,
       totalCost: 0,
       debtAmount: 0,
@@ -1039,9 +1042,21 @@ app.post("/api/user/update-profile", async (req, res) => {
     };
   }
 
-  // Clean avatar to ensure no Dicebear bot art survives
+  const selectedSource = selectedAvatarSource !== undefined ? selectedAvatarSource : (existing.selectedAvatarSource || 'front');
+  const currentPhotoFront = photoFront !== undefined ? (photoFront && photoFront.trim() ? photoFront.trim() : undefined) : existing.photoFront;
+  const currentPhotoProfile = photoProfile !== undefined ? (photoProfile && photoProfile.trim() ? photoProfile.trim() : undefined) : existing.photoProfile;
+
+  // Clean and determine avatar: use chosen photo (front or profile)
   let cleanAvatar = existing.avatar || "";
-  if (avatar !== undefined) {
+  if (selectedSource === 'profile' && currentPhotoProfile) {
+    cleanAvatar = currentPhotoProfile;
+  } else if (selectedSource === 'front' && currentPhotoFront) {
+    cleanAvatar = currentPhotoFront;
+  } else if (currentPhotoFront) {
+    cleanAvatar = currentPhotoFront;
+  } else if (currentPhotoProfile) {
+    cleanAvatar = currentPhotoProfile;
+  } else if (avatar !== undefined) {
     cleanAvatar = avatar && avatar.includes("dicebear.com/7.x/bottts") ? "" : avatar.trim();
   }
 
@@ -1053,6 +1068,9 @@ app.post("/api/user/update-profile", async (req, res) => {
     email: email !== undefined ? email.trim() : existing.email,
     phone: phone !== undefined ? phone.trim() : existing.phone,
     avatar: cleanAvatar,
+    photoFront: currentPhotoFront,
+    photoProfile: currentPhotoProfile,
+    selectedAvatarSource: selectedSource,
     birthday: birthday !== undefined ? birthday : existing.birthday,
     joinedYear: joinedYear !== undefined && !isNaN(Number(joinedYear)) ? Number(joinedYear) : existing.joinedYear,
     skippedYears: req.body.skippedYears !== undefined 
@@ -1141,8 +1159,51 @@ app.post("/api/admin/reject-user", async (req, res) => {
 app.post("/api/admin/delete-user", async (req, res) => {
   const { userId } = req.body;
   if (!userId) return res.status(400).json({ success: false, error: "userId обязателен" });
+  
+  const participants = getParticipants();
+  const user = participants.find(p => p.id === userId || String(p.id) === String(userId));
+  if (!user) {
+    return res.status(404).json({ success: false, error: "Участник не найден" });
+  }
+  
+  // Protect main Captain account from accidental deletion
+  if (user.role === "admin" && (user.id === "3" || user.nickname.toLowerCase() === "captain")) {
+    return res.status(403).json({ success: false, error: "Нельзя удалить главного Капитана команды" });
+  }
+
   await deleteParticipant(userId);
-  res.json({ success: true, message: "Участник удален из списка", participants: getParticipants() });
+  passwordResetRequests = passwordResetRequests.filter(r => r.userId !== userId);
+  console.log(`[ADMIN] Account completely deleted for user ${user.name} (@${user.nickname}, id: ${userId})`);
+  
+  res.json({ 
+    success: true, 
+    message: `Аккаунт члена команды ${user.name} (@${user.nickname}) полностью удален`, 
+    deletedUserId: userId,
+    participants: getParticipants() 
+  });
+});
+
+app.delete("/api/participants/:id", async (req, res) => {
+  const { id } = req.params;
+  const participants = getParticipants();
+  const user = participants.find(p => p.id === id || String(p.id) === String(id));
+  if (!user) {
+    return res.status(404).json({ success: false, error: "Участник не найден" });
+  }
+  if (user.role === "admin" && (user.id === "3" || user.nickname.toLowerCase() === "captain")) {
+    return res.status(403).json({ success: false, error: "Нельзя удалить главного Капитана команды" });
+  }
+
+  await deleteParticipant(id);
+  passwordResetRequests = passwordResetRequests.filter(r => r.userId !== id);
+  console.log(`[ADMIN] Account completely deleted for user ${user.name} (@${user.nickname}, id: ${id})`);
+
+  res.json({ 
+    success: true, 
+    message: `Аккаунт ${user.name} (@${user.nickname}) полностью удален`, 
+    deletedUserId: id,
+    participants: getParticipants() 
+  });
 });
 
 app.post("/api/admin/set-role", async (req, res) => {

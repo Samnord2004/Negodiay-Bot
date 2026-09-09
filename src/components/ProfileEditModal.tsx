@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { 
   X, User, Mail, Phone, Calendar, Sparkles, Upload, 
-  RefreshCw, CheckCircle, ShieldAlert, HeartHandshake, Smile, Camera
+  RefreshCw, CheckCircle, ShieldAlert, HeartHandshake, Smile, Camera,
+  Check, Trash2, Eye, Award, CheckCircle2
 } from 'lucide-react';
-import { Participant, ROLE_DEFINITIONS } from '../types';
+import { Participant, ROLE_DEFINITIONS, AvatarSource } from '../types';
 import { PSYCHOTYPES } from '../mockData';
 import { compressImage } from '../utils/imageCompressor';
 import { formatBirthdayShort } from '../utils/dateUtils';
+import { getSafeAvatar } from '../utils/avatar';
 
 interface ProfileEditModalProps {
   isOpen: boolean;
@@ -30,9 +32,15 @@ export default function ProfileEditModal({
   const [skippedYears, setSkippedYears] = useState<number[]>([]);
   const [gender, setGender] = useState<'male' | 'female'>('male');
   const [psychotype, setPsychotype] = useState('');
-  const [avatar, setAvatar] = useState('');
+  
+  // Two photos in personal data
+  const [photoFront, setPhotoFront] = useState('');
+  const [photoProfile, setPhotoProfile] = useState('');
+  // Which photo is chosen as active avatar: 'front' | 'profile'
+  const [selectedAvatarSource, setSelectedAvatarSource] = useState<AvatarSource>('front');
+  
   const [loading, setLoading] = useState(false);
-  const [compressing, setCompressing] = useState(false);
+  const [compressingSlot, setCompressingSlot] = useState<'front' | 'profile' | null>(null);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
@@ -48,9 +56,23 @@ export default function ProfileEditModal({
       setSkippedYears(Array.isArray(currentUser.skippedYears) ? currentUser.skippedYears : []);
       setGender(currentUser.gender || 'male');
       setPsychotype(currentUser.psychotype || PSYCHOTYPES[0]?.name || 'Весельчак-балагур');
-      // Purge any legacy dicebear bot avatar
+
+      const front = currentUser.photoFront || '';
+      const profile = currentUser.photoProfile || '';
       const cleanAvatar = currentUser.avatar && currentUser.avatar.includes('dicebear.com/7.x/bottts') ? '' : (currentUser.avatar || '');
-      setAvatar(cleanAvatar);
+
+      // If no photoFront or photoProfile yet, pre-populate photoFront with existing clean avatar
+      setPhotoFront(front || (!profile ? cleanAvatar : ''));
+      setPhotoProfile(profile);
+
+      if (currentUser.selectedAvatarSource) {
+        setSelectedAvatarSource(currentUser.selectedAvatarSource);
+      } else if (profile && !front) {
+        setSelectedAvatarSource('profile');
+      } else {
+        setSelectedAvatarSource('front');
+      }
+
       setError('');
       setSuccessMsg('');
     }
@@ -64,27 +86,41 @@ export default function ProfileEditModal({
     allYearsSince1993.push(y);
   }
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, slot: 'front' | 'profile') => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Reset input so selecting the same file again triggers onChange
     e.target.value = '';
-
-    setCompressing(true);
+    setCompressingSlot(slot);
     setError('');
     try {
-      // Compress and optimize avatar to 384x384 JPEG (~25-40KB)
-      const compressed = await compressImage(file, 384, 0.85);
-      setAvatar(compressed);
+      // Compress to 512px crisp high-quality JPEG
+      const compressed = await compressImage(file, 512, 0.88);
+      if (slot === 'front') {
+        setPhotoFront(compressed);
+        if (!photoProfile) {
+          setSelectedAvatarSource('front');
+        }
+      } else {
+        setPhotoProfile(compressed);
+        if (!photoFront) {
+          setSelectedAvatarSource('profile');
+        }
+      }
     } catch (err: any) {
       console.error('Avatar compression error:', err);
-      // Fallback: read directly if canvas fails
       try {
         const reader = new FileReader();
         reader.onloadend = () => {
           if (reader.result) {
-            setAvatar(reader.result as string);
+            const dataUrl = reader.result as string;
+            if (slot === 'front') {
+              setPhotoFront(dataUrl);
+              if (!photoProfile) setSelectedAvatarSource('front');
+            } else {
+              setPhotoProfile(dataUrl);
+              if (!photoFront) setSelectedAvatarSource('profile');
+            }
           }
         };
         reader.readAsDataURL(file);
@@ -92,9 +128,14 @@ export default function ProfileEditModal({
         setError('Не удалось обработать изображение');
       }
     } finally {
-      setCompressing(false);
+      setCompressingSlot(null);
     }
   };
+
+  // Active avatar image is strictly chosen by team member: either front or profile
+  const activeAvatarImage = selectedAvatarSource === 'profile'
+    ? (photoProfile.trim() || photoFront.trim())
+    : (photoFront.trim() || photoProfile.trim());
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -128,7 +169,10 @@ export default function ProfileEditModal({
           skippedYears: skippedYears.filter(y => !isNaN(y)),
           gender,
           psychotype,
-          avatar
+          photoFront: photoFront.trim(),
+          photoProfile: photoProfile.trim(),
+          selectedAvatarSource,
+          avatar: activeAvatarImage.trim()
         })
       });
 
@@ -153,7 +197,7 @@ export default function ProfileEditModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-stone-900/60 backdrop-blur-xs overflow-y-auto animate-in fade-in duration-200">
-      <div className="bg-white border border-stone-200 rounded-3xl shadow-xl max-w-lg w-full overflow-hidden my-auto">
+      <div className="bg-white border border-stone-200 rounded-3xl shadow-xl max-w-2xl w-full overflow-hidden my-auto">
         
         {/* Header */}
         <div className="bg-white px-6 py-4 flex items-center justify-between border-b border-stone-100">
@@ -163,10 +207,10 @@ export default function ProfileEditModal({
             </div>
             <div>
               <h3 className="font-black text-base uppercase tracking-tight text-stone-900 leading-tight">
-                Редактирование профиля
+                Редактирование личных данных
               </h3>
               <p className="text-xs text-stone-500 font-medium">
-                Личные данные соратника команды «Негодяи»
+                Фотографии (анфас и профиль), выбор аватара и анкета соратника «Негодяев»
               </p>
             </div>
           </div>
@@ -180,7 +224,7 @@ export default function ProfileEditModal({
         </div>
 
         {/* Form Body */}
-        <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-4 max-h-[80vh] overflow-y-auto scrollbar-thin">
+        <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-5 max-h-[82vh] overflow-y-auto scrollbar-thin">
           
           {/* Status Banners */}
           {error && (
@@ -212,64 +256,281 @@ export default function ProfileEditModal({
             </div>
           )}
 
-          {/* Avatar Section */}
-          <div className="bg-stone-50/70 border border-stone-200 rounded-2xl p-4 space-y-3">
-            <label className="block text-xs font-bold uppercase text-stone-800 tracking-wider">
-              Аватарка / Фото профиля
-            </label>
-            <div className="flex flex-col sm:flex-row items-center gap-4">
-              <div className="relative shrink-0">
-                {avatar && avatar.trim() && !avatar.includes('dicebear.com/7.x/bottts') ? (
-                  <img
-                    src={avatar.trim()}
-                    alt="Avatar preview"
-                    className="w-20 h-20 rounded-2xl border border-stone-300 object-cover bg-white shadow-xs"
-                  />
-                ) : (
-                  <div className="w-20 h-20 rounded-2xl border border-dashed border-amber-300 bg-amber-50/60 flex flex-col items-center justify-center text-amber-900 font-bold text-2xl">
-                    <span>{name.charAt(0) || 'Н'}</span>
-                  </div>
-                )}
-                {compressing && (
-                  <div className="absolute inset-0 bg-white/80 rounded-2xl flex items-center justify-center text-[10px] font-bold text-stone-700">
-                    Сжатие...
-                  </div>
-                )}
-              </div>
-
-              <div className="flex-1 w-full space-y-2">
-                <div className="flex items-center gap-2">
-                  <label className="cursor-pointer flex-1 py-2 px-3 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold text-center flex items-center justify-center gap-1.5 transition-colors shadow-xs">
-                    <Camera size={14} />
-                    <span>Загрузить фото с устройства</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleFileUpload}
-                      className="hidden"
-                    />
-                  </label>
-                  {avatar ? (
-                    <button
-                      type="button"
-                      onClick={() => setAvatar('')}
-                      className="px-3 py-2 bg-stone-100 hover:bg-stone-200 border border-stone-300 rounded-xl text-xs font-semibold text-stone-700 flex items-center justify-center gap-1 transition-colors"
-                      title="Удалить аватар"
-                    >
-                      <X size={14} />
-                      <span>Удалить</span>
-                    </button>
-                  ) : null}
-                </div>
-                <input
-                  type="text"
-                  value={avatar}
-                  onChange={(e) => setAvatar(e.target.value)}
-                  placeholder="Или вставьте прямую ссылку на фото (URL)..."
-                  className="w-full text-xs px-3 py-2 bg-white border border-stone-200 rounded-xl outline-none font-mono text-stone-800 focus:border-red-500"
-                />
+          {/* TWO PHOTOS SECTION: АНФАС И ПРОФИЛЬ + ВЫБОР АВАТАРА */}
+          <div className="bg-stone-50/80 border border-stone-200 rounded-2xl p-4 sm:p-5 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-stone-200 pb-3">
+              <div>
+                <h4 className="text-xs font-black uppercase text-stone-900 tracking-wider flex items-center gap-2">
+                  <span>📸 Личные фотографии: Анфас и Профиль</span>
+                </h4>
+                <p className="text-[11px] text-stone-500 mt-0.5">
+                  Загрузите обе фотографии. В качестве аватарки команды используется одно фото на ваш выбор.
+                </p>
               </div>
             </div>
+
+            {/* Grid of 2 Photo Slots */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              
+              {/* SLOT 1: ФОТОГРАФИЯ «АНФАС» */}
+              <div className={`p-3.5 rounded-2xl border-2 transition-all flex flex-col justify-between ${
+                selectedAvatarSource === 'front'
+                  ? 'bg-amber-50/60 border-amber-400 shadow-xs'
+                  : 'bg-white border-stone-200 hover:border-stone-300'
+              }`}>
+                <div>
+                  <div className="flex items-center justify-between gap-2 mb-2.5">
+                    <span className="font-bold text-xs uppercase tracking-wider text-stone-800 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-blue-600 inline-block"></span>
+                      Фото «Анфас» (прямо)
+                    </span>
+                    {selectedAvatarSource === 'front' ? (
+                      <span className="bg-amber-500 text-white font-black text-[10px] uppercase px-2 py-0.5 rounded-full shadow-2xs flex items-center gap-1">
+                        <Check size={11} strokeWidth={3} />
+                        Аватарка
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedAvatarSource('front')}
+                        className="text-[10px] font-bold text-stone-600 hover:text-amber-900 bg-stone-100 hover:bg-amber-100 px-2 py-0.5 rounded-full border border-stone-200 transition-colors"
+                      >
+                        Сделать аватаркой
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Photo Preview Container */}
+                  <div className="relative aspect-4/3 w-full bg-stone-100 rounded-xl overflow-hidden border border-stone-200 flex items-center justify-center mb-2.5 shadow-2xs group">
+                    {photoFront ? (
+                      <img
+                        src={photoFront}
+                        alt="Анфас"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="text-center p-3 text-stone-400">
+                        <Camera size={26} className="mx-auto mb-1 opacity-50" />
+                        <span className="text-[11px] font-medium block">Фото анфас не загружено</span>
+                        <span className="text-[10px] text-stone-400 block">(Прямой ракурс лица)</span>
+                      </div>
+                    )}
+                    {compressingSlot === 'front' && (
+                      <div className="absolute inset-0 bg-white/85 flex items-center justify-center text-xs font-bold text-stone-700">
+                        Сжатие фото...
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Actions for Front Photo */}
+                <div className="space-y-2 mt-1">
+                  <div className="flex items-center gap-1.5">
+                    <label className="cursor-pointer flex-1 py-1.5 px-2.5 bg-stone-900 hover:bg-black text-white rounded-xl text-xs font-bold text-center flex items-center justify-center gap-1.5 transition-colors shadow-2xs">
+                      <Camera size={13} />
+                      <span>{photoFront ? 'Заменить' : 'Загрузить анфас'}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleFileUpload(e, 'front')}
+                        className="hidden"
+                      />
+                    </label>
+                    {photoFront && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPhotoFront('');
+                          if (selectedAvatarSource === 'front' && photoProfile) {
+                            setSelectedAvatarSource('profile');
+                          }
+                        }}
+                        className="p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-xl border border-stone-200 transition-colors"
+                        title="Удалить фото анфас"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    value={photoFront}
+                    onChange={(e) => setPhotoFront(e.target.value)}
+                    placeholder="URL фото анфас..."
+                    className="w-full text-[11px] px-2.5 py-1.5 bg-stone-50 border border-stone-200 rounded-lg outline-none font-mono text-stone-800 focus:border-red-500"
+                  />
+                  {/* Select as Avatar button */}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedAvatarSource('front')}
+                    className={`w-full py-1.5 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                      selectedAvatarSource === 'front'
+                        ? 'bg-amber-600 text-white shadow-xs'
+                        : 'bg-stone-100 hover:bg-stone-200 text-stone-700 border border-stone-200'
+                    }`}
+                  >
+                    <CheckCircle2 size={13} className={selectedAvatarSource === 'front' ? 'text-yellow-300' : 'text-stone-400'} />
+                    <span>{selectedAvatarSource === 'front' ? 'Выбрано для аватарки' : 'Использовать в аватарке'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* SLOT 2: ФОТОГРАФИЯ «ПРОФИЛЬ» */}
+              <div className={`p-3.5 rounded-2xl border-2 transition-all flex flex-col justify-between ${
+                selectedAvatarSource === 'profile'
+                  ? 'bg-amber-50/60 border-amber-400 shadow-xs'
+                  : 'bg-white border-stone-200 hover:border-stone-300'
+              }`}>
+                <div>
+                  <div className="flex items-center justify-between gap-2 mb-2.5">
+                    <span className="font-bold text-xs uppercase tracking-wider text-stone-800 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-purple-600 inline-block"></span>
+                      Фото «Профиль» (сбоку)
+                    </span>
+                    {selectedAvatarSource === 'profile' ? (
+                      <span className="bg-amber-500 text-white font-black text-[10px] uppercase px-2 py-0.5 rounded-full shadow-2xs flex items-center gap-1">
+                        <Check size={11} strokeWidth={3} />
+                        Аватарка
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedAvatarSource('profile')}
+                        className="text-[10px] font-bold text-stone-600 hover:text-amber-900 bg-stone-100 hover:bg-amber-100 px-2 py-0.5 rounded-full border border-stone-200 transition-colors"
+                      >
+                        Сделать аватаркой
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Photo Preview Container */}
+                  <div className="relative aspect-4/3 w-full bg-stone-100 rounded-xl overflow-hidden border border-stone-200 flex items-center justify-center mb-2.5 shadow-2xs group">
+                    {photoProfile ? (
+                      <img
+                        src={photoProfile}
+                        alt="Профиль"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="text-center p-3 text-stone-400">
+                        <Camera size={26} className="mx-auto mb-1 opacity-50" />
+                        <span className="text-[11px] font-medium block">Фото профиль не загружено</span>
+                        <span className="text-[10px] text-stone-400 block">(Вид сбоку 90° или полуоборот)</span>
+                      </div>
+                    )}
+                    {compressingSlot === 'profile' && (
+                      <div className="absolute inset-0 bg-white/85 flex items-center justify-center text-xs font-bold text-stone-700">
+                        Сжатие фото...
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Actions for Profile Photo */}
+                <div className="space-y-2 mt-1">
+                  <div className="flex items-center gap-1.5">
+                    <label className="cursor-pointer flex-1 py-1.5 px-2.5 bg-stone-900 hover:bg-black text-white rounded-xl text-xs font-bold text-center flex items-center justify-center gap-1.5 transition-colors shadow-2xs">
+                      <Camera size={13} />
+                      <span>{photoProfile ? 'Заменить' : 'Загрузить профиль'}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleFileUpload(e, 'profile')}
+                        className="hidden"
+                      />
+                    </label>
+                    {photoProfile && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPhotoProfile('');
+                          if (selectedAvatarSource === 'profile' && photoFront) {
+                            setSelectedAvatarSource('front');
+                          }
+                        }}
+                        className="p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-xl border border-stone-200 transition-colors"
+                        title="Удалить фото профиль"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    value={photoProfile}
+                    onChange={(e) => setPhotoProfile(e.target.value)}
+                    placeholder="URL фото профиль..."
+                    className="w-full text-[11px] px-2.5 py-1.5 bg-stone-50 border border-stone-200 rounded-lg outline-none font-mono text-stone-800 focus:border-red-500"
+                  />
+                  {/* Select as Avatar button */}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedAvatarSource('profile')}
+                    className={`w-full py-1.5 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                      selectedAvatarSource === 'profile'
+                        ? 'bg-amber-600 text-white shadow-xs'
+                        : 'bg-stone-100 hover:bg-stone-200 text-stone-700 border border-stone-200'
+                    }`}
+                  >
+                    <CheckCircle2 size={13} className={selectedAvatarSource === 'profile' ? 'text-yellow-300' : 'text-stone-400'} />
+                    <span>{selectedAvatarSource === 'profile' ? 'Выбрано для аватарки' : 'Использовать в аватарке'}</span>
+                  </button>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Summary & Active Avatar Live Preview */}
+            <div className="p-3 bg-white rounded-xl border border-amber-300 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-xs">
+              <div className="flex items-center gap-3 w-full sm:w-auto">
+                <img
+                  src={getSafeAvatar(activeAvatarImage, gender)}
+                  alt="Итоговая аватарка"
+                  className="w-13 h-13 rounded-full border-2 border-amber-400 object-cover bg-amber-50 shadow-xs shrink-0"
+                />
+                <div>
+                  <div className="text-[10px] font-black uppercase text-amber-900 tracking-wider">
+                    Активная аватарка в команде
+                  </div>
+                  <div className="font-bold text-xs text-stone-900 flex items-center gap-1.5 mt-0.5">
+                    <span>Источник:</span>
+                    <span className="text-red-700 uppercase font-black">
+                      {selectedAvatarSource === 'profile' ? 'Фото «Профиль» (вид сбоку)' : 'Фото «Анфас» (прямой ракурс)'}
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-stone-500">
+                    Отображается в чате, таблице слёта и поиске
+                  </div>
+                </div>
+              </div>
+
+              {/* Toggle Switcher */}
+              <div className="flex items-center gap-1 bg-stone-100 p-1 rounded-xl border border-stone-200 self-stretch sm:self-center shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setSelectedAvatarSource('front')}
+                  className={`flex-1 sm:flex-initial px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                    selectedAvatarSource === 'front'
+                      ? 'bg-white text-stone-950 shadow-xs border border-stone-300'
+                      : 'text-stone-600 hover:text-stone-900'
+                  }`}
+                >
+                  Анфас
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedAvatarSource('profile')}
+                  className={`flex-1 sm:flex-initial px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                    selectedAvatarSource === 'profile'
+                      ? 'bg-white text-stone-950 shadow-xs border border-stone-300'
+                      : 'text-stone-600 hover:text-stone-900'
+                  }`}
+                >
+                  Профиль
+                </button>
+              </div>
+            </div>
+
           </div>
 
           {/* Name and Nickname */}
@@ -485,7 +746,7 @@ export default function ProfileEditModal({
             </button>
             <button
               type="submit"
-              disabled={loading || compressing}
+              disabled={loading || compressingSlot !== null}
               className="px-6 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-bold text-xs uppercase tracking-wide rounded-xl shadow-xs transition-colors"
             >
               {loading ? 'Сохранение...' : 'Сохранить профиль'}

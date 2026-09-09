@@ -25,6 +25,7 @@ import ContestsTab from './components/ContestsTab';
 import NavigationTabs, { TabItem } from './components/NavigationTabs';
 import TopSiteMenu from './components/TopSiteMenu';
 import ProfileEditModal from './components/ProfileEditModal';
+import SiteSearch from './components/SiteSearch';
 import { compressImage } from './utils/imageCompressor';
 
 import { 
@@ -325,6 +326,33 @@ export default function App() {
     }
   };
 
+  const handleDeleteUser = async (userId: string) => {
+    try {
+      const res = await fetch("/api/admin/delete-user", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        if (data.participants) {
+          setParticipants(data.participants);
+        } else {
+          setParticipants(prev => prev.filter(p => p.id !== userId));
+        }
+        showToast(data.message || "Член команды и его аккаунт полностью удалены", "success");
+        if (currentUser && (currentUser.id === userId || String(currentUser.id) === String(userId))) {
+          handleLogout();
+        }
+      } else {
+        showToast(data.error || "Ошибка при удалении аккаунта", "alert");
+      }
+    } catch (err) {
+      console.error("Delete user error:", err);
+      showToast("Ошибка соединения при удалении пользователя", "alert");
+    }
+  };
+
   // Chat message sending with Bot auto-response handling
   const handleSendMessage = async (text: string, imageUrl?: string) => {
     if (!currentUser) return;
@@ -462,6 +490,7 @@ export default function App() {
         onLogin={handleLoginSuccess}
         onLogout={handleLogout}
         participants={participants}
+        customLogo={botConfig.customLogo}
         onRegisterSuccess={(newUser) => {
           setParticipants(prev => [newUser, ...prev]);
           handleLoginSuccess(newUser);
@@ -521,56 +550,79 @@ export default function App() {
         className="border-b-4 border-red-600 shadow-md sticky top-0 z-30 transition-colors"
         style={{ backgroundColor: themeConfig.headerBg || '#FACC15' }}
       >
-        <div className="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-4">
+        <div className="max-w-7xl mx-auto px-4 py-3 flex flex-col md:flex-row items-center justify-between gap-3 sm:gap-4">
           
           {/* Logo & Brand Title */}
-          <div className="flex items-center gap-3">
-            <div className="relative group cursor-pointer">
-              <input
-                id="header-logo-upload-input"
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) handleUploadLogoFile(file);
-                }}
-              />
-              <label htmlFor="header-logo-upload-input" className="cursor-pointer block relative">
-                {botConfig.customLogo && botConfig.customLogo.trim() ? (
-                  <img 
-                    src={botConfig.customLogo.trim()} 
-                    alt="Лого Негодяи" 
-                    className="w-12 h-12 object-contain bg-white border-2 border-red-600 rounded-xl p-0.5 shadow-md group-hover:opacity-85 transition-opacity"
-                  />
-                ) : (
-                  <div className="group-hover:opacity-85 transition-opacity">
-                    <Logo size="sm" className="bg-white border-2 border-red-600 rounded-xl p-1 shadow-md shrink-0" />
+          <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-start shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="relative group cursor-pointer">
+                <input
+                  id="header-logo-upload-input"
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleUploadLogoFile(file);
+                  }}
+                />
+                <label htmlFor="header-logo-upload-input" className="cursor-pointer block relative">
+                  {botConfig.customLogo && botConfig.customLogo.trim() ? (
+                    <img 
+                      src={botConfig.customLogo.trim()} 
+                      alt="Лого Негодяи" 
+                      className="w-12 h-12 object-contain bg-white border-2 border-red-600 rounded-xl p-0.5 shadow-md group-hover:opacity-85 transition-opacity"
+                    />
+                  ) : (
+                    <div className="group-hover:opacity-85 transition-opacity">
+                      <Logo size="sm" className="bg-white border-2 border-red-600 rounded-xl p-1 shadow-md shrink-0" />
+                    </div>
+                  )}
+                  <div className="absolute -bottom-1 -right-1 bg-red-600 text-yellow-300 rounded-full p-1 border border-amber-950 shadow opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Edit size={10} />
                   </div>
-                )}
-                <div className="absolute -bottom-1 -right-1 bg-red-600 text-yellow-300 rounded-full p-1 border border-amber-950 shadow opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Edit size={10} />
-                </div>
-              </label>
-            </div>
-
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-xl sm:text-2xl font-black text-amber-950 uppercase tracking-tight leading-none">
-                  <span className="bg-red-600 text-yellow-300 px-2.5 py-0.5 rounded transform -rotate-1 inline-block shadow-sm">НЕГОДЯИ</span>
-                </h1>
-                <span className="bg-red-700 text-yellow-300 text-[10px] sm:text-xs font-black px-2.5 py-0.5 rounded-full border border-yellow-300 shadow select-none">
-                  🧭 нам {teamAgeYears} {yearWord}
-                </span>
+                </label>
               </div>
-              <p className="text-[11px] sm:text-xs font-bold text-amber-900 mt-0.5">
-                Туристическая команда «Негодяи»
-              </p>
+
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h1 className="text-xl sm:text-2xl font-black text-amber-950 uppercase tracking-tight leading-none">
+                    <span className="bg-red-600 text-yellow-300 px-2.5 py-0.5 rounded transform -rotate-1 inline-block shadow-sm">НЕГОДЯИ</span>
+                  </h1>
+                  <span className="bg-red-700 text-yellow-300 text-[10px] sm:text-xs font-black px-2.5 py-0.5 rounded-full border border-yellow-300 shadow select-none">
+                    🧭 нам {teamAgeYears} {yearWord}
+                  </span>
+                </div>
+                <p className="text-[11px] sm:text-xs font-bold text-amber-900 mt-0.5">
+                  Туристическая команда «Негодяи»
+                </p>
+              </div>
             </div>
           </div>
 
+          {/* SITE SEARCH BAR IN TOP HEADER */}
+          <div className="w-full md:w-auto flex-1 max-w-xl mx-0 md:mx-4">
+            <SiteSearch
+              participants={participants}
+              tasks={tasks}
+              contests={contests}
+              documents={documents}
+              inventoryItems={inventoryItems}
+              menuItems={menuItems}
+              groceryItems={groceryItems}
+              creativityIdeas={creativityIdeas}
+              fundRecords={fundRecords}
+              stories={stories}
+              currentUser={currentUser}
+              onNavigateTab={handleNavigate}
+              onOpenBirthdays={() => setIsBirthdayModalOpen(true)}
+              onOpenProfileEdit={() => setIsProfileEditOpen(true)}
+              onDeleteUser={handleDeleteUser}
+            />
+          </div>
+
           {/* Open Top Menu Actions */}
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap shrink-0">
             
             {/* Top Dropdown Menu */}
             <TopSiteMenu
@@ -663,6 +715,7 @@ export default function App() {
             onUpdateExcursions={setExcursions}
             onNudgeDebtor={handleNudgeDebtor}
             onNavigateToTab={handleNavigate}
+            onDeleteUser={handleDeleteUser}
             tasks={tasks}
             onUpdateTasks={setTasks}
             menuItems={menuItems}
@@ -808,6 +861,7 @@ export default function App() {
             onUpdateBotConfig={setBotConfig}
             onApproveUser={handleApproveUser}
             onRejectUser={handleRejectUser}
+            onDeleteUser={handleDeleteUser}
             onSetRole={handleSetRole}
           />
         )}
