@@ -101,24 +101,19 @@ export default function TopSiteMenu({
         )}
       </button>
 
-      {/* SEMI-TRANSPARENT BACKDROP */}
+      {/* POPUP MENU PANEL - ALWAYS STRICTLY CENTERED ON SCREEN */}
       {isOpen && (
         <div 
-          className="fixed inset-0 bg-stone-950/50 backdrop-blur-xs z-40 transition-opacity animate-in fade-in duration-150"
+          className="fixed inset-0 z-50 bg-stone-950/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-150"
           onClick={() => setIsOpen(false)}
-          aria-hidden="true"
-        />
-      )}
-
-      {/* DROPDOWN MENU PANEL - ALWAYS FULLY VISIBLE ON MOBILE, TABLET & DESKTOP */}
-      {isOpen && (
-        <div 
-          role="dialog"
-          aria-modal="true"
-          aria-label="Главное меню сайта и навигация"
-          onClick={(e) => e.stopPropagation()}
-          className="fixed z-50 top-[64px] sm:top-[70px] right-2 sm:right-4 md:right-6 w-[calc(100vw-16px)] sm:w-[380px] max-w-[390px] max-h-[min(620px,calc(100vh-85px))] bg-amber-50 border-4 border-amber-600 rounded-3xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150 flex flex-col"
         >
+          <div 
+            role="dialog"
+            aria-modal="true"
+            aria-label="Главное меню сайта и навигация"
+            onClick={(e) => e.stopPropagation()}
+            className="w-full sm:w-[420px] max-w-[440px] max-h-[85vh] bg-amber-50 border-4 border-amber-600 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 flex flex-col pointer-events-auto"
+          >
           
           {/* Header Bar */}
           <div className="bg-gradient-to-r from-red-600 via-amber-600 to-red-700 p-3.5 flex items-center justify-between text-yellow-300 border-b-2 border-amber-400 shrink-0">
@@ -206,7 +201,7 @@ export default function TopSiteMenu({
                         @{currentUser.nickname}
                       </div>
                       <div className="text-[10px] text-stone-500 truncate mt-0.5">
-                        {currentUser.email || currentUser.phone || currentUser.psychotype || 'Участник команды'}
+                        {currentUser.email || currentUser.phone || 'Участник команды'}
                       </div>
                     </div>
                   </div>
@@ -286,6 +281,28 @@ export default function TopSiteMenu({
                       <div className="font-black text-xs uppercase leading-tight">История команды</div>
                       <div className={`text-[10px] ${activeTab === 'history' ? 'text-yellow-100' : 'text-stone-500'}`}>
                         Летопись с 2018 года, байки и фото-истории
+                      </div>
+                    </div>
+                  </div>
+                  <ArrowRight size={14} className="opacity-60" />
+                </button>
+
+                {/* 1.5: Дни рождения */}
+                <button
+                  type="button"
+                  onClick={() => handleSelectNav('birthdays')}
+                  className={`w-full text-left p-2.5 rounded-xl border-2 transition-all flex items-center justify-between ${
+                    activeTab === 'birthdays'
+                      ? 'bg-red-600 text-yellow-300 border-amber-950 shadow-sm'
+                      : 'bg-white hover:bg-amber-100/70 text-amber-950 border-amber-200'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Cake size={17} className={activeTab === 'birthdays' ? 'text-yellow-300' : 'text-red-600'} />
+                    <div>
+                      <div className="font-black text-xs uppercase leading-tight">Дни рождения</div>
+                      <div className={`text-[10px] ${activeTab === 'birthdays' ? 'text-yellow-100' : 'text-stone-500'}`}>
+                        Календарь именинников, оповещения и поздравления
                       </div>
                     </div>
                   </div>
@@ -526,7 +543,8 @@ export default function TopSiteMenu({
           </div>
 
         </div>
-      )}
+      </div>
+    )}
 
     </div>
   );

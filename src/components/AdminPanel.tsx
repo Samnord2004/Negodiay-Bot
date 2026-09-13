@@ -1,16 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Settings, Users, CheckSquare, Coffee, Package, Award, 
+  Users, CheckSquare, Coffee, Package, Award, 
   Plus, Trash, Trash2, Edit, CheckCircle, AlertTriangle, Shield, 
-  Brain, Sliders, UserCheck, UserX, Key, Calendar, MapPin, RefreshCw, Flame, Bot
+  UserCheck, UserX, Key, Calendar, MapPin, RefreshCw, Flame
 } from 'lucide-react';
 import { 
   Participant, TaskItem, MenuItem, GroceryItem, 
   InventoryItem, Contest, Excursion, BotConfig, InventoryCondition,
-  UserRole, ROLE_DEFINITIONS
+  UserRole, ROLE_DEFINITIONS, isUniqueRole
 } from '../types';
 import { getSafeAvatar, getParticipantAvatar } from '../utils/avatar';
-import { PSYCHOTYPES } from '../mockData';
 import DeleteParticipantModal from './DeleteParticipantModal';
 
 interface AdminPanelProps {
@@ -66,30 +65,59 @@ export default function AdminPanel({
   onDeleteUser,
   onSetRole
 }: AdminPanelProps) {
-  const [activeTab, setActiveTab] = useState<'pending' | 'roles' | 'teamSettings' | 'tasks' | 'menu' | 'inventory' | 'contests' | 'excursions'>('pending');
+  const [activeTab, setActiveTab] = useState<'pending' | 'roles' | 'tasks' | 'menu' | 'inventory' | 'contests' | 'excursions'>('pending');
 
-  // Team parameters & Bot config (Captain control)
-  const [foundingYear, setFoundingYear] = useState<number>(botConfig.foundingYear || 2018);
-  const [swearingLevel, setSwearingLevel] = useState<'low' | 'medium' | 'high'>(botConfig.swearingLevel || 'medium');
-  const [autoDetect, setAutoDetect] = useState<boolean>(botConfig.autoDetectPsychotype ?? true);
+  // Team parameters (Captain control: founding year)
+  const [foundingYear, setFoundingYear] = useState<number>(botConfig.foundingYear || 1993);
   const [isSavedTeamConfig, setIsSavedTeamConfig] = useState(false);
 
   useEffect(() => {
     if (botConfig.foundingYear) setFoundingYear(botConfig.foundingYear);
-    if (botConfig.swearingLevel) setSwearingLevel(botConfig.swearingLevel);
-    if (botConfig.autoDetectPsychotype !== undefined) setAutoDetect(botConfig.autoDetectPsychotype);
   }, [botConfig]);
 
   const handleSaveTeamConfig = (overrides?: Partial<BotConfig>) => {
     const updated: BotConfig = {
       ...botConfig,
-      foundingYear: overrides?.foundingYear !== undefined ? overrides.foundingYear : foundingYear,
-      swearingLevel: overrides?.swearingLevel !== undefined ? overrides.swearingLevel : swearingLevel,
-      autoDetectPsychotype: overrides?.autoDetectPsychotype !== undefined ? overrides.autoDetectPsychotype : autoDetect
+      foundingYear: overrides?.foundingYear !== undefined ? overrides.foundingYear : foundingYear
     };
     onUpdateBotConfig(updated);
     setIsSavedTeamConfig(true);
     setTimeout(() => setIsSavedTeamConfig(false), 2500);
+  };
+
+  // Role transfer confirmation modal state (strictly prevents duplicate roles in the team)
+  const [roleTransferModal, setRoleTransferModal] = useState<{
+    targetParticipant: Participant;
+    newRole: UserRole;
+    previousHolder: Participant;
+  } | null>(null);
+
+  const handleInitiateRoleChange = (targetParticipant: Participant, newRole: UserRole) => {
+    const currentRole = targetParticipant.role || 'member';
+    if (newRole === currentRole) return;
+
+    if (newRole === 'member') {
+      onSetRole(targetParticipant.id, 'member');
+      return;
+    }
+
+    // Check if another participant in the team already holds this unique role
+    const currentHolder = participants.find(p => p.id !== targetParticipant.id && p.role === newRole);
+    if (currentHolder) {
+      setRoleTransferModal({
+        targetParticipant,
+        newRole,
+        previousHolder: currentHolder
+      });
+    } else {
+      onSetRole(targetParticipant.id, newRole);
+    }
+  };
+
+  const handleConfirmRoleTransfer = () => {
+    if (!roleTransferModal) return;
+    onSetRole(roleTransferModal.targetParticipant.id, roleTransferModal.newRole);
+    setRoleTransferModal(null);
   };
 
   // Task form
@@ -356,7 +384,18 @@ export default function AdminPanel({
     }
   };
 
-  if (!isAdmin) {
+  // Verify if current user is the Captain
+  const isCaptain = (user: Participant | null | undefined): boolean => {
+    if (!user) return false;
+    const nick = (user.nickname || '').toLowerCase().replace(/^@/, '');
+    const email = (user.email || '').toLowerCase();
+    const name = (user.name || '').toLowerCase();
+    return user.role === 'admin' || nick === 'ковбой' || nick === 'cowboy' || email === 'asamoilov81@gmail.com' || name.includes('самойлов') || user.id === 'cowboy_1';
+  };
+
+  const effectiveIsAdmin = isAdmin || isCaptain(currentUser);
+
+  if (!effectiveIsAdmin) {
     return (
       <div className="bg-yellow-50 border-4 border-red-600 rounded-3xl p-8 max-w-lg mx-auto text-center shadow-2xl">
         <div className="w-16 h-16 bg-red-600 text-yellow-300 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-4 border-2 border-amber-950 shadow-md">
@@ -364,12 +403,12 @@ export default function AdminPanel({
         </div>
         <h2 className="text-2xl font-black text-red-600 uppercase mb-2">Панель Капитана команды</h2>
         <p className="text-xs font-bold text-amber-900 mb-6 leading-relaxed">
-          Управление слётом, одобрение регистраций новых участников, назначение казначея фонда, настройка задач, инвентаря и психотипов доступны только Капитану команды.
+          Управление слётом, одобрение регистраций новых участников, назначение казначея фонда, настройка задач и инвентаря доступны только Капитану команды (Андрей Самойлов, позывной «Ковбой»).
         </p>
         <button
           type="button"
           onClick={onOpenLogin}
-          className="w-full bg-red-600 hover:bg-red-700 text-yellow-300 font-black uppercase text-xs py-3.5 rounded-xl border-2 border-amber-950 shadow-md transition-all active:scale-95"
+          className="w-full bg-red-600 hover:bg-red-700 text-yellow-300 font-black uppercase text-xs py-3.5 rounded-xl border-2 border-amber-950 shadow-md transition-all active:scale-95 cursor-pointer"
         >
           Войти как Капитан команды
         </button>
@@ -440,7 +479,6 @@ export default function AdminPanel({
             {[
               { id: 'pending', label: `Заявки (${pendingUsers.length + pendingResetCount})`, icon: UserCheck, alert: (pendingUsers.length > 0 || pendingResetCount > 0) },
               { id: 'roles', label: 'Роли & Пароли', icon: Shield },
-              { id: 'teamSettings', label: 'Параметры команды', icon: Settings },
               { id: 'tasks', label: 'Задачи слёта', icon: CheckSquare },
               { id: 'menu', label: 'Меню и Продукты', icon: Coffee },
               { id: 'inventory', label: 'Инвентарь', icon: Package },
@@ -670,25 +708,75 @@ export default function AdminPanel({
 
           {/* Reference Cards for All Roles */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
-            {Object.values(ROLE_DEFINITIONS).map((r) => (
-              <div
-                key={r.role}
-                className="bg-white border-2 border-amber-300 rounded-xl p-2.5 shadow-sm flex flex-col justify-between hover:border-amber-500 transition-colors"
-              >
-                <div className="flex items-center gap-2 mb-1.5">
-                  <span className="text-xl">{r.icon}</span>
+            {Object.values(ROLE_DEFINITIONS).map((r) => {
+              const currentHolder = participants.find(p => p.role === r.role);
+              const isMemberRole = r.role === 'member';
+              const membersCount = participants.filter(p => !p.role || p.role === 'member').length;
+
+              return (
+                <div
+                  key={r.role}
+                  className={`bg-white border-2 rounded-xl p-3 shadow-xs flex flex-col justify-between transition-colors ${
+                    currentHolder ? 'border-amber-400 hover:border-amber-500' : 'border-stone-200 hover:border-amber-300'
+                  }`}
+                >
                   <div>
-                    <h4 className="font-black text-xs text-amber-950 leading-tight">{r.title}</h4>
-                    <span className={`inline-block text-[9px] font-black px-1.5 py-0.2 rounded border ${r.color}`}>
-                      {r.badge}
-                    </span>
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="text-xl">{r.icon}</span>
+                      <div className="min-w-0 flex-1">
+                        <h4 className="font-black text-xs text-amber-950 leading-tight truncate">{r.title}</h4>
+                        <span className={`inline-block text-[9px] font-black px-1.5 py-0.2 rounded border ${r.color}`}>
+                          {r.badge}
+                        </span>
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-stone-600 leading-snug">
+                      {r.description}
+                    </p>
+                  </div>
+
+                  <div className="mt-2.5 pt-2 border-t border-amber-100">
+                    {isMemberRole ? (
+                      <div className="text-[11px] font-bold text-stone-600 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-stone-400 shrink-0"></span>
+                        <span>В строю: <strong>{membersCount}</strong> участников</span>
+                      </div>
+                    ) : currentHolder ? (
+                      <div className="flex items-center justify-between gap-1.5 bg-amber-50/80 p-1.5 rounded-lg border border-amber-200">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <img
+                            src={getParticipantAvatar(currentHolder)}
+                            alt={currentHolder.name}
+                            className="w-5 h-5 rounded-full border border-amber-300 object-cover shrink-0"
+                          />
+                          <div className="min-w-0">
+                            <div className="text-[11px] font-black text-amber-950 truncate leading-tight">
+                              {currentHolder.name}
+                            </div>
+                            <div className="text-[9px] text-red-700 font-bold truncate">
+                              @{currentHolder.nickname}
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => onSetRole(currentHolder.id, 'member')}
+                          className="text-[10px] text-stone-500 hover:text-red-700 font-bold px-1.5 py-0.5 rounded hover:bg-stone-200 transition-colors shrink-0"
+                          title="Освободить роль (сделать участником команды)"
+                        >
+                          Снять
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="text-[11px] font-bold text-emerald-700 flex items-center gap-1.5 bg-emerald-50/70 p-1.5 rounded-lg border border-emerald-200">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0 animate-pulse"></span>
+                        <span>Свободно (не назначен)</span>
+                      </div>
+                    )}
                   </div>
                 </div>
-                <p className="text-[11px] text-stone-600 leading-snug">
-                  {r.description}
-                </p>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Participants Roles Table */}
@@ -699,7 +787,7 @@ export default function AdminPanel({
                   <th className="p-3">Участник</th>
                   <th className="p-3">Позывной</th>
                   <th className="p-3">Текущая роль</th>
-                  <th className="p-3 min-w-[200px]">Назначить роль в команде</th>
+                  <th className="p-3 min-w-[240px]">Назначить роль в команде</th>
                   <th className="p-3 text-center">Управление & Аккаунт</th>
                 </tr>
               </thead>
@@ -707,6 +795,17 @@ export default function AdminPanel({
                 {participants.map(p => {
                   const currentRole = p.role || 'member';
                   const roleMeta = ROLE_DEFINITIONS[currentRole] || ROLE_DEFINITIONS.member;
+
+                  const availableRoleKeys: UserRole[] = [
+                    'member',
+                    'foreman',
+                    'designer',
+                    'assistant_captain',
+                    'keeper',
+                    'chef',
+                    'treasurer',
+                    'admin'
+                  ];
 
                   return (
                     <tr key={p.id} className="hover:bg-amber-50/80 transition-colors">
@@ -728,23 +827,35 @@ export default function AdminPanel({
                         <div className="flex items-center gap-2">
                           <select
                             value={currentRole}
-                            onChange={(e) => onSetRole(p.id, e.target.value as UserRole)}
-                            className="bg-amber-50 border-2 border-amber-400 focus:border-red-600 text-amber-950 font-bold text-xs rounded-lg px-2.5 py-1.5 outline-none cursor-pointer"
+                            onChange={(e) => handleInitiateRoleChange(p, e.target.value as UserRole)}
+                            className="bg-amber-50 border-2 border-amber-400 focus:border-red-600 text-amber-950 font-bold text-xs rounded-lg px-2.5 py-1.5 outline-none cursor-pointer w-full max-w-[290px]"
                           >
-                            <option value="member">⛺ Участник (Негодяй)</option>
-                            <option value="foreman">🔨 Прораб (строительные работы, лагерь)</option>
-                            <option value="designer">🎨 Дизайнер (оформление лагеря, форма, раздатка)</option>
-                            <option value="assistant_captain">🧭 Помощник капитана (координация команды)</option>
-                            <option value="keeper">📦 Хранитель (имущество команды)</option>
-                            <option value="chef">👨‍🍳 Шеф-повар (командный повар)</option>
-                            <option value="treasurer">💰 Казначей фонда (сбор взносов)</option>
-                            <option value="admin">👑 Администратор сайта</option>
+                            {availableRoleKeys.map(rKey => {
+                              const rDef = ROLE_DEFINITIONS[rKey];
+                              const occupiedBy = participants.find(other => other.role === rKey);
+                              const isCurrent = currentRole === rKey;
+                              let label = `${rDef.icon} ${rDef.title}`;
+
+                              if (isCurrent) {
+                                label += ' (текущая)';
+                              } else if (rKey !== 'member' && occupiedBy) {
+                                label += ` (занято: ${occupiedBy.name})`;
+                              } else if (rKey !== 'member') {
+                                label += ' (свободно)';
+                              }
+
+                              return (
+                                <option key={rKey} value={rKey}>
+                                  {label}
+                                </option>
+                              );
+                            })}
                           </select>
                           {currentRole !== 'member' && (
                             <button
                               type="button"
-                              onClick={() => onSetRole(p.id, 'member')}
-                              className="px-2 py-1.5 bg-stone-200 hover:bg-stone-300 text-stone-700 font-bold text-[10px] uppercase rounded-lg transition-colors"
+                              onClick={() => handleInitiateRoleChange(p, 'member')}
+                              className="px-2 py-1.5 bg-stone-200 hover:bg-stone-300 text-stone-700 font-bold text-[10px] uppercase rounded-lg transition-colors whitespace-nowrap"
                               title="Снять роль и сделать обычным участником"
                             >
                               Снять
@@ -795,156 +906,7 @@ export default function AdminPanel({
         </div>
       )}
 
-      {/* TAB 3: TEAM SETTINGS & BOT CONFIG (CAPTAIN EXCLUSIVE) */}
-      {activeTab === 'teamSettings' && (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h3 className="font-black text-base uppercase text-red-600 flex items-center gap-2">
-              <Settings size={18} />
-              Параметры команды и настройка ИИ-Бота (Штаб Капитана)
-            </h3>
-            {isSavedTeamConfig && (
-              <span className="text-xs text-green-700 font-black bg-green-100 border border-green-300 px-3 py-1 rounded-xl flex items-center gap-1.5 animate-bounce">
-                <CheckCircle size={14} /> Параметры успешно сохранены!
-              </span>
-            )}
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Card 1: Team Founding Year */}
-            <div className="bg-amber-50 border-2 border-amber-400 rounded-2xl p-5 space-y-4 shadow-sm">
-              <div className="flex items-center gap-2.5 pb-2 border-b border-amber-200">
-                <div className="p-2 bg-red-600 text-yellow-300 rounded-xl">
-                  <Calendar size={20} />
-                </div>
-                <div>
-                  <h4 className="font-black text-sm uppercase text-amber-950">
-                    Год основания команды
-                  </h4>
-                  <p className="text-[11px] font-bold text-amber-800">
-                    Официальный параметр, который заполняет капитан команды
-                  </p>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="block text-xs font-black text-amber-950 uppercase">
-                  Укажите год основания туристической команды:
-                </label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="number"
-                    min="1970"
-                    max={new Date().getFullYear()}
-                    value={foundingYear}
-                    onChange={(e) => setFoundingYear(parseInt(e.target.value) || 2018)}
-                    className="w-32 px-3 py-2 bg-white border-2 border-amber-400 focus:border-red-600 rounded-xl text-base font-black text-amber-950 text-center shadow-inner outline-none"
-                  />
-                  <div className="text-xs font-bold text-amber-950 bg-amber-200/80 px-3 py-2 rounded-xl border border-amber-300">
-                    Возраст команды: <span className="text-red-700 font-black text-sm">{Math.max(1, new Date().getFullYear() - foundingYear)} лет</span>
-                  </div>
-                </div>
-                <p className="text-[11px] text-stone-600 leading-relaxed pt-1">
-                  💡 На основе этого значения рассчитывается юбилейный стаж команды «НЕГОДЯИ» на главной странице, в шапке сайта, подвале и статистических сводках.
-                </p>
-              </div>
-
-              <div className="pt-2">
-                <button
-                  type="button"
-                  onClick={() => handleSaveTeamConfig({ foundingYear })}
-                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-yellow-300 font-black text-xs uppercase rounded-xl shadow transition-transform active:scale-95 flex items-center gap-1.5"
-                >
-                  <CheckCircle size={14} /> Сохранить год основания
-                </button>
-              </div>
-            </div>
-
-            {/* Card 2: AI Bot & Psychotypes Configuration */}
-            <div className="bg-amber-50 border-2 border-amber-400 rounded-2xl p-5 space-y-4 shadow-sm">
-              <div className="flex items-center gap-2.5 pb-2 border-b border-amber-200">
-                <div className="p-2 bg-red-600 text-yellow-300 rounded-xl">
-                  <Bot size={20} />
-                </div>
-                <div>
-                  <h4 className="font-black text-sm uppercase text-amber-950">
-                    ИИ-Бот Максимка и психотипы
-                  </h4>
-                  <p className="text-[11px] font-bold text-amber-800">
-                    Поведение помощника и ролевая адаптация под участников
-                  </p>
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-xs font-black text-amber-950 uppercase mb-1">
-                    Уровень крепких выражений (мат бота):
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[
-                      { id: 'low', label: 'Без мата', desc: 'Приличный походный' },
-                      { id: 'medium', label: 'Умеренно', desc: 'С перчинкой «бля»' },
-                      { id: 'high', label: 'Хардкор', desc: 'Полный походный угар' }
-                    ].map(lvl => (
-                      <button
-                        key={lvl.id}
-                        type="button"
-                        onClick={() => {
-                          setSwearingLevel(lvl.id as any);
-                          handleSaveTeamConfig({ swearingLevel: lvl.id as any });
-                        }}
-                        className={`p-2 rounded-xl border text-center transition-all ${
-                          swearingLevel === lvl.id
-                            ? 'bg-red-600 text-yellow-300 border-amber-950 font-black shadow-md'
-                            : 'bg-white text-amber-950 border-amber-300 hover:bg-amber-100 font-bold'
-                        }`}
-                      >
-                        <div className="text-xs uppercase">{lvl.label}</div>
-                        <div className="text-[9px] opacity-80">{lvl.desc}</div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="pt-2 border-t border-amber-200">
-                  <label className="flex items-start gap-2.5 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={autoDetect}
-                      onChange={(e) => {
-                        setAutoDetect(e.target.checked);
-                        handleSaveTeamConfig({ autoDetectPsychotype: e.target.checked });
-                      }}
-                      className="mt-1 w-4 h-4 accent-red-600 rounded cursor-pointer"
-                    />
-                    <div className="text-xs">
-                      <span className="font-black text-amber-950 block">
-                        Автоопределение психотипов в чате
-                      </span>
-                      <span className="text-[11px] text-stone-600 block leading-tight mt-0.5">
-                        Бот Максимка анализирует характер реплик участников и подстраивает шутки под их слабости (Excel-занудство, страх медведей, любовь к плову, песни у костра).
-                      </span>
-                    </div>
-                  </label>
-                </div>
-              </div>
-
-              <div className="pt-2">
-                <button
-                  type="button"
-                  onClick={() => handleSaveTeamConfig()}
-                  className="px-4 py-2 bg-amber-200 hover:bg-amber-300 text-amber-950 font-black text-xs uppercase rounded-xl border border-amber-400 transition-colors"
-                >
-                  Применить все настройки
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 4: TASKS */}
+      {/* TAB 3: TASKS */}
       {activeTab === 'tasks' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
@@ -1959,6 +1921,105 @@ export default function AdminPanel({
         onClose={() => setParticipantToDelete(null)}
         onConfirm={handleConfirmDeleteParticipant}
       />
+
+      {/* Role Transfer Confirmation Modal (Guarantees zero role duplication in team) */}
+      {roleTransferModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white border-4 border-amber-500 rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-amber-100 border-2 border-amber-400 flex items-center justify-center text-2xl shrink-0">
+                {ROLE_DEFINITIONS[roleTransferModal.newRole]?.icon || '👑'}
+              </div>
+              <div>
+                <h3 className="font-black text-lg text-amber-950 uppercase leading-tight">
+                  Передача командной роли
+                </h3>
+                <p className="text-xs text-stone-600 mt-0.5">
+                  В туристической команде «Негодяи» роль не может дублироваться.
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-amber-50 rounded-xl p-3 border border-amber-300 text-xs text-amber-950 space-y-1">
+              <p className="font-bold">
+                Ключевая должность «{ROLE_DEFINITIONS[roleTransferModal.newRole]?.title}» уже закреплена за другим участником.
+              </p>
+              <p className="text-stone-600">
+                В команде может быть только <strong>один</strong> {ROLE_DEFINITIONS[roleTransferModal.newRole]?.title.toLowerCase()}. Если подтвердить передачу, прежний ответственный автоматически станет рядовым участником команды.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 py-1">
+              {/* Previous holder */}
+              <div className="bg-stone-50 border-2 border-red-300 rounded-xl p-3 flex flex-col justify-between">
+                <span className="text-[10px] font-black uppercase text-red-700 mb-2 block">
+                  Снимается с роли ➔ Участник
+                </span>
+                <div className="flex items-center gap-2">
+                  <img
+                    src={getParticipantAvatar(roleTransferModal.previousHolder)}
+                    alt={roleTransferModal.previousHolder.name}
+                    className="w-10 h-10 rounded-full border border-stone-300 object-cover shrink-0"
+                  />
+                  <div className="min-w-0">
+                    <h4 className="font-black text-xs text-stone-900 truncate">
+                      {roleTransferModal.previousHolder.name}
+                    </h4>
+                    <span className="text-[11px] text-red-600 font-bold block">
+                      @{roleTransferModal.previousHolder.nickname}
+                    </span>
+                  </div>
+                </div>
+                <div className="mt-2 text-[10px] text-stone-500 font-medium">
+                  Статус: станет рядовым Негодяем (⛺ Участник)
+                </div>
+              </div>
+
+              {/* New assignee */}
+              <div className="bg-emerald-50 border-2 border-emerald-400 rounded-xl p-3 flex flex-col justify-between">
+                <span className="text-[10px] font-black uppercase text-emerald-800 mb-2 block">
+                  Новый ответственный ➔ {ROLE_DEFINITIONS[roleTransferModal.newRole]?.badge}
+                </span>
+                <div className="flex items-center gap-2">
+                  <img
+                    src={getParticipantAvatar(roleTransferModal.targetParticipant)}
+                    alt={roleTransferModal.targetParticipant.name}
+                    className="w-10 h-10 rounded-full border border-emerald-400 object-cover shrink-0"
+                  />
+                  <div className="min-w-0">
+                    <h4 className="font-black text-xs text-emerald-950 truncate">
+                      {roleTransferModal.targetParticipant.name}
+                    </h4>
+                    <span className="text-[11px] text-emerald-700 font-bold block">
+                      @{roleTransferModal.targetParticipant.nickname}
+                    </span>
+                  </div>
+                </div>
+                <div className="mt-2 text-[10px] text-emerald-800 font-black">
+                  Получит роль: {ROLE_DEFINITIONS[roleTransferModal.newRole]?.title}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-amber-200">
+              <button
+                type="button"
+                onClick={() => setRoleTransferModal(null)}
+                className="px-4 py-2 bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold text-xs uppercase rounded-xl transition-colors"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmRoleTransfer}
+                className="px-5 py-2 bg-red-600 hover:bg-red-700 text-yellow-300 font-black text-xs uppercase rounded-xl shadow transition-colors flex items-center gap-1.5"
+              >
+                <span>Подтвердить передачу роли</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

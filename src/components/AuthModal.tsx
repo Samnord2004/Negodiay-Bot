@@ -269,11 +269,11 @@ export default function AuthModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
-      <div className="bg-amber-50 border-4 border-red-600 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden my-8">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 sm:p-4 animate-in fade-in duration-150">
+      <div className="bg-amber-50 border-4 border-red-600 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">
         
         {/* Modal Header */}
-        <div className="bg-yellow-400 border-b-4 border-red-600 px-6 py-4 flex items-center justify-between">
+        <div className="bg-yellow-400 border-b-4 border-red-600 px-6 py-4 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">
             <ShieldCheck className="text-red-600 w-6 h-6" />
             <h3 className="font-black text-lg sm:text-xl uppercase text-red-700 tracking-tight">
@@ -290,7 +290,7 @@ export default function AuthModal({
 
         {/* Logged in state */}
         {currentUser ? (
-          <div className="p-6 space-y-4">
+          <div className="p-6 space-y-4 overflow-y-auto flex-1">
             <div className="flex items-center gap-4 bg-white p-4 rounded-xl border-2 border-amber-300 shadow-sm">
               <img 
                 src={getSafeAvatar(currentUser.avatar, currentUser.gender)} 
@@ -360,7 +360,7 @@ export default function AuthModal({
             </div>
           </div>
         ) : (
-          <div className="p-6">
+          <div className="p-6 overflow-y-auto flex-1">
             {/* Mode Switcher */}
             <div className="flex rounded-xl bg-amber-200 p-1 mb-6 border border-amber-300">
               <button

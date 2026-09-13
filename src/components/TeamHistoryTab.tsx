@@ -394,9 +394,9 @@ export default function TeamHistoryTab({
 
       {/* MODAL: ADD / EDIT STORY BLOCK */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-          <div className="bg-yellow-50 border-4 border-red-600 rounded-3xl p-5 sm:p-7 max-w-2xl w-full shadow-2xl space-y-5 my-8">
-            <div className="flex items-center justify-between border-b-2 border-amber-300 pb-3">
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-150">
+          <div className="bg-yellow-50 border-4 border-red-600 rounded-3xl p-5 sm:p-7 max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b-2 border-amber-300 pb-3 shrink-0">
               <h3 className="text-lg sm:text-xl font-black uppercase text-red-600 flex items-center gap-2">
                 <Sparkles size={20} />
                 {editingStory ? 'Редактировать блок истории' : 'Добавить блок истории команды'}
@@ -410,7 +410,7 @@ export default function TeamHistoryTab({
               </button>
             </div>
 
-            <form onSubmit={handleSaveStory} className="space-y-4 text-xs font-bold text-amber-950">
+            <form onSubmit={handleSaveStory} className="space-y-4 text-xs font-bold text-amber-950 overflow-y-auto flex-1 pr-1 pt-4">
               
               {/* Category & Title */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

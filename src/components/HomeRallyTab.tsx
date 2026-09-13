@@ -131,7 +131,9 @@ export default function HomeRallyTab({
 
   const getTeamYearsText = (joinedYear: number, skippedYears?: number[]) => {
     const currentY = new Date().getFullYear();
-    const years = currentY - (joinedYear || 1993) - (skippedYears ? skippedYears.length : 0);
+    const effectiveJoined = Math.max(1993, Math.min(joinedYear || 1993, currentY));
+    const validSkipped = (skippedYears || []).filter(y => y >= effectiveJoined && y <= currentY);
+    const years = currentY - effectiveJoined - validSkipped.length;
     const positiveYears = Math.max(0, years);
     const lastDigit = positiveYears % 10;
     const lastTwoDigits = positiveYears % 100;
@@ -176,7 +178,8 @@ export default function HomeRallyTab({
     if (!editingSkippedParticipant) return;
     setIsSavingSkippedYears(true);
     try {
-      const cleanYears = tempSkippedYears.filter(y => !isNaN(y)).sort((a, b) => a - b);
+      const pJoined = editingSkippedParticipant.joinedYear || 1993;
+      const cleanYears = tempSkippedYears.filter(y => !isNaN(y) && y >= pJoined).sort((a, b) => a - b);
       const res = await fetch(`/api/participants/${editingSkippedParticipant.id}/skipped-years`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -302,7 +305,7 @@ export default function HomeRallyTab({
             <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
               <div>
                 <span className="bg-red-600 text-white font-bold text-xs uppercase px-3 py-1 rounded-full shadow-xs">
-                  🏕️ Официальный штаб слёта
+                  🏕️ Контроль бюджета планируемых мероприятий
                 </span>
                 <h2 className="text-xl sm:text-2xl font-black text-stone-900 uppercase mt-2.5 leading-tight">
                   туристической команды "Негодяи"
@@ -401,7 +404,7 @@ export default function HomeRallyTab({
               <div>
                 <h3 className="text-lg font-black text-stone-900 uppercase flex items-center gap-2">
                   <Users size={20} className="text-red-600" />
-                  Реестр Негодяев команды ({participants.length})
+                  Реестр команды негодяи ({participants.length})
                 </h3>
                 <p className="text-xs text-stone-500 mt-0.5">
                   Учет взносов на текущий слёт, стаж в команде и дни рождения
@@ -481,47 +484,51 @@ export default function HomeRallyTab({
                           </div>
 
                           {/* Skipped Years display */}
-                          {p.skippedYears && p.skippedYears.length > 0 ? (
-                            <div className="mt-1 flex items-center gap-1.5 flex-wrap">
-                              <span className="inline-flex items-center gap-1 bg-red-50 text-red-800 border border-red-200 px-2 py-0.5 rounded-md text-[11px] font-semibold">
-                                <span>Пропущено слётов:</span>
-                                <strong className="text-red-700 font-bold">{p.skippedYears.slice().sort((a,b)=>a-b).join(', ')}</strong>
-                                <span className="text-[10px] text-red-600">({p.skippedYears.length} г.)</span>
-                              </span>
-                              {(isAdmin || currentUser?.id === p.id) && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setEditingSkippedParticipant(p);
-                                    setTempSkippedYears(Array.isArray(p.skippedYears) ? [...p.skippedYears] : []);
-                                  }}
-                                  className="text-[10px] text-red-600 hover:text-red-800 underline font-bold"
-                                  title="Изменить пропущенные года слёта"
-                                >
-                                  ред.
-                                </button>
-                              )}
-                            </div>
-                          ) : (
-                            <div className="mt-1 flex items-center gap-1.5">
-                              <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-md text-[10px] font-semibold">
-                                🎖️ Без пропусков
-                              </span>
-                              {(isAdmin || currentUser?.id === p.id) && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setEditingSkippedParticipant(p);
-                                    setTempSkippedYears([]);
-                                  }}
-                                  className="text-[10px] text-stone-500 hover:text-red-600 underline font-medium"
-                                  title="Указать пропущенные слёты"
-                                >
-                                  + пропуск
-                                </button>
-                              )}
-                            </div>
-                          )}
+                          {(() => {
+                            const pJoined = p.joinedYear || 1993;
+                            const validSkipped = (p.skippedYears || []).filter(y => y >= pJoined);
+                            return validSkipped.length > 0 ? (
+                              <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                                <span className="inline-flex items-center gap-1 bg-red-50 text-red-800 border border-red-200 px-2 py-0.5 rounded-md text-[11px] font-semibold">
+                                  <span>Пропущено слётов:</span>
+                                  <strong className="text-red-700 font-bold">{validSkipped.slice().sort((a,b)=>a-b).join(', ')}</strong>
+                                  <span className="text-[10px] text-red-600">({validSkipped.length} г.)</span>
+                                </span>
+                                {(isAdmin || currentUser?.id === p.id) && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingSkippedParticipant(p);
+                                      setTempSkippedYears(validSkipped);
+                                    }}
+                                    className="text-[10px] text-red-600 hover:text-red-800 underline font-bold"
+                                    title="Изменить пропущенные года слёта"
+                                  >
+                                    ред.
+                                  </button>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="mt-1 flex items-center gap-1.5">
+                                <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-md text-[10px] font-semibold">
+                                  🎖️ Без пропусков
+                                </span>
+                                {(isAdmin || currentUser?.id === p.id) && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingSkippedParticipant(p);
+                                      setTempSkippedYears([]);
+                                    }}
+                                    className="text-[10px] text-stone-500 hover:text-red-600 underline font-medium"
+                                    title="Указать пропущенные слёты"
+                                  >
+                                    + пропуск
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </td>
 
                         {/* Birthday */}
@@ -565,10 +572,10 @@ export default function HomeRallyTab({
                                 }}
                                 disabled={nudgingId === p.id}
                                 className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 active:scale-95 text-amber-900 font-bold text-[10px] uppercase rounded-lg border border-amber-300 flex items-center gap-1 transition-all disabled:opacity-80"
-                                title="Отправить напоминание о взносе в чат от лица Бота Максимки"
+                                title="Отправить напоминание о взносе в общий чат команды"
                               >
                                 <span>⚡</span>
-                                <span>{nudgingId === p.id ? 'Пнули! ⚡' : 'Пнуть ⚡'}</span>
+                                <span>{nudgingId === p.id ? 'Напомнили! ⚡' : 'Напомнить ⚡'}</span>
                               </button>
                             )}
                             {canManagePayments && (
@@ -839,46 +846,62 @@ export default function HomeRallyTab({
               </div>
             </div>
 
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase text-stone-800">
-                  Выберите года, когда участник пропустил слёт (с 1993 года):
-                </span>
-                <span className="text-xs font-bold text-red-600">
-                  {tempSkippedYears.length > 0 ? `Пропусков: ${tempSkippedYears.length}` : 'Без пропусков'}
-                </span>
-              </div>
+            {(() => {
+              const currentY = new Date().getFullYear();
+              const memberJoinedYear = Math.max(1993, Math.min(editingSkippedParticipant.joinedYear || 1993, currentY));
+              const availableYears = Array.from(
+                { length: currentY - memberJoinedYear + 1 },
+                (_, i) => memberJoinedYear + i
+              );
+              const validSkipped = tempSkippedYears.filter(y => y >= memberJoinedYear && y <= currentY);
 
-              <div className="max-h-48 overflow-y-auto p-2 bg-white rounded-xl border border-stone-200 grid grid-cols-4 sm:grid-cols-6 gap-1.5 scrollbar-thin">
-                {Array.from({ length: new Date().getFullYear() - 1993 + 1 }, (_, i) => 1993 + i).map(year => {
-                  const isSkipped = tempSkippedYears.includes(year);
-                  return (
-                    <button
-                      key={year}
-                      type="button"
-                      onClick={() => {
-                        if (isSkipped) {
-                          setTempSkippedYears(prev => prev.filter(y => y !== year));
-                        } else {
-                          setTempSkippedYears(prev => [...prev, year].sort((a, b) => a - b));
-                        }
-                      }}
-                      className={`py-1.5 px-2 rounded-lg text-xs font-bold border transition-all ${
-                        isSkipped
-                          ? 'bg-red-50 text-red-700 border-red-300'
-                          : 'bg-white text-stone-700 border-stone-200 hover:bg-stone-50'
-                      }`}
-                    >
-                      {year} {isSkipped ? '✕' : '✓'}
-                    </button>
-                  );
-                })}
-              </div>
+              return (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase text-stone-800">
+                      Пропущенные слёты участника (с момента прихода в {memberJoinedYear} г.):
+                    </span>
+                    <span className="text-xs font-bold text-red-600">
+                      {validSkipped.length > 0 ? `Пропусков: ${validSkipped.length}` : 'Без пропусков'}
+                    </span>
+                  </div>
 
-              <p className="text-[11px] text-stone-500 italic pt-1">
-                Расчёт стажа: {getTeamYearsText(editingSkippedParticipant.joinedYear || 1993, tempSkippedYears)} чистой верности команде.
-              </p>
-            </div>
+                  <p className="text-[11px] text-stone-500 leading-snug">
+                    Отображаются только года с момента первого прихода в команду ({memberJoinedYear} г.). Года ранее {memberJoinedYear} г. не показываются.
+                  </p>
+
+                  <div className="max-h-48 overflow-y-auto p-2 bg-white rounded-xl border border-stone-200 grid grid-cols-4 sm:grid-cols-6 gap-1.5 scrollbar-thin">
+                    {availableYears.map(year => {
+                      const isSkipped = validSkipped.includes(year);
+                      return (
+                        <button
+                          key={year}
+                          type="button"
+                          onClick={() => {
+                            if (isSkipped) {
+                              setTempSkippedYears(prev => prev.filter(y => y !== year && y >= memberJoinedYear));
+                            } else {
+                              setTempSkippedYears(prev => [...prev.filter(y => y >= memberJoinedYear), year].sort((a, b) => a - b));
+                            }
+                          }}
+                          className={`py-1.5 px-2 rounded-lg text-xs font-bold border transition-all ${
+                            isSkipped
+                              ? 'bg-red-50 text-red-700 border-red-300'
+                              : 'bg-white text-stone-700 border-stone-200 hover:bg-stone-50'
+                          }`}
+                        >
+                          {year} {isSkipped ? '✕' : '✓'}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <p className="text-[11px] text-stone-500 italic pt-1">
+                    Расчёт стажа: {getTeamYearsText(memberJoinedYear, validSkipped)} чистой верности команде.
+                  </p>
+                </div>
+              );
+            })()}
 
             <div className="flex items-center justify-end gap-2 pt-2 border-t-2 border-amber-200">
               <button

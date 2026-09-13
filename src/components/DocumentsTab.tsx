@@ -426,10 +426,10 @@ export default function DocumentsTab({
 
       {/* ADD DOCUMENT / PHOTO MODAL */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 overflow-y-auto">
-          <div className="bg-white border border-stone-200 rounded-3xl shadow-xl w-full max-w-lg overflow-hidden my-6 animate-in fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-4 animate-in fade-in duration-150">
+          <div className="bg-white border border-stone-200 rounded-3xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">
             
-            <div className="px-6 py-4 border-b border-stone-100 flex items-center justify-between">
+            <div className="px-6 py-4 border-b border-stone-100 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
                 <FileText className="text-red-600 w-5 h-5" />
                 <h3 className="font-bold text-base text-stone-900">
@@ -444,7 +444,7 @@ export default function DocumentsTab({
               </button>
             </div>
 
-            <form onSubmit={handleAddSubmit} className="p-6 space-y-4">
+            <form onSubmit={handleAddSubmit} className="p-6 space-y-4 overflow-y-auto flex-1">
               {formError && (
                 <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-semibold">
                   {formError}
@@ -600,10 +600,10 @@ export default function DocumentsTab({
 
       {/* DOCUMENT PREVIEW MODAL */}
       {activeDocPreview && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 overflow-y-auto">
-          <div className="bg-white border border-stone-200 rounded-3xl shadow-xl w-full max-w-2xl overflow-hidden my-6 animate-in fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-4 animate-in fade-in duration-150">
+          <div className="bg-white border border-stone-200 rounded-3xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">
             
-            <div className="px-6 py-4 border-b border-stone-100 flex items-center justify-between">
+            <div className="px-6 py-4 border-b border-stone-100 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2.5">
                 <FileText className="text-red-600 w-5 h-5" />
                 <div>

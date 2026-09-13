@@ -4,7 +4,7 @@ export const participants = pgTable("participants", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   nickname: text("nickname").notNull(),
-  psychotype: text("psychotype").notNull(),
+  psychotype: text("psychotype"),
   avatar: text("avatar").notNull(),
   paidAmount: integer("paid_amount").notNull().default(0),
   totalCost: integer("total_cost").notNull().default(0),
@@ -61,8 +61,8 @@ export const inventoryItems = pgTable("inventory_items", {
 
 export const botConfig = pgTable("bot_config", {
   id: integer("id").primaryKey().default(1),
-  swearingLevel: text("swearing_level").notNull().default("medium"),
-  autoDetectPsychotype: boolean("auto_detect_psychotype").notNull().default(true),
+  swearingLevel: text("swearing_level"),
+  autoDetectPsychotype: boolean("auto_detect_psychotype"),
   activePersonality: text("active_personality").notNull().default("Старожила слётов"),
   welcomeTemplate: text("welcome_template").notNull().default("Привет, {name}! Добро пожаловать на Слёт Негодяев!"),
   foundingYear: integer("founding_year").notNull().default(1993),
@@ -86,7 +86,7 @@ export const messages = pgTable("messages", {
   id: text("id").primaryKey(),
   senderName: text("sender_name").notNull(),
   senderNickname: text("sender_nickname").notNull(),
-  senderPsychotype: text("sender_psychotype").notNull(),
+  senderPsychotype: text("sender_psychotype"),
   text: text("text").notNull(),
   timestamp: text("timestamp").notNull(),
   isBot: boolean("is_bot").notNull().default(false),

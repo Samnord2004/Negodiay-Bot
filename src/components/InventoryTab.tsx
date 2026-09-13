@@ -193,7 +193,7 @@ export default function InventoryTab({
                 type="text"
                 value={itemResponsible}
                 onChange={(e) => setItemResponsible(e.target.value)}
-                placeholder="Лёха, Саня, База"
+                placeholder="Андрей, Саня, База"
                 className="w-full bg-white border border-amber-400 rounded-xl p-2"
               />
             </div>

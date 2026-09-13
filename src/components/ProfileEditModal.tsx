@@ -5,7 +5,6 @@ import {
   Check, Trash2, Eye, Award, CheckCircle2
 } from 'lucide-react';
 import { Participant, ROLE_DEFINITIONS, AvatarSource } from '../types';
-import { PSYCHOTYPES } from '../mockData';
 import { compressImage } from '../utils/imageCompressor';
 import { formatBirthdayShort } from '../utils/dateUtils';
 import { getSafeAvatar } from '../utils/avatar';
@@ -31,7 +30,6 @@ export default function ProfileEditModal({
   const [joinedYear, setJoinedYear] = useState<number>(1993);
   const [skippedYears, setSkippedYears] = useState<number[]>([]);
   const [gender, setGender] = useState<'male' | 'female'>('male');
-  const [psychotype, setPsychotype] = useState('');
   
   // Two photos in personal data
   const [photoFront, setPhotoFront] = useState('');
@@ -52,10 +50,11 @@ export default function ProfileEditModal({
       setEmail(currentUser.email || '');
       setPhone(currentUser.phone || '');
       setBirthday(currentUser.birthday ? formatBirthdayShort(currentUser.birthday) : '');
-      setJoinedYear(currentUser.joinedYear || 1993);
-      setSkippedYears(Array.isArray(currentUser.skippedYears) ? currentUser.skippedYears : []);
+      const initJoined = currentUser.joinedYear || 1993;
+      setJoinedYear(initJoined);
+      const rawSkipped = Array.isArray(currentUser.skippedYears) ? currentUser.skippedYears : [];
+      setSkippedYears(rawSkipped.filter(y => y >= initJoined));
       setGender(currentUser.gender || 'male');
-      setPsychotype(currentUser.psychotype || PSYCHOTYPES[0]?.name || 'Весельчак-балагур');
 
       const front = currentUser.photoFront || '';
       const profile = currentUser.photoProfile || '';
@@ -81,10 +80,13 @@ export default function ProfileEditModal({
   if (!isOpen || !currentUser) return null;
 
   const currentYear = new Date().getFullYear();
-  const allYearsSince1993: number[] = [];
-  for (let y = 1993; y <= currentYear; y++) {
-    allYearsSince1993.push(y);
+  const effectiveJoinedYear = Math.max(1993, Math.min(Number(joinedYear) || 1993, currentYear));
+  const memberYearsList: number[] = [];
+  for (let y = effectiveJoinedYear; y <= currentYear; y++) {
+    memberYearsList.push(y);
   }
+  const validSkippedYears = skippedYears.filter(y => y >= effectiveJoinedYear && y <= currentYear);
+  const totalRalliesSinceJoined = currentYear - effectiveJoinedYear + 1;
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, slot: 'front' | 'profile') => {
     const file = e.target.files?.[0];
@@ -165,10 +167,9 @@ export default function ProfileEditModal({
           email: email.trim(),
           phone: phone.trim(),
           birthday: normalizedBirthday,
-          joinedYear: Number(joinedYear) || 1993,
-          skippedYears: skippedYears.filter(y => !isNaN(y)),
+          joinedYear: effectiveJoinedYear,
+          skippedYears: validSkippedYears,
           gender,
-          psychotype,
           photoFront: photoFront.trim(),
           photoProfile: photoProfile.trim(),
           selectedAvatarSource,
@@ -196,8 +197,8 @@ export default function ProfileEditModal({
   const roleMeta = currentUser.role ? ROLE_DEFINITIONS[currentUser.role] : null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-stone-900/60 backdrop-blur-xs overflow-y-auto animate-in fade-in duration-200">
-      <div className="bg-white border border-stone-200 rounded-3xl shadow-xl max-w-2xl w-full overflow-hidden my-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-stone-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+      <div className="bg-white border border-stone-200 rounded-3xl shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">
         
         {/* Header */}
         <div className="bg-white px-6 py-4 flex items-center justify-between border-b border-stone-100">
@@ -636,102 +637,96 @@ export default function ProfileEditModal({
               <input
                 type="number"
                 min="1993"
-                max={new Date().getFullYear()}
+                max={currentYear}
                 value={joinedYear}
-                onChange={(e) => setJoinedYear(Number(e.target.value))}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  setJoinedYear(val);
+                  if (val && !isNaN(val)) {
+                    const bounded = Math.max(1993, Math.min(val, currentYear));
+                    setSkippedYears(prev => prev.filter(y => y >= bounded));
+                  }
+                }}
                 className="w-full px-3 py-2 bg-white border border-stone-200 focus:border-red-500 rounded-xl text-xs font-medium text-stone-900 outline-none transition-colors"
               />
               <p className="text-[10px] text-stone-500 mt-1">Основание команды — 1993 г.</p>
             </div>
           </div>
 
-          {/* Skipped Rally Years (Пропущенные года слёта с 1993 г.) */}
-          <div className="bg-stone-50 border border-stone-200 rounded-2xl p-3.5">
-            <div className="flex items-center justify-between mb-1">
+          {/* Skipped Rally Years (только с момента первого прихода в команду) */}
+          <div className="bg-stone-50 border border-stone-200 rounded-2xl p-3.5 space-y-2">
+            <div className="flex items-center justify-between flex-wrap gap-1">
               <label className="block text-xs font-bold uppercase text-stone-800">
-                Пропущенные слёты команды (с 1993 г.)
+                Пропущенные слёты члена команды (с {effectiveJoinedYear} г.)
               </label>
-              <span className="text-[11px] font-bold text-red-600">
-                {skippedYears.length > 0 ? `Пропущено: ${skippedYears.length} г.` : 'Без пропусков (все слёты)'}
+              <span className={`text-[11px] font-bold ${validSkippedYears.length > 0 ? 'text-red-600' : 'text-emerald-700'}`}>
+                {validSkippedYears.length > 0 
+                  ? `Пропущено: ${validSkippedYears.length} из ${totalRalliesSinceJoined} сл.` 
+                  : '🎖️ Без пропусков с момента прихода'}
               </span>
             </div>
-            <p className="text-[11px] text-stone-500 mb-2.5">
-              Нажмите на год слёта, чтобы отметить пропуск. Влияет на расчёт непрерывного походного стажа.
+            <p className="text-[11px] text-stone-500 leading-snug">
+              Для выбора доступны только слёты с года вашего первого прихода в команду (<strong>{effectiveJoinedYear} г.</strong>). Года ранее {effectiveJoinedYear} г. не отображаются, так как вы тогда ещё не вступили в команду.
             </p>
-            <div className="max-h-36 overflow-y-auto p-1 bg-white rounded-xl border border-stone-200 flex flex-wrap gap-1.5 scrollbar-thin">
-              {allYearsSince1993.map(year => {
-                const isSkipped = skippedYears.includes(year);
+            <div className="max-h-36 overflow-y-auto p-1.5 bg-white rounded-xl border border-stone-200 flex flex-wrap gap-1.5 scrollbar-thin">
+              {memberYearsList.map(year => {
+                const isSkipped = validSkippedYears.includes(year);
                 return (
                   <button
                     key={year}
                     type="button"
                     onClick={() => {
                       if (isSkipped) {
-                        setSkippedYears(prev => prev.filter(y => y !== year));
+                        setSkippedYears(prev => prev.filter(y => y !== year && y >= effectiveJoinedYear));
                       } else {
-                        setSkippedYears(prev => [...prev, year].sort((a, b) => a - b));
+                        setSkippedYears(prev => [...prev.filter(y => y >= effectiveJoinedYear), year].sort((a, b) => a - b));
                       }
                     }}
-                    className={`px-2 py-1 rounded-lg text-xs font-bold border transition-all ${
+                    className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border transition-all ${
                       isSkipped
-                        ? 'bg-red-50 text-red-700 border-red-300'
+                        ? 'bg-red-50 text-red-700 border-red-300 shadow-xs'
                         : 'bg-white text-stone-700 border-stone-200 hover:bg-stone-50'
                     }`}
                   >
-                    {year} {isSkipped ? '✕' : '✓'}
+                    {year} {isSkipped ? '✕ пропуск' : '✓ был'}
                   </button>
                 );
               })}
             </div>
+            <div className="text-[10px] text-stone-500 font-medium flex items-center justify-between pt-0.5 border-t border-stone-200/60">
+              <span>Слётов в составе команды: <strong>{totalRalliesSinceJoined}</strong></span>
+              <span>Фактический походный стаж: <strong className="text-amber-950">{Math.max(0, totalRalliesSinceJoined - validSkippedYears.length)} сл.</strong></span>
+            </div>
           </div>
 
-          {/* Gender and Psychotype */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-bold uppercase text-stone-800 mb-1">
-                Пол
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setGender('male')}
-                  className={`py-2 px-3 rounded-xl font-bold text-xs border transition-all ${
-                    gender === 'male'
-                      ? 'bg-stone-900 text-white border-stone-900'
-                      : 'bg-white text-stone-700 border-stone-200 hover:bg-stone-50'
-                  }`}
-                >
-                  🧑 Парень
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setGender('female')}
-                  className={`py-2 px-3 rounded-xl font-bold text-xs border transition-all ${
-                    gender === 'female'
-                      ? 'bg-red-600 text-white border-red-600'
-                      : 'bg-white text-stone-700 border-stone-200 hover:bg-stone-50'
-                  }`}
-                >
-                  👩 Девушка
-                </button>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold uppercase text-stone-800 mb-1">
-                Походный психотип
-              </label>
-              <select
-                value={psychotype}
-                onChange={(e) => setPsychotype(e.target.value)}
-                className="w-full px-3 py-2 bg-white border border-stone-200 focus:border-red-500 rounded-xl text-xs font-medium text-stone-900 outline-none transition-colors"
+          {/* Gender */}
+          <div>
+            <label className="block text-xs font-bold uppercase text-stone-800 mb-1">
+              Пол
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setGender('male')}
+                className={`py-2 px-3 rounded-xl font-bold text-xs border transition-all ${
+                  gender === 'male'
+                    ? 'bg-stone-900 text-white border-stone-900'
+                    : 'bg-white text-stone-700 border-stone-200 hover:bg-stone-50'
+                }`}
               >
-                {PSYCHOTYPES.map((pt) => (
-                  <option key={pt.name} value={pt.name}>
-                    {pt.emoji} {pt.name}
-                  </option>
-                ))}
-              </select>
+                🧑 Парень
+              </button>
+              <button
+                type="button"
+                onClick={() => setGender('female')}
+                className={`py-2 px-3 rounded-xl font-bold text-xs border transition-all ${
+                  gender === 'female'
+                    ? 'bg-red-600 text-white border-red-600'
+                    : 'bg-white text-stone-700 border-stone-200 hover:bg-stone-50'
+                }`}
+              >
+                👩 Девушка
+              </button>
             </div>
           </div>
 

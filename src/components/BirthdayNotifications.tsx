@@ -45,11 +45,11 @@ export default function BirthdayNotifications({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/40 backdrop-blur-xs p-4 overflow-y-auto">
-      <div className="bg-white border border-stone-200 rounded-3xl shadow-xl w-full max-w-2xl overflow-hidden my-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/50 backdrop-blur-xs p-3 sm:p-4 animate-in fade-in duration-150">
+      <div className="bg-white border border-stone-200 rounded-3xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">
         
         {/* Header */}
-        <div className="bg-gradient-to-r from-amber-50/80 via-white to-red-50/40 border-b border-stone-200 px-6 py-4 flex items-center justify-between">
+        <div className="bg-gradient-to-r from-amber-50/80 via-white to-red-50/40 border-b border-stone-200 px-6 py-4 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-amber-100/90 border border-amber-300 flex items-center justify-center text-red-600 shadow-2xs">
               <Cake className="w-5 h-5" />

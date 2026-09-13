@@ -10,7 +10,6 @@ import {
   MenuItem, GroceryItem, CreativityIdea, FundRecord, TeamStory, 
   ROLE_DEFINITIONS 
 } from '../types';
-import { PSYCHOTYPES } from '../mockData';
 import { getSafeAvatar, getParticipantAvatar } from '../utils/avatar';
 import DeleteParticipantModal from './DeleteParticipantModal';
 
@@ -50,10 +49,10 @@ interface SectionItem {
 const SITE_SECTIONS: SectionItem[] = [
   {
     id: 'sec_history',
-    title: 'Реестр негодяев и история команды',
+    title: 'Реестр команды негодяи и история',
     category: 'Команда',
     description: 'Полный список участников, архив слётов с 1993 года, герои костра и традиции',
-    keywords: ['реестр негодяев', 'реестр', 'состав', 'участники', 'негодяи', 'список', 'команда', 'братство', 'база', 'история', 'герои', 'традиции'],
+    keywords: ['реестр команды негодяи', 'реестр негодяев', 'реестр', 'состав', 'участники', 'негодяи', 'список', 'команда', 'братство', 'база', 'история', 'герои', 'традиции'],
     tabId: 'history',
     icon: BookOpen,
     badge: 'Главная база'
@@ -70,10 +69,10 @@ const SITE_SECTIONS: SectionItem[] = [
   },
   {
     id: 'sec_rallies',
-    title: 'Планируемые слёты и программа',
+    title: 'Планируемые слёты и Контроль бюджета',
     category: 'Слёты',
-    description: 'Главный ежегодный лесной сбор Негодяев 2026, сплавы, карта лагеря и регламент',
-    keywords: ['слёты', 'слёт', 'ралли', 'лагерь', 'программа', 'сбор', 'выезд', '2026', 'палатки', 'поляна', 'расписание'],
+    description: 'Контроль бюджета планируемых мероприятий, сборы, сплавы, карта лагеря и регламент',
+    keywords: ['контроль бюджета планируемых мероприятий', 'контроль бюджета', 'бюджет', 'слёты', 'слёт', 'ралли', 'лагерь', 'программа', 'сбор', 'выезд', '2026', 'палатки', 'поляна', 'расписание'],
     tabId: 'home',
     subTab: 'overview',
     icon: Compass,
@@ -135,13 +134,13 @@ const SITE_SECTIONS: SectionItem[] = [
   },
   {
     id: 'sec_gallery',
-    title: 'Фотогалерея команды',
+    title: 'Фотогалерея и Облачные архивы',
     category: 'Медиа',
-    description: 'Исторические фотографии слётов, сплавов, костров и карнавалов разных лет',
-    keywords: ['фотогалерея', 'фото', 'фотографии', 'снимки', 'альбомы', 'кадры', 'воспоминания'],
+    description: 'Исторические фотографии и архивы на Яндекс Диске с 1993 года, сплавы, костры и карнавалы',
+    keywords: ['фотогалерея', 'фото', 'фотографии', 'снимки', 'альбомы', 'кадры', 'воспоминания', 'яндекс диск', 'яндекс.диск', 'диск', 'облако', 'облачный архив', 'хранилище', '1993'],
     tabId: 'gallery',
     icon: FolderArchive,
-    badge: 'Архив фото'
+    badge: 'Архив с 1993'
   },
   {
     id: 'sec_fund',
@@ -169,7 +168,7 @@ const SITE_SECTIONS: SectionItem[] = [
     category: 'Календарь',
     description: 'Календарь именинников команды, ближайшие юбилеи и поздравления',
     keywords: ['дни рождения', 'день рождения', 'именинники', 'днюхи', 'поздравления', 'календарь', 'возраст', 'праздник'],
-    tabId: 'history',
+    tabId: 'birthdays',
     icon: Cake,
     badge: 'Праздники',
     customAction: 'birthdays'
@@ -297,7 +296,6 @@ export default function SiteSearch({
 
       // Role info
       const roleInfo = p.role ? ROLE_DEFINITIONS[p.role] : ROLE_DEFINITIONS.member;
-      const psychotypeMeta = PSYCHOTYPES.find(pt => pt.name === p.psychotype);
 
       return {
         participant: p,
@@ -315,8 +313,7 @@ export default function SiteSearch({
         memberContests,
         votedIdeas,
         authoredIdeas,
-        roleInfo,
-        psychotypeMeta
+        roleInfo
       };
     });
   }, [cleanQuery, participants, tasks, contests, creativityIdeas, fundRecords, inventoryItems, groceryItems, currentUser]);
@@ -370,6 +367,7 @@ export default function SiteSearch({
     setIsOpen(false);
     setQuery('');
     if (sec.customAction === 'birthdays') {
+      onNavigateTab('birthdays');
       onOpenBirthdays();
     } else {
       onNavigateTab(sec.tabId, sec.subTab);
@@ -381,8 +379,10 @@ export default function SiteSearch({
       
       {/* SEARCH INPUT BAR IN GLOBAL HEADER */}
       <div className="relative flex items-center w-full">
-        <div className="absolute left-3 text-amber-800/80 pointer-events-none flex items-center">
-          <Search size={16} className={isOpen ? 'text-red-600' : 'text-amber-800'} />
+        <div className="absolute left-3 pointer-events-none flex items-center">
+          <span className="text-red-700 font-black text-xs uppercase tracking-wider select-none">
+            НАЙТИ:
+          </span>
         </div>
 
         <input
@@ -394,13 +394,13 @@ export default function SiteSearch({
             setQuery(e.target.value);
             if (!isOpen) setIsOpen(true);
           }}
-          placeholder="Поиск по сайту (участники, долги, задачи, документы...)"
-          className="w-full pl-9 pr-16 py-2 bg-amber-50/95 hover:bg-white focus:bg-white text-amber-950 font-bold text-xs sm:text-sm border border-amber-400 focus:border-red-600 focus:ring-2 focus:ring-red-500/20 rounded-xl shadow-xs placeholder:text-amber-800/60 focus:outline-none transition-all duration-150"
+          placeholder="участники, долги, задачи, документы, конкурсы..."
+          className="w-full pl-20 pr-24 py-2 bg-amber-50/95 hover:bg-white focus:bg-white text-amber-950 font-bold text-xs sm:text-sm border-2 border-amber-400 focus:border-red-600 focus:ring-2 focus:ring-red-500/20 rounded-xl shadow-xs placeholder:text-amber-800/60 focus:outline-none transition-all duration-150"
         />
 
-        {/* Clear Button / Hotkey indicator */}
-        <div className="absolute right-2 flex items-center gap-1">
-          {query ? (
+        {/* Clear Button and 'НАЙТИ' button */}
+        <div className="absolute right-1.5 flex items-center gap-1.5">
+          {query && (
             <button
               type="button"
               onClick={() => {
@@ -412,26 +412,28 @@ export default function SiteSearch({
             >
               <X size={14} />
             </button>
-          ) : (
-            <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 bg-amber-200/60 border border-amber-300 rounded-md select-none">
-              ⌘K
-            </kbd>
           )}
+          <button
+            type="button"
+            onClick={() => {
+              setIsOpen(true);
+              searchInputRef.current?.focus();
+            }}
+            className="px-3 py-1 bg-red-600 hover:bg-red-700 text-yellow-300 text-xs font-black uppercase tracking-wider rounded-lg shadow-xs transition-all active:scale-95 cursor-pointer flex items-center gap-1"
+          >
+            <span>НАЙТИ</span>
+          </button>
         </div>
       </div>
 
-      {/* DROPDOWN SEARCH RESULTS PANEL */}
+      {/* SEARCH RESULTS POPUP PANEL - STRICTLY CENTERED ON SCREEN */}
       {isOpen && (
-        <>
-          {/* Semi-transparent click-outside backdrop */}
-          <div
-            className="fixed inset-0 bg-stone-950/25 backdrop-blur-2xs z-40 transition-opacity animate-in fade-in duration-100"
-            onClick={() => setIsOpen(false)}
-            aria-hidden="true"
-          />
-
+        <div 
+          className="fixed inset-0 z-50 bg-stone-950/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-150"
+          onClick={() => setIsOpen(false)}
+        >
           <div 
-            className="absolute top-full left-1/2 -translate-x-1/2 w-[calc(100vw-24px)] sm:w-[560px] md:w-[640px] max-w-2xl mt-2.5 bg-white border-2 border-amber-400 rounded-3xl shadow-2xl z-50 overflow-hidden max-h-[min(78vh,640px)] flex flex-col ring-1 ring-black/10 animate-in fade-in zoom-in-98 slide-in-from-top-2 duration-150"
+            className="w-full sm:w-[580px] md:w-[680px] max-w-2xl bg-white border-4 border-amber-500 rounded-3xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col ring-1 ring-black/10 animate-in zoom-in-95 duration-150 pointer-events-auto"
             onClick={(e) => e.stopPropagation()}
           >
             
@@ -558,7 +560,6 @@ export default function SiteSearch({
                     votedIdeas,
                     authoredIdeas,
                     roleInfo,
-                    psychotypeMeta,
                     pInventory,
                     pGroceries
                   }) => {
@@ -593,11 +594,6 @@ export default function SiteSearch({
                                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${roleInfo.color}`}>
                                   {roleInfo.icon} {roleInfo.title}
                                 </span>
-                                {p.psychotype && (
-                                  <span className="text-[10px] font-medium text-amber-900 bg-amber-100/80 px-2 py-0.5 rounded border border-amber-300">
-                                    {psychotypeMeta?.emoji || '🎭'} {p.psychotype}
-                                  </span>
-                                )}
                                 <span className="text-[10px] text-stone-500">
                                   В банде с {p.joinedYear || 1993}г
                                 </span>
@@ -804,12 +800,6 @@ export default function SiteSearch({
                             <p className="text-[10px] text-stone-600 leading-tight mb-1 line-clamp-2">
                               {roleInfo.description}
                             </p>
-
-                            {psychotypeMeta && (
-                              <div className="p-1.5 bg-amber-50 rounded text-[10px] text-amber-950 italic border border-amber-200 truncate">
-                                «{psychotypeMeta.typicalPhrase}»
-                              </div>
-                            )}
 
                             <button
                               type="button"
@@ -1063,8 +1053,8 @@ export default function SiteSearch({
           </div>
 
         </div>
-        </>
-      )}
+      </div>
+    )}
 
       {/* FULL PERSONAL DOSSIER MODAL VIEW */}
       {selectedParticipant && (
@@ -1128,11 +1118,6 @@ export default function SiteSearch({
                     }`}>
                       {selectedParticipant.role ? ROLE_DEFINITIONS[selectedParticipant.role]?.icon : '⛺'} {selectedParticipant.role ? ROLE_DEFINITIONS[selectedParticipant.role]?.title : 'Участник'}
                     </span>
-                    {selectedParticipant.psychotype && (
-                      <span className="text-[10px] font-medium text-amber-900 bg-amber-100/80 px-2 py-0.5 rounded border border-amber-300">
-                        🎭 {selectedParticipant.psychotype}
-                      </span>
-                    )}
                   </div>
                 </div>
               </div>

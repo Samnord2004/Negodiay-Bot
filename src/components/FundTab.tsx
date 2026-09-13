@@ -110,7 +110,7 @@ export default function FundTab({
   // Find the appointed treasurer
   const currentTreasurer = participants.find(p => p.role === 'treasurer') || 
                            participants.find(p => p.nickname.toLowerCase().includes('булочк')) || 
-                           participants[0];
+                           null;
 
   // Check if current user has treasurer rights
   const hasTreasurerRights = 
@@ -339,6 +339,16 @@ export default function FundTab({
 
   const handleAssignTreasurer = async () => {
     if (!selectedTreasurerId) return;
+    const target = participants.find(p => p.id === selectedTreasurerId);
+    if (!target) return;
+
+    if (currentTreasurer && currentTreasurer.id !== selectedTreasurerId) {
+      const confirmTransfer = window.confirm(
+        `В туристической команде «Негодяи» роль не может дублироваться — казначей может быть только один.\n\nПередать полномочия казначея фонда участнику ${target.name} (@${target.nickname})?\n\nПрежний ответственный (${currentTreasurer.name}) станет обычным участником команды.`
+      );
+      if (!confirmTransfer) return;
+    }
+
     try {
       const res = await fetch('/api/admin/set-role', {
         method: 'POST',
@@ -351,7 +361,11 @@ export default function FundTab({
       const data = await res.json();
       if (res.ok && data.success) {
         onSetTreasurer(selectedTreasurerId);
-        setNotificationToast(`Казначеем фонда успешно назначен: ${participants.find(p => p.id === selectedTreasurerId)?.name}`);
+        if (data.replacedUser) {
+          setNotificationToast(`💰 Казначеем фонда назначен ${target.name}. Прежний казначей (${data.replacedUser.name}) переведен в участники команды.`);
+        } else {
+          setNotificationToast(`💰 Казначеем фонда успешно назначен: ${target.name}`);
+        }
       }
     } catch (err) {
       console.error(err);

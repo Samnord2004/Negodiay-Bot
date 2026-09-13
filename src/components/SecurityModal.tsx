@@ -90,11 +90,11 @@ export default function SecurityModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
-      <div className="bg-amber-50 border-4 border-red-600 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 sm:p-4 animate-in fade-in duration-150">
+      <div className="bg-amber-50 border-4 border-red-600 rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">
         
         {/* Header */}
-        <div className="bg-yellow-400 border-b-4 border-red-600 px-6 py-4 flex items-center justify-between">
+        <div className="bg-yellow-400 border-b-4 border-red-600 px-6 py-4 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">
             <ShieldCheck className="text-red-600 w-6 h-6" />
             <h3 className="font-black text-lg uppercase text-red-700 tracking-tight">
@@ -109,7 +109,7 @@ export default function SecurityModal({
           </button>
         </div>
 
-        <div className="p-6 space-y-6">
+        <div className="p-6 space-y-6 overflow-y-auto flex-1">
           {errorMsg && (
             <div className="p-3 bg-red-100 border-2 border-red-500 rounded-xl text-xs text-red-800 font-bold flex items-start gap-2">
               <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />

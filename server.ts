@@ -15,6 +15,7 @@ import {
   updateParticipantPassword,
   updateParticipantBiometrics,
   registerNewParticipant,
+  isBannedBotParticipant,
   getExcursions,
   saveExcursions,
   addOrUpdateExcursion,
@@ -90,6 +91,34 @@ function getGeminiClient(): GoogleGenAI | null {
   return aiClient;
 }
 
+function parseBirthday(bdayStr?: string): { day: number; month: number; year?: number; formatted: string } | null {
+  if (!bdayStr || typeof bdayStr !== "string") return null;
+  const str = bdayStr.trim();
+  if (str.includes('.')) {
+    const parts = str.split('.');
+    if (parts.length >= 2) {
+      const day = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10);
+      const year = parts[2] ? parseInt(parts[2], 10) : undefined;
+      if (!isNaN(day) && !isNaN(month)) {
+        return { day, month, year, formatted: `${String(day).padStart(2, '0')}.${String(month).padStart(2, '0')}` };
+      }
+    }
+  }
+  if (str.includes('-')) {
+    const parts = str.split('-');
+    if (parts.length >= 3) {
+      const year = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10);
+      const day = parseInt(parts[2], 10);
+      if (!isNaN(day) && !isNaN(month)) {
+        return { day, month, year, formatted: `${String(day).padStart(2, '0')}.${String(month).padStart(2, '0')}` };
+      }
+    }
+  }
+  return null;
+}
+
 // Shared, robust bot response generator supporting both Web client and active Telegram Bot
 async function generateBotResponseInternal(body: any): Promise<any> {
   const {
@@ -106,12 +135,17 @@ async function generateBotResponseInternal(body: any): Promise<any> {
     groceryItems = [],
     inventoryItems = [],
     participants = [],
-    contests = getContests()
+    contests = getContests(),
+    documents = getTeamDocuments()
   } = body;
 
   const birthdayContext = (participants || []).map((p: any) => 
     `- ${p.name} (@${p.nickname}): ДР ${p.birthday || "не указан"}`
   ).join("\n") || "Нет данных о днях рождения.";
+
+  const documentsContext = (documents || []).map((d: any) =>
+    `- Документ: "${d.title}" (${d.category === 'statutory' ? 'Уставной документ' : d.category === 'rally' ? 'Положение о слёте' : 'Памятка / Инструкция'}) | Описание: ${d.description || ''}`
+  ).join("\n") || "База документов и регламентов пуста.";
 
   const today = new Date();
   const currentMonth = today.getMonth() + 1;
@@ -232,6 +266,102 @@ async function generateBotResponseInternal(body: any): Promise<any> {
       detectedPsychotype: "Весельчак-балагур",
       detectedPsychotypeExplanation: "Задорный командный боевой заряд 'Давай Негодяй'!",
       adapterStyleUsed: "Командный боевой клич"
+    };
+  }
+
+  // 8. Дни рождения команды (Birthdays)
+  const isBirthdayQuery = msgLower.includes("днюх") || msgLower.includes("рожден") || msgLower.includes("именин") || msgLower.includes("поздрав");
+  if (isBirthdayQuery) {
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1;
+    const currentDay = now.getDate();
+
+    const todayList = (participants || []).filter((p: any) => {
+      const bday = parseBirthday(p.birthday);
+      return bday && bday.month === currentMonth && bday.day === currentDay;
+    });
+
+    const upcomingList = (participants || [])
+      .map((p: any) => {
+        const bday = parseBirthday(p.birthday);
+        return bday ? `${p.name} (@${p.nickname} — ${bday.formatted})` : null;
+      })
+      .filter(Boolean)
+      .slice(0, 6)
+      .join(", ");
+
+    let bdayText = "";
+    if (todayList.length > 0) {
+      const bdayPerson = todayList.map((p: any) => `${p.name} (@${p.nickname})`).join(" и ");
+      if (swearingLevel === "high") {
+        bdayText = `🎉 Ёбаный карась! У ${bdayPerson} СЕГОДНЯ ДЕНЬ РОЖДЕНИЯ, команда! От лица всех Негодяев желаю: крепчайшей титановой печени, чтоб палатка стояла железобетонно, костер горел в любой ливень, а тушенка была чисто один кусковой говяжий сок, нахуй! С праздником, братуха! Наливай полнее! 🍻🎂🎈`;
+      } else if (swearingLevel === "low") {
+        bdayText = `🎉 Внимание команде! Сегодня празднует ДЕНЬ РОЖДЕНИЯ наш соратник: ${bdayPerson}! Желаем отличных маршрутов, душевных песен у костра, крепкого здоровья и победы на слёте! С Днём Рождения! 🎈⛺✨`;
+      } else {
+        bdayText = `🎉 Братва, внимание! Сегодня ДЕНЬ РОЖДЕНИЯ у нашего негодяя: ${bdayPerson}, бля! От всей команды поздравляем! Желаем здоровья, сочного плова в казане, сухих спальников и чтобы байдарки никогда нахуй не переворачивались! Ура имениннику! 🍲🥂🎂`;
+      }
+    } else {
+      if (swearingLevel === "high") {
+        bdayText = `🎂 Слышь, ${senderName}! Сегодня прямо сейчас никто не проставился, но вот походный календарь днюх команды Негодяев:\n${upcomingList || "пока даты не заполнены"}!\nГотовим кружки, тосты и бальзам, бля! 🍻`;
+      } else {
+        bdayText = `🎂 Привет, ${senderName}! Я слежу за всеми днями рождения нашей команды! Ближайшие даты негодяев:\n${upcomingList || "пока не внесены даты"}.\nНе забываем вовремя поздравлять соратников по костру! ⛺🎉`;
+      }
+    }
+
+    return {
+      text: bdayText,
+      detectedPsychotype: "Весельчак-балагур",
+      detectedPsychotypeExplanation: "Следит за днями рождениями команды Негодяев и заряжает походное поздравление!",
+      adapterStyleUsed: "Днюшный походный разнос"
+    };
+  }
+
+  // 9. Документы команды и устав (Documents)
+  const isDocQuery = msgLower.includes("документ") || msgLower.includes("устав") || msgLower.includes("положени") || msgLower.includes("кодекс") || msgLower.includes("регламент") || msgLower.includes("правил") || msgLower.includes("инструкци") || msgLower.includes("памятк");
+  if (isDocQuery) {
+    const docs = (documents && documents.length > 0) ? documents : getTeamDocuments();
+    const docSummary = docs.map((d: any) => `📄 «${d.title}» — ${d.description}`).join("\n");
+    let docText = "";
+    if (swearingLevel === "high") {
+      docText = `Слышь, ${senderName}! По официальным документам и уставу команды расклад такой, бля:\n${docSummary || "Документы пока не загружены"}\nУстав — закон Негодяев! Учи правила лагеря, кодекс чести и не позорь братство нахуй!`;
+    } else if (swearingLevel === "low") {
+      docText = `Привет, ${senderName}! Вот официальная база документов и положений нашей команды:\n${docSummary || "Список документов пуст"}\nВсе документы доступны также во вкладке «Документы»!`;
+    } else {
+      docText = `Команда, внимание! Вот официальная база документов и устав команды «Негодяи», бля:\n${docSummary || "Документы в процессе оформления"}\nСоблюдаем кодекс чести, регламент слёта и правила лагеря!`;
+    }
+    return {
+      text: docText,
+      detectedPsychotype: "Душнила-контролёр",
+      detectedPsychotypeExplanation: "Запросил официальные документы, устав и регламенты команды.",
+      adapterStyleUsed: "Уставной регламент Негодяев"
+    };
+  }
+
+  // 10. Походные задачи слёта (Tasks)
+  const isTaskQuery = msgLower.includes("задач") || msgLower.includes("дел") || msgLower.includes("дежур") || msgLower.includes("поручен") || msgLower.includes("что делать") || msgLower.includes("кто что делает");
+  if (isTaskQuery) {
+    const currentTasks = (tasks && tasks.length > 0) ? tasks : getTasks();
+    const openTasks = currentTasks.filter((t: any) => !t.isCompleted);
+    const tasksList = openTasks.map((t: any) => `📌 «${t.title}» (Ответственный: ${t.assigneeName}, срок: ${t.deadline})`).join("\n");
+    let taskText = "";
+    if (openTasks.length > 0) {
+      if (swearingLevel === "high") {
+        taskText = `Слышь, ${senderName}! По задачам слёта у нас висит нехилый фронт работ, бля! Вот дела, которые НАДО СДЕЛАТЬ:\n${tasksList}\nБыстро подхватили задницы и закрываем дедлайны нахуй, а то на слёте будете только дрова таскать!`;
+      } else if (swearingLevel === "low") {
+        taskText = `Привет, ${senderName}! Вот список важных задач по подготовке к турслёту:\n${tasksList}\nДавайте дружно закроем их до выезда!`;
+      } else {
+        taskText = `Команда, по подготовке к слёту у нас есть открытые задачи, бля:\n${tasksList}\nДавайте активнее включайтесь, помогайте ответственным, чтобы слёт прошёл на высоте!`;
+      }
+    } else {
+      taskText = swearingLevel === "high"
+        ? `Ахуеть, бля! Все задачи по слёту выполнены! Команда просто звери! Можно расслабиться и наливать чаёк у костра! 🍻`
+        : `Отличные новости! Все походные задачи команды успешно закрыты! Мы полностью готовы к слёту! 🏕️✨`;
+    }
+    return {
+      text: taskText,
+      detectedPsychotype: "Душнила-контролёр",
+      detectedPsychotypeExplanation: "Проверил актуальные задачи команды и раздал указаний по дедлайнам.",
+      adapterStyleUsed: "Раздача походных задач"
     };
   }
 
@@ -407,7 +537,12 @@ ${recentHistoryText}
     return parsedResponse;
 
   } catch (error: any) {
-    console.error("Error communicating with Gemini:", error);
+    const isQuotaOrBilling = error?.status === 429 || String(error?.message || '').includes('429') || String(error?.message || '').includes('RESOURCE_EXHAUSTED') || String(error?.message || '').includes('prepayment credits');
+    if (isQuotaOrBilling) {
+      console.warn("[AI BOT] Gemini prepayment/quota limit reached. Seamlessly utilizing internal Negodyai rule-based generator.");
+    } else {
+      console.error("Error communicating with Gemini:", error?.message || error);
+    }
     const fallback = generateMockNegodyaiResponse(
       cleanMessage,
       senderName,
@@ -418,121 +553,47 @@ ${recentHistoryText}
       tasks,
       menuItems,
       groceryItems,
-      inventoryItems
+      inventoryItems,
+      contests,
+      participants,
+      documents
     );
     return {
       ...fallback,
-      warning: "Произошла ошибка ИИ. Перешли на резервный алгоритм ответов Негодяя."
+      warning: "Ответ сформирован встроенным алгоритмом Негодяя."
     };
   }
 }
 
-// API endpoint for generating bot responses
+// API endpoint for generating bot responses (Бот Максимка)
 app.post("/api/bot-respond", async (req, res) => {
   try {
-    const { message, senderName, senderNickname } = req.body;
-    if (!message || message.trim() === "") {
-      return res.status(400).json({ error: "Message is required" });
-    }
-
-    const normSenderName = senderName || "Анонимный Негодяй";
-    const normSenderNickname = senderNickname || normSenderName.toLowerCase().replace(/\s+/g, "_");
-
-    // Check if participant is registered on the server, if not - add them (MAX dynamic synch)
-    const currentParticipants = getParticipants();
-    let existingP = currentParticipants.find(
-      (p: any) => p.name === normSenderName || p.nickname === normSenderNickname
-    );
-
-    if (!existingP) {
-      const isFemale =
-        normSenderName.endsWith("а") ||
-        normSenderName.endsWith("я") ||
-        normSenderName.endsWith("ка") ||
-        normSenderName.toLowerCase().includes("иришка") ||
-        normSenderName.toLowerCase().includes("булочка");
-
-      // Calculate totalCost based on active excursions
-      const currentExcursions = getExcursions();
-      const activeCost = currentExcursions
-        .filter((e: any) => e.isActive)
-        .reduce((acc: number, curr: any) => acc + (isFemale ? (curr.costGirls ?? curr.costPerPerson ?? 3500) : (curr.costBoys ?? curr.costPerPerson ?? 5000)), 0);
-
-      existingP = {
-        id: "p_" + Date.now(),
-        name: normSenderName,
-        nickname: normSenderNickname,
-        psychotype: "Весельчак-балагур",
-        avatar: isFemale ? "💁‍♀️" : "🏕️",
-        paidAmount: 0,
-        totalCost: activeCost,
-        debtAmount: activeCost,
-        joined: true,
-        birthday: "",
-        joinedYear: new Date().getFullYear(),
-        skippedYears: [],
-        gender: isFemale ? "female" : "male"
-      };
-      addOrUpdateParticipant(existingP);
-    }
-
-    // Capture incoming user message in serverMessages
-    const userMsg = {
-      id: "msg_" + Date.now() + "_user",
-      senderName: normSenderName,
-      senderNickname: normSenderNickname,
-      senderPsychotype: existingP.psychotype || "Весельчак-балагур",
-      text: message,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      isBot: false
-    };
-    addMessage(userMsg);
-
-    const payload = await generateBotResponseInternal({
+    const participants = getParticipants();
+    const debts = participants.map((p: any) => ({
+      id: p.id,
+      name: p.name,
+      nickname: p.nickname,
+      paidAmount: p.paidAmount || 0,
+      totalCost: p.totalCost || 0,
+      debtAmount: Math.max(0, (p.totalCost || 0) - (p.paidAmount || 0))
+    }));
+    const fullBody = {
       ...req.body,
-      senderName: normSenderName,
-      senderNickname: normSenderNickname,
-      senderPsychotype: existingP.psychotype,
-      participants: getParticipants(),
+      participants,
+      debts,
       excursions: getExcursions(),
       tasks: getTasks(),
       menuItems: getMenuItems(),
       groceryItems: getGroceryItems(),
       inventoryItems: getInventoryItems(),
-      debts: getParticipants().map((p: any) => ({
-        name: p.name,
-        nickname: p.nickname,
-        paidAmount: p.paidAmount,
-        totalCost: p.totalCost,
-        debtAmount: p.debtAmount
-      }))
-    });
-
-    // Capture outgoing bot response in serverMessages
-    const botMsg = {
-      id: "bot_" + Date.now() + "_res",
-      senderName: "Бот Максимка",
-      senderNickname: "negodyai_bot",
-      senderPsychotype: "ИИ Главный Негодяй",
-      text: payload.text || "А фиг его знает, бля, что ответить! Давай на сплав ехать!",
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      isBot: true,
-      detectedPsychotypeExplanation: payload.detectedPsychotypeExplanation || "Подстроился под общение.",
-      adapterStyleUsed: payload.adapterStyleUsed || "Угарный походник"
+      contests: getContests(),
+      documents: getTeamDocuments()
     };
-    addMessage(botMsg);
-
-    // Auto detect sender psychotype if configured
-    const botConfig = getBotConfig();
-    if (botConfig.autoDetectPsychotype && payload.detectedPsychotype) {
-      existingP.psychotype = payload.detectedPsychotype;
-      addOrUpdateParticipant(existingP);
-    }
-
-    return res.json(payload);
-  } catch (error: any) {
-    console.error("Express API error:", error);
-    return res.status(500).json({ error: "Internal Server Error" });
+    const response = await generateBotResponseInternal(fullBody);
+    return res.json(response);
+  } catch (err: any) {
+    console.error("Bot generation error:", err);
+    return res.status(500).json({ error: "Failed to generate bot response", details: err.message });
   }
 });
 
@@ -643,6 +704,9 @@ app.post("/api/auth/register", async (req, res) => {
   }
 
   const cleanNick = nickname.trim().replace(/^@/, '');
+  if (isBannedBotParticipant({ name, nickname: cleanNick })) {
+    return res.status(400).json({ success: false, error: "Регистрация ботов и фиктивных участников запрещена правилами команды." });
+  }
   const existingWithNick = getParticipants().find(
     p => p.nickname.toLowerCase() === cleanNick.toLowerCase() && p.accountStatus !== "rejected"
   );
@@ -918,7 +982,6 @@ app.post("/api/auth/login", (req, res) => {
         accountStatus: "active",
         avatar: "",
         biometricEnabled: true,
-        psychotype: "Генералиссимус-стратег",
         paidAmount: 0,
         totalCost: 0,
         debtAmount: 0,
@@ -1016,11 +1079,13 @@ app.post("/api/user/update-profile", async (req, res) => {
 
   // If user was not found by ID (e.g. client registered locally or restored state)
   if (!existing) {
+    if (isBannedBotParticipant({ id: userId, name, nickname })) {
+      return res.status(400).json({ success: false, error: "Создание и восстановление ботов запрещено" });
+    }
     existing = {
       id: userId,
       name: name || "Участник команды",
       nickname: nickname || "negodyai",
-      psychotype: psychotype || "Весельчак-балагур",
       avatar: "",
       photoFront: photoFront || undefined,
       photoProfile: photoProfile || undefined,
@@ -1060,6 +1125,12 @@ app.post("/api/user/update-profile", async (req, res) => {
     cleanAvatar = avatar && avatar.includes("dicebear.com/7.x/bottts") ? "" : avatar.trim();
   }
 
+  const finalJoinedYear = joinedYear !== undefined && !isNaN(Number(joinedYear)) ? Number(joinedYear) : (existing.joinedYear || 1993);
+  const rawSkipped = req.body.skippedYears !== undefined 
+    ? (Array.isArray(req.body.skippedYears) ? req.body.skippedYears.map(Number).filter(n => !isNaN(n)) : [])
+    : (existing.skippedYears || []);
+  const cleanSkipped = rawSkipped.filter(n => n >= finalJoinedYear);
+
   const updated = {
     ...existing,
     id: existing.id,
@@ -1072,11 +1143,8 @@ app.post("/api/user/update-profile", async (req, res) => {
     photoProfile: currentPhotoProfile,
     selectedAvatarSource: selectedSource,
     birthday: birthday !== undefined ? birthday : existing.birthday,
-    joinedYear: joinedYear !== undefined && !isNaN(Number(joinedYear)) ? Number(joinedYear) : existing.joinedYear,
-    skippedYears: req.body.skippedYears !== undefined 
-      ? (Array.isArray(req.body.skippedYears) ? req.body.skippedYears.map(Number).filter(n => !isNaN(n)) : [])
-      : (existing.skippedYears || []),
-    psychotype: psychotype !== undefined ? psychotype : existing.psychotype,
+    joinedYear: finalJoinedYear,
+    skippedYears: cleanSkipped,
     gender: gender === "female" ? ("female" as const) : ("male" as const)
   };
 
@@ -1094,8 +1162,9 @@ app.put("/api/participants/:id/skipped-years", async (req, res) => {
     if (!existing) {
       return res.status(404).json({ success: false, error: "Участник не найден" });
     }
+    const memberJoinedYear = existing.joinedYear || 1993;
     const cleanYears = Array.isArray(skippedYears) 
-      ? Array.from(new Set(skippedYears.map(Number).filter(n => !isNaN(n) && n >= 1993 && n <= 2030))).sort((a, b) => a - b)
+      ? Array.from(new Set(skippedYears.map(Number).filter(n => !isNaN(n) && n >= memberJoinedYear && n <= 2030))).sort((a, b) => a - b)
       : [];
     const updated = {
       ...existing,
@@ -1212,8 +1281,22 @@ app.post("/api/admin/set-role", async (req, res) => {
   if (!validRoles.includes(role)) {
     return res.status(400).json({ success: false, error: "Недопустимая роль" });
   }
-  await updateParticipantRole(userId, role);
-  res.json({ success: true, message: `Роль успешно изменена на ${role}`, participants: getParticipants() });
+  const result = await updateParticipantRole(userId, role);
+  if (!result.success) {
+    return res.status(404).json(result);
+  }
+  res.json({ 
+    success: true, 
+    message: result.message, 
+    assignedRole: role,
+    userId,
+    replacedUser: result.replacedUser ? {
+      id: result.replacedUser.id,
+      name: result.replacedUser.name,
+      nickname: result.replacedUser.nickname
+    } : null,
+    participants: getParticipants() 
+  });
 });
 
 app.post("/api/admin/login", (req, res) => {
@@ -1239,16 +1322,25 @@ app.get("/api/photos", (req, res) => {
 });
 
 app.post("/api/photos", (req, res) => {
-  const { year, title, description, imageUrl, uploadedBy } = req.body;
-  if (!imageUrl || !title) {
-    return res.status(400).json({ success: false, error: "Заголовок и фото обязательны" });
+  const { year, title, description, imageUrl, cloudUrl, itemType, uploadedBy } = req.body;
+  if (!title || !title.trim()) {
+    return res.status(400).json({ success: false, error: "Название обязательно для заполнения" });
   }
+  const cleanImageUrl = (imageUrl || "").trim();
+  const cleanCloudUrl = (cloudUrl || "").trim();
+  if (!cleanImageUrl && !cleanCloudUrl) {
+    return res.status(400).json({ success: false, error: "Загрузите фотографию или укажите ссылку на облачное хранилище (Яндекс Диск и др.)" });
+  }
+  const determinedType = itemType || (cleanCloudUrl && !cleanImageUrl ? "cloud_album" : "photo");
+
   const newPhoto = {
     id: "photo_" + Date.now(),
     year: parseInt(year, 10) || new Date().getFullYear(),
-    title,
-    description: description || "",
-    imageUrl,
+    title: title.trim(),
+    description: (description || "").trim(),
+    imageUrl: cleanImageUrl,
+    cloudUrl: cleanCloudUrl,
+    itemType: determinedType,
     uploadedBy: uploadedBy || "Негодяй",
     uploadedAt: new Date().toISOString().split("T")[0],
     likes: 0,
@@ -1481,30 +1573,29 @@ app.post("/api/chat/nudge", async (req, res) => {
     const cleanNick = debtorNickname ? debtorNickname.replace(/^@/, '') : '';
     const mention = cleanNick ? `@${cleanNick}` : (debtorName || "Участник");
     
-    // Exact requested text: "..... почему не платишь бля, за тобой должок числиться. Если не хочешь в палатку к Буркуту, бегом вносить платёж"
-    const nudgeText = `${mention}, почему не платишь бля, за тобой должок числиться. Если не хочешь в палатку к Буркуту, бегом вносить платёж!`;
+    const nudgeText = `${mention}, напоминаем о необходимости внести взнос по слёту в походную кассу!`;
     
-    const botMsg = {
-      id: "bot_nudge_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6),
-      senderName: "Бот Максимка",
-      senderNickname: "negodyai_bot",
-      senderPsychotype: "ИИ Главный Негодяй",
+    const reminderMsg = {
+      id: "remind_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6),
+      senderName: "Казначей команды",
+      senderNickname: "treasurer",
+      senderPsychotype: "Казначей",
       text: nudgeText,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      isBot: true
+      isBot: false
     };
 
-    addMessage(botMsg);
-    res.json({ success: true, botMessage: botMsg, messages: getMessages() });
+    addMessage(reminderMsg);
+    res.json({ success: true, message: reminderMsg, messages: getMessages() });
   } catch (err: any) {
     console.error("Nudge debtor error:", err);
-    res.status(500).json({ success: false, error: "Ошибка отправки пинка" });
+    res.status(500).json({ success: false, error: "Ошибка отправки напоминания" });
   }
 });
 
-// Participant internal chat message (with integrated Bot Maximka support)
+// Participant internal chat message (Supports Bot Maximka responses)
 app.post("/api/chat/send", async (req, res) => {
-  const { senderName, senderNickname, senderPsychotype, text, imageUrl, attachments, triggerBot } = req.body;
+  const { senderName, senderNickname, senderPsychotype, text, imageUrl, attachments } = req.body;
   if (!text && !imageUrl) {
     return res.status(400).json({ error: "Message cannot be empty" });
   }
@@ -1512,7 +1603,7 @@ app.post("/api/chat/send", async (req, res) => {
     id: "msg_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6),
     senderName: senderName || "Участник",
     senderNickname: senderNickname || "member",
-    senderPsychotype: senderPsychotype || "Негодяй",
+    senderPsychotype: senderPsychotype || "Участник",
     text: text || "",
     timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     isBot: false,
@@ -1521,83 +1612,94 @@ app.post("/api/chat/send", async (req, res) => {
   };
   addMessage(newMsg);
 
-  // Check if bot should reply
-  const textLower = (text || "").toLowerCase();
-  const shouldBotAnswer = triggerBot ||
-    textLower.includes("бот") ||
-    textLower.includes("максимк") ||
-    textLower.includes("негодяй") ||
-    textLower.includes("как гуляет") ||
-    textLower.includes("днюх") ||
-    textLower.includes("рожден") ||
-    textLower.includes("именин") ||
-    textLower.includes("поздрав") ||
-    textLower.includes("задач") ||
-    textLower.includes("меню") ||
-    textLower.includes("продукт") ||
-    textLower.includes("еда") ||
-    textLower.includes("жрат") ||
-    textLower.includes("пожрать") ||
-    textLower.includes("конкурс") ||
-    textLower.includes("соревнован") ||
-    textLower.includes("турнир") ||
-    textLower.includes("долг") ||
-    textLower.includes("деньг") ||
-    textLower.includes("бабл") ||
-    textLower.includes("взнос") ||
-    textLower.includes("смет") ||
-    textLower.includes("инвентар") ||
-    textLower.includes("снаряг") ||
-    textLower.includes("палатк") ||
-    textLower.includes("тост") ||
-    textLower.includes("запись") ||
-    textLower.includes("?") ||
-    textLower.startsWith("/");
+  // Check if Бот Максимка should respond!
+  let botMsg: any = null;
+  const msgLower = (text || "").toLowerCase().trim();
+  const shouldBotRespond = 
+    msgLower.includes("бот") || 
+    msgLower.includes("максимк") || 
+    msgLower.includes("макс") || 
+    msgLower.includes("как гуляет") || 
+    msgLower.includes("пизда на глаза") || 
+    msgLower.includes("записьдень") || 
+    msgLower.includes("запиздень") || 
+    msgLower.includes("запись дубля") || 
+    msgLower.includes("кто с негодяем дрался") || 
+    msgLower.includes("давай негодяй") || 
+    msgLower.includes("днюх") || 
+    msgLower.includes("рожден") || 
+    msgLower.includes("именин") || 
+    msgLower.includes("поздрав") || 
+    msgLower.includes("документ") || 
+    msgLower.includes("устав") || 
+    msgLower.includes("положени") || 
+    msgLower.includes("кодекс") || 
+    msgLower.includes("регламент") || 
+    msgLower.includes("задач") || 
+    msgLower.includes("дежур") || 
+    msgLower.includes("меню") || 
+    msgLower.includes("еда") || 
+    msgLower.includes("долг") || 
+    msgLower.includes("деньги") || 
+    msgLower.includes("бабл") || 
+    msgLower.includes("смет") || 
+    msgLower.includes("инвентар") || 
+    msgLower.includes("снаряг") || 
+    msgLower.includes("узел") || 
+    msgLower.includes("ориентирован") || 
+    msgLower.includes("конкурс") || 
+    msgLower.endsWith("?") || 
+    msgLower.startsWith("/");
 
-  let botMessage = null;
-  if (shouldBotAnswer) {
+  if (shouldBotRespond) {
     try {
-      const payload = await generateBotResponseInternal({
+      const participants = getParticipants();
+      const debts = participants.map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        nickname: p.nickname,
+        paidAmount: p.paidAmount || 0,
+        totalCost: p.totalCost || 0,
+        debtAmount: Math.max(0, (p.totalCost || 0) - (p.paidAmount || 0))
+      }));
+      const botConfig = getBotConfig();
+      const botPayload = await generateBotResponseInternal({
         message: text,
         senderName: newMsg.senderName,
         senderNickname: newMsg.senderNickname,
         senderPsychotype: newMsg.senderPsychotype,
-        participants: getParticipants(),
+        swearingLevel: botConfig.swearingLevel || "medium",
+        participants,
+        debts,
         excursions: getExcursions(),
         tasks: getTasks(),
         menuItems: getMenuItems(),
         groceryItems: getGroceryItems(),
         inventoryItems: getInventoryItems(),
         contests: getContests(),
-        debts: getParticipants().map((p: any) => ({
-          name: p.name,
-          nickname: p.nickname,
-          paidAmount: p.paidAmount,
-          totalCost: p.totalCost,
-          debtAmount: p.debtAmount
-        }))
+        documents: getTeamDocuments()
       });
 
-      botMessage = {
+      botMsg = {
         id: "bot_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6),
         senderName: "Бот Максимка",
         senderNickname: "negodyai_bot",
-        senderPsychotype: "ИИ Главный Негодяй",
-        text: payload.text || "А фиг его знает, бля, что ответить! Собираемся на слёт!",
+        senderPsychotype: "Главный Негодяй",
+        text: botPayload.text || "Ахуенно!",
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         isBot: true,
-        detectedPsychotypeExplanation: payload.detectedPsychotypeExplanation || "Ответил в походном стиле.",
-        adapterStyleUsed: payload.adapterStyleUsed || "Угарный Негодяй",
-        imageUrl: payload.imageUrl,
-        attachments: payload.attachments
+        detectedPsychotypeExplanation: botPayload.detectedPsychotypeExplanation || "Фирменный ответ Негодяя",
+        adapterStyleUsed: botPayload.adapterStyleUsed || "Боевой клич",
+        imageUrl: botPayload.imageUrl,
+        attachments: botPayload.attachments
       };
-      addMessage(botMessage);
-    } catch (e) {
-      console.error("Error auto-generating bot reply:", e);
+      addMessage(botMsg);
+    } catch (botErr) {
+      console.error("Error generating bot response in chat:", botErr);
     }
   }
 
-  res.json({ success: true, message: newMsg, botMessage });
+  res.json({ success: true, message: newMsg, botMessage: botMsg });
 });
 
 // Fallback algorithm generating custom witty responses when Gemini is unconfigured or errors out
@@ -1613,7 +1715,8 @@ function generateMockNegodyaiResponse(
   groceryItems?: any[],
   inventoryItems?: any[],
   contests?: any[],
-  participants?: any[]
+  participants?: any[],
+  documents?: any[]
 ) {
   const msgLower = message.toLowerCase();
   let text = "";
@@ -1690,18 +1793,16 @@ function generateMockNegodyaiResponse(
 
     // Check today's birthdays
     const todayList = (participants || []).filter((p: any) => {
-      if (!p.birthday) return false;
-      const parts = p.birthday.split('-');
-      if (parts.length < 3) return false;
-      return parseInt(parts[1], 10) === currentMonth && parseInt(parts[2], 10) === currentDay;
+      const bday = parseBirthday(p.birthday);
+      return bday && bday.month === currentMonth && bday.day === currentDay;
     });
 
     const upcomingList = (participants || [])
-      .filter((p: any) => p.birthday)
       .map((p: any) => {
-        const parts = p.birthday.split('-');
-        return `${p.name} (${parts[2]}.${parts[1]})`;
+        const bday = parseBirthday(p.birthday);
+        return bday ? `${p.name} (${bday.formatted})` : null;
       })
+      .filter(Boolean)
       .slice(0, 5)
       .join(", ");
 
@@ -1716,13 +1817,12 @@ function generateMockNegodyaiResponse(
       }
     } else {
       let targetName = senderName;
-      if (msgLower.includes("саня") || msgLower.includes("запева")) targetName = "Саня Запевала";
-      else if (msgLower.includes("хорек") || msgLower.includes("андрюх")) targetName = "Андрюха Хорёк";
-      else if (msgLower.includes("лех") || msgLower.includes("навига")) targetName = "Лёха Навигатор";
-      else if (msgLower.includes("ириш") || msgLower.includes("бул")) targetName = "Иришка Булочка";
-      else if (msgLower.includes("михалыч") || msgLower.includes("лесни")) targetName = "Михалыч Лесник";
-      else if (msgLower.includes("юр") || msgLower.includes("манг")) targetName = "Юрец Мангальщик";
-      else if (msgLower.includes("данчик") || msgLower.includes("кипиш")) targetName = "Данчик Кипиш";
+      const matchedP = (participants || []).find((p: any) => 
+        p.name && (msgLower.includes(p.name.toLowerCase()) || (p.nickname && msgLower.includes(p.nickname.toLowerCase())))
+      );
+      if (matchedP) {
+        targetName = `${matchedP.name} (@${matchedP.nickname})`;
+      }
 
       if (swearingLevel === "high") {
         text = `🎂 Слышь, ${senderName}! Сегодня прямо сейчас никто не проставился, но вот походный календарь днюх команды: ${upcomingList}! А для ${targetName} желаю, чтоб жизнь была огонь, а в рюкзаке всегда звенело то, что надо, бля! 🍻`;
@@ -1790,6 +1890,7 @@ function generateMockNegodyaiResponse(
   const hasMenuKeywords = msgLower.includes("меню") || msgLower.includes("еда") || msgLower.includes("едят") || msgLower.includes("блюд") || msgLower.includes("пожрать") || msgLower.includes("закуп") || msgLower.includes("продукт") || msgLower.includes("тушняк") || msgLower.includes("кушать") || msgLower.includes("обед") || msgLower.includes("ужин") || msgLower.includes("завтрак") || msgLower.includes("повар") || msgLower.includes("жрат");
   const hasTaskKeywords = msgLower.includes("задач") || msgLower.includes("дел") || msgLower.includes("дежур") || msgLower.includes("поручен") || msgLower.includes("сделать") || msgLower.includes("кто что") || msgLower.includes("дрова") || msgLower.includes("обязан");
   const hasInventoryKeywords = msgLower.includes("инвентар") || msgLower.includes("имуществ") || msgLower.includes("палатк") || msgLower.includes("снаряг") || msgLower.includes("пила") || msgLower.includes("казан") || msgLower.includes("топор") || msgLower.includes("вещи");
+  const hasDocKeywords = msgLower.includes("документ") || msgLower.includes("устав") || msgLower.includes("положени") || msgLower.includes("кодекс") || msgLower.includes("регламент") || msgLower.includes("правил") || msgLower.includes("инструкци") || msgLower.includes("памятк");
   const isKnotsQuery = msgLower.includes("узел") || msgLower.includes("узл") || msgLower.includes("вязать") || msgLower.includes("прусик") || msgLower.includes("восьмерк");
   const isOrientQuery = msgLower.includes("ориентирован") || msgLower.includes("знаки") || msgLower.includes("карты") || msgLower.includes("кп");
   const isScheduleQuery = msgLower.includes("график") || msgLower.includes("расписан") || msgLower.includes("этапы") || msgLower.includes("время соревнований");
@@ -1907,6 +2008,17 @@ function generateMockNegodyaiResponse(
       { id: "att_2", title: "Схемы туристических узлов", url: KNOTS_DIAGRAM_SVG, type: "knots" },
       { id: "att_3", title: "График соревнований и этапов", url: CONTEST_SCHEDULE_SVG, type: "schedule" }
     ];
+  } else if (hasDocKeywords) {
+    adapterStyleUsed = "Официальные документы Негодяев";
+    const docs = (documents && documents.length > 0) ? documents : getTeamDocuments();
+    const docSummary = docs.map((d: any) => `📄 «${d.title}» — ${d.description}`).join("\n");
+    if (swearingLevel === "high") {
+      text = `Слышь, ${senderName}! По официальным документам и уставу команды расклад такой, бля:\n${docSummary || "Документы пока не внесены"}\nУстав — закон Негодяев! Учи правила лагеря, кодекс чести и не позорь братство нахуй!`;
+    } else if (swearingLevel === "medium") {
+      text = `Команда, внимание! Вот официальная база документов и устав команды «Негодяи», бля:\n${docSummary || "Документы в процессе оформления"}\nСоблюдаем кодекс чести, регламент слёта и правила лагеря!`;
+    } else {
+      text = `Привет, ${senderName}! Вот актуальная база документов и положений нашей команды:\n${docSummary || "Список документов пуст"}\nВсе документы доступны также во вкладке «Документы»!`;
+    }
   } else if (hasInventoryKeywords) {
     adapterStyleUsed = "Проверка снаряжения";
     const invList = (inventoryItems || []).map((i: any) => `"${i.name}" [Состояние: ${i.condition}] (Хранитель: ${i.responsibleName})`).join("; ");
@@ -2046,7 +2158,7 @@ function generateMockNegodyaiResponse(
       case "Эко-защитник":
         adapterStyleUsed = "Зеленый привет";
         if (swearingLevel === "high") {
-          text = `Гринпис лесной, спокуха, бля! Никто пластик в речку кидать не будет — Лёха Навигатор заставит нарушителя этот пластик сожрать нахуй! Экология — заебись тема, мы за чистую тайгу!`;
+          text = `Гринпис лесной, спокуха, бля! Никто пластик в речку кидать не будет — Ковбой заставит нарушителя этот пластик сожрать нахуй! Экология — заебись тема, мы за чистую тайгу!`;
         } else if (swearingLevel === "medium") {
           text = `Всё соберем в мешки, не ори, бля! ${senderName}, мы Негодяи, но культурные — за собой оставляем поляну чище, чем была. Улыбнись эко-патруль!`;
         } else {

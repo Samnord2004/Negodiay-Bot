@@ -9,6 +9,7 @@ import Logo from './components/Logo';
 import AuthModal from './components/AuthModal';
 import SecurityModal from './components/SecurityModal';
 import BirthdayNotifications from './components/BirthdayNotifications';
+import BirthdaysTab from './components/BirthdaysTab';
 import GalleryTab from './components/GalleryTab';
 import DocumentsTab from './components/DocumentsTab';
 import FundTab from './components/FundTab';
@@ -27,6 +28,7 @@ import TopSiteMenu from './components/TopSiteMenu';
 import ProfileEditModal from './components/ProfileEditModal';
 import SiteSearch from './components/SiteSearch';
 import { compressImage } from './utils/imageCompressor';
+import { getBirthdayRemainingDays } from './utils/dateUtils';
 
 import { 
   Participant, Excursion, ChatMessage, BotConfig, 
@@ -44,9 +46,14 @@ import {
 
 export default function App() {
   // Navigation
-  type TabType = 'history' | 'home' | 'tasks' | 'menu' | 'inventory' | 'contests' | 'gallery' | 'documents' | 'fund' | 'creativity' | 'admin';
+  type TabType = 'history' | 'birthdays' | 'home' | 'tasks' | 'menu' | 'inventory' | 'contests' | 'gallery' | 'documents' | 'fund' | 'creativity' | 'admin';
   const [activeTab, setActiveTab] = useState<TabType>('history');
   const [homeSubTab, setHomeSubTab] = useState<'overview' | 'tasks' | 'menu' | 'contests' | 'creativity'>('overview');
+
+  // Chat State
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [chatPrefill, setChatPrefill] = useState('');
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
 
   // Modals
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -54,11 +61,27 @@ export default function App() {
   const [isBirthdayModalOpen, setIsBirthdayModalOpen] = useState(false);
   const [isProfileEditOpen, setIsProfileEditOpen] = useState(false);
 
+  const isCaptainUser = (user: Participant | null | undefined): boolean => {
+    if (!user) return false;
+    const nick = (user.nickname || '').toLowerCase().replace(/^@/, '');
+    const email = (user.email || '').toLowerCase();
+    const name = (user.name || '').toLowerCase();
+    return user.role === 'admin' || nick === 'ковбой' || nick === 'cowboy' || email === 'asamoilov81@gmail.com' || name.includes('самойлов') || user.id === 'cowboy_1';
+  };
+
   // Authentication State
   const [currentUser, setCurrentUser] = useState<Participant | null>(() => {
     try {
       const saved = localStorage.getItem('negodyai_active_user');
-      return saved ? JSON.parse(saved) : null;
+      if (saved) {
+        const u = JSON.parse(saved);
+        if (isCaptainUser(u)) {
+          u.role = 'admin';
+          u.accountStatus = 'active';
+        }
+        return u;
+      }
+      return null;
     } catch {
       return null;
     }
@@ -240,21 +263,25 @@ export default function App() {
   // Update current user if participant data changed
   useEffect(() => {
     if (currentUser) {
-      const match = participants.find(p => p.id === currentUser.id || String(p.id) === String(currentUser.id));
+      let match = participants.find(p => p.id === currentUser.id || String(p.id) === String(currentUser.id));
+      if (!match && isCaptainUser(currentUser)) {
+        match = participants.find(p => isCaptainUser(p));
+      }
       if (match) {
+        const resolvedRole = isCaptainUser(match) ? 'admin' : match.role;
+        const updatedUser = { ...match, role: resolvedRole, accountStatus: 'active' as const };
         if (
           match.name !== currentUser.name ||
           match.avatar !== currentUser.avatar ||
-          match.role !== currentUser.role ||
+          resolvedRole !== currentUser.role ||
           match.nickname !== currentUser.nickname ||
-          match.psychotype !== currentUser.psychotype ||
           match.phone !== currentUser.phone ||
           match.email !== currentUser.email ||
           match.birthday !== currentUser.birthday
         ) {
-          setCurrentUser(match);
+          setCurrentUser(updatedUser);
           try {
-            localStorage.setItem('negodyai_active_user', JSON.stringify(match));
+            localStorage.setItem('negodyai_active_user', JSON.stringify(updatedUser));
           } catch (e) {
             console.warn(e);
           }
@@ -265,9 +292,14 @@ export default function App() {
 
   // Auth Handlers
   const handleLoginSuccess = (user: Participant) => {
-    setCurrentUser(user);
-    localStorage.setItem('negodyai_active_user', JSON.stringify(user));
-    showToast(`Добро пожаловать в команду, ${user.name}!`, 'success');
+    const finalUser = { ...user };
+    if (isCaptainUser(finalUser)) {
+      finalUser.role = 'admin';
+      finalUser.accountStatus = 'active';
+    }
+    setCurrentUser(finalUser);
+    localStorage.setItem('negodyai_active_user', JSON.stringify(finalUser));
+    showToast(`Добро пожаловать в команду, ${finalUser.name}!`, 'success');
   };
 
   const handleLogout = () => {
@@ -317,12 +349,42 @@ export default function App() {
         body: JSON.stringify({ userId, role })
       });
       if (res.ok) {
-        setParticipants(prev => prev.map(p => p.id === userId ? { ...p, role } : p));
+        const data = await res.json();
+        if (data.participants) {
+          setParticipants(data.participants);
+        } else {
+          setParticipants(prev => prev.map(p => {
+            if (p.id === userId) return { ...p, role };
+            if (role !== 'member' && p.role === role) return { ...p, role: 'member' };
+            return p;
+          }));
+        }
+
+        // Keep current session user synced
+        if (currentUser && currentUser.id === userId) {
+          setCurrentUser(prev => prev ? { ...prev, role } : null);
+        } else if (currentUser && data.replacedUser && currentUser.id === data.replacedUser.id) {
+          setCurrentUser(prev => prev ? { ...prev, role: 'member' } : null);
+        }
+
         const roleInfo = ROLE_DEFINITIONS[role];
-        showToast(`Роль участника изменена: ${roleInfo ? `${roleInfo.icon} ${roleInfo.title}` : role}`, "success");
+        const target = participants.find(p => p.id === userId);
+        const targetName = target ? target.name : "Участник";
+
+        if (data.replacedUser) {
+          showToast(`👑 Роль «${roleInfo?.title || role}» передана ${targetName}. Прежний ответственный (${data.replacedUser.name}) теперь рядовой участник.`, "info");
+        } else {
+          showToast(`Роль участника ${targetName} изменена: ${roleInfo ? `${roleInfo.icon} ${roleInfo.title}` : role}`, "success");
+        }
+        return { success: true, replacedUser: data.replacedUser };
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        showToast(errData.error || "Ошибка смены роли", "alert");
+        return { success: false };
       }
     } catch (err) {
-      showToast("Ошибка смены роли", "alert");
+      showToast("Ошибка связи с сервером при смене роли", "alert");
+      return { success: false };
     }
   };
 
@@ -361,7 +423,6 @@ export default function App() {
       senderId: currentUser.id,
       senderName: currentUser.name,
       senderNickname: currentUser.nickname,
-      senderPsychotype: currentUser.psychotype,
       text,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       isBot: false,
@@ -377,63 +438,55 @@ export default function App() {
         body: JSON.stringify({
           senderName: currentUser.name,
           senderNickname: currentUser.nickname,
-          senderPsychotype: currentUser.psychotype,
           text,
           imageUrl
         })
       });
       if (res.ok) {
         const data = await res.json();
-        if (data.botMessage) {
-          setMessages(prev => {
-            if (prev.some(m => m.id === data.botMessage.id)) return prev;
-            return [...prev, data.botMessage];
-          });
-        }
+        setMessages(prev => {
+          let updated = [...prev];
+          if (data.message && !updated.some(m => m.id === data.message.id)) {
+            updated.push(data.message);
+          }
+          if (data.botMessage && !updated.some(m => m.id === data.botMessage.id)) {
+            updated.push(data.botMessage);
+          }
+          return updated;
+        });
       }
     } catch (err) {
       console.error("Message send error:", err);
     }
   };
 
-  // Nudge Debtor with Bot message in chat
+  // Nudge Debtor with reminder in chat
   const handleNudgeDebtor = async (debtor: Participant) => {
     const cleanNick = debtor.nickname ? debtor.nickname.replace(/^@/, '') : '';
     const mention = cleanNick ? `@${cleanNick}` : (debtor.name || 'Участник');
-    // Exact user requested phrase: "..... почему не платишь бля, за тобой должок числиться. Если не хочешь в палатку к Буркуту, бегом вносить платёж"
-    const phrase = `${mention}, почему не платишь бля, за тобой должок числиться. Если не хочешь в палатку к Буркуту, бегом вносить платёж!`;
+    const phrase = `${mention}, напоминаем о необходимости внести взнос по слёту в походную кассу!`;
     
-    // Instant optimistic bot message in local chat
-    const botMsg: ChatMessage = {
-      id: "bot_nudge_" + Date.now(),
-      senderName: "Бот Максимка",
-      senderNickname: "negodyai_bot",
-      senderPsychotype: "ИИ Главный Негодяй",
+    const remindMsg: ChatMessage = {
+      id: "remind_" + Date.now(),
+      senderName: currentUser ? currentUser.name : "Казначей команды",
+      senderNickname: currentUser ? currentUser.nickname : "treasurer",
       text: phrase,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      isBot: true
+      isBot: false
     };
-    setMessages(prev => [...prev, botMsg]);
-
-    showToast(`⚡ Бот Максимка пнул ${debtor.name} в общем чате!`, 'alert');
+    setMessages(prev => [...prev, remindMsg]);
+    showToast(`Напоминание для ${debtor.name} отправлено в чат команды`, 'info');
 
     try {
-      const res = await fetch("/api/chat/nudge", {
+      await fetch("/api/chat/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          debtorId: debtor.id,
-          debtorName: debtor.name,
-          debtorNickname: debtor.nickname,
-          debtAmount: debtor.debtAmount
+          senderName: remindMsg.senderName,
+          senderNickname: remindMsg.senderNickname,
+          text: phrase
         })
       });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.messages) {
-          setMessages(data.messages);
-        }
-      }
     } catch (err) {
       console.error("Error nudging debtor:", err);
     }
@@ -485,17 +538,31 @@ export default function App() {
   // Gating access: Require login & approved account to view the site, including homepage
   if (!currentUser || currentUser.accountStatus !== 'active') {
     return (
-      <TeamAuthGate
-        currentUser={currentUser}
-        onLogin={handleLoginSuccess}
-        onLogout={handleLogout}
-        participants={participants}
-        customLogo={botConfig.customLogo}
-        onRegisterSuccess={(newUser) => {
-          setParticipants(prev => [newUser, ...prev]);
-          handleLoginSuccess(newUser);
-        }}
-      />
+      <>
+        <TeamAuthGate
+          currentUser={currentUser}
+          onLogin={handleLoginSuccess}
+          onLogout={handleLogout}
+          participants={participants}
+          customLogo={botConfig.customLogo}
+          onRegisterSuccess={(newUser) => {
+            setParticipants(prev => [newUser, ...prev]);
+            handleLoginSuccess(newUser);
+          }}
+        />
+        <FloatingChat
+          messages={messages}
+          onSendMessage={handleSendMessage}
+          currentUser={currentUser}
+          participants={participants}
+          isOpen={isChatOpen}
+          onToggle={() => setIsChatOpen(prev => !prev)}
+          onClose={() => setIsChatOpen(false)}
+          prefillText={chatPrefill}
+          onClearPrefill={() => setChatPrefill('')}
+          onUnreadCountChange={setUnreadChatCount}
+        />
+      </>
     );
   }
 
@@ -525,8 +592,20 @@ export default function App() {
     }
   };
 
+  const birthdaysWithInfo = participants
+    .map(p => getBirthdayRemainingDays(p.birthday))
+    .filter((info): info is NonNullable<ReturnType<typeof getBirthdayRemainingDays>> => info !== null);
+  const todayBirthdaysCount = birthdaysWithInfo.filter(i => i.isToday).length;
+  const upcomingBirthdaysCount = birthdaysWithInfo.filter(i => i.days <= 7).length;
+
   const MAIN_TABS: TabItem[] = [
     { id: 'history', label: 'История команды', icon: BookOpen },
+    { 
+      id: 'birthdays', 
+      label: 'Дни рождения', 
+      icon: Cake, 
+      badge: todayBirthdaysCount > 0 ? `🎂 ${todayBirthdaysCount}` : upcomingBirthdaysCount > 0 ? upcomingBirthdaysCount : undefined 
+    },
     { id: 'home', label: 'Планируемые слёты', icon: Tent },
     { id: 'inventory', label: 'Инвентарь', icon: Package },
     { id: 'gallery', label: 'Фотогалерея', icon: ImageIcon },
@@ -615,11 +694,36 @@ export default function App() {
               stories={stories}
               currentUser={currentUser}
               onNavigateTab={handleNavigate}
-              onOpenBirthdays={() => setIsBirthdayModalOpen(true)}
+              onOpenBirthdays={() => handleNavigate('birthdays')}
               onOpenProfileEdit={() => setIsProfileEditOpen(true)}
               onDeleteUser={handleDeleteUser}
             />
           </div>
+
+          {/* TEAM CHAT BUTTON PINNED IN TOP HEADER BETWEEN SEARCH AND TOP MENU */}
+          <button
+            type="button"
+            onClick={() => setIsChatOpen(prev => !prev)}
+            aria-label={isChatOpen ? 'Свернуть чат команды' : 'Открыть чат команды «Негодяи»'}
+            className={`px-3.5 py-2 rounded-2xl border-2 font-black text-xs uppercase flex items-center gap-2 transition-all shadow-md active:scale-95 cursor-pointer shrink-0 ${
+              isChatOpen
+                ? 'bg-red-700 text-yellow-300 border-yellow-300 shadow-lg ring-2 ring-yellow-400'
+                : 'bg-gradient-to-r from-red-600 to-amber-600 hover:from-red-500 hover:to-amber-500 text-yellow-300 border-amber-950 hover:border-yellow-300'
+            }`}
+            title="Открыть чат команды «Негодяи»"
+          >
+            <div className="relative">
+              <MessageSquare size={17} className="text-yellow-300" />
+              {unreadChatCount > 0 && !isChatOpen && (
+                <span className="absolute -top-2.5 -right-2.5 bg-yellow-300 text-stone-950 text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow animate-bounce border border-amber-950">
+                  {unreadChatCount}
+                </span>
+              )}
+            </div>
+            <span className="tracking-tight hidden sm:inline">Чат команды</span>
+            <span className="tracking-tight sm:hidden">Чат</span>
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+          </button>
 
           {/* Open Top Menu Actions */}
           <div className="flex items-center gap-2 flex-wrap shrink-0">
@@ -631,7 +735,7 @@ export default function App() {
               onNavigateTab={handleNavigate}
               onOpenProfileEdit={() => setIsProfileEditOpen(true)}
               onOpenSecurity={() => setIsSecurityModalOpen(true)}
-              onOpenBirthdays={() => setIsBirthdayModalOpen(true)}
+              onOpenBirthdays={() => handleNavigate('birthdays')}
               onOpenAuth={() => setIsAuthModalOpen(true)}
               onLogout={handleLogout}
               pendingApprovalsCount={pendingApprovalsCount}
@@ -641,17 +745,6 @@ export default function App() {
               onUploadLogo={handleUploadLogoFile}
               onResetLogo={handleResetLogo}
             />
-
-            {/* Birthday Diary Alert */}
-            <button
-              type="button"
-              onClick={() => setIsBirthdayModalOpen(true)}
-              className="px-3 py-2 bg-yellow-300 hover:bg-yellow-200 border-2 border-amber-500 rounded-xl text-xs font-black uppercase text-amber-950 flex items-center gap-1.5 shadow-sm transition-all active:scale-95"
-              title="Ежедневник дней рождений"
-            >
-              <Cake size={16} className="text-red-600" />
-              <span className="hidden sm:inline">Дни рождения</span>
-            </button>
 
             {/* Login Button for Guests */}
             {!currentUser && (
@@ -703,6 +796,20 @@ export default function App() {
             onDeleteStory={handleDeleteStory}
             currentUser={currentUser}
             isAdmin={currentUser?.role === 'admin'}
+          />
+        )}
+
+        {/* TAB 0.5: TEAM BIRTHDAYS - RIGHT AFTER TEAM HISTORY */}
+        {activeTab === 'birthdays' && (
+          <BirthdaysTab
+            participants={participants}
+            currentUser={currentUser}
+            isAdmin={currentUser?.role === 'admin'}
+            onOpenProfileEdit={() => setIsProfileEditOpen(true)}
+            onOpenChatWithGreeting={(text) => {
+              setChatPrefill(text);
+              setIsChatOpen(true);
+            }}
           />
         )}
 
@@ -836,7 +943,7 @@ export default function App() {
           />
         )}
 
-        {/* TAB 7: ADMIN PANEL (WITH PSYCHOTYPES BLOCK & USER APPROVALS) */}
+        {/* TAB 7: ADMIN PANEL (USER APPROVALS, ROLES, TASKS, MENU, INVENTORY, CONTESTS, RALLIES) */}
         {activeTab === 'admin' && (
           <AdminPanel
             isAdmin={currentUser?.role === 'admin'}
@@ -874,6 +981,12 @@ export default function App() {
         onSendMessage={handleSendMessage}
         currentUser={currentUser}
         participants={participants}
+        isOpen={isChatOpen}
+        onToggle={() => setIsChatOpen(prev => !prev)}
+        onClose={() => setIsChatOpen(false)}
+        prefillText={chatPrefill}
+        onClearPrefill={() => setChatPrefill('')}
+        onUnreadCountChange={setUnreadChatCount}
       />
 
       {/* FOOTER */}

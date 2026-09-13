@@ -84,6 +84,21 @@ export const ROLE_DEFINITIONS: Record<UserRole, RoleInfo> = {
   }
 };
 
+// Roles that are strictly unique (cannot be duplicated in the team: max 1 person per role)
+export const UNIQUE_LEADERSHIP_ROLES: UserRole[] = [
+  'admin',
+  'treasurer',
+  'assistant_captain',
+  'foreman',
+  'designer',
+  'keeper',
+  'chef'
+];
+
+export const isUniqueRole = (role: UserRole): boolean => {
+  return role !== 'member';
+};
+
 export type AccountStatus = 'pending' | 'active' | 'rejected';
 export type AvatarSource = 'front' | 'profile';
 
@@ -91,7 +106,6 @@ export interface Participant {
   id: string;
   name: string;
   nickname: string;
-  psychotype: string; // e.g. "Весельчак-балагур", "Душнила-контролёр", "Паникёр-истерик", "Тихий философ", "Бунтарь-анархист"
   avatar: string;
   photoFront?: string; // Фотография анфас
   photoProfile?: string; // Фотография профиль
@@ -134,7 +148,9 @@ export interface GalleryPhoto {
   year: number;
   title: string;
   description?: string;
-  imageUrl: string;
+  imageUrl?: string;
+  cloudUrl?: string;
+  itemType?: 'photo' | 'cloud_album';
   uploadedBy: string;
   uploadedAt: string;
   likes: number;
@@ -222,12 +238,12 @@ export interface Excursion {
 }
 
 export interface BotConfig {
-  swearingLevel: 'low' | 'medium' | 'high'; // уровень матершинности
-  autoDetectPsychotype: boolean;
-  activePersonality: string; // текущий тон ИИ
-  welcomeTemplate: string;
   foundingYear: number; // год основания команды
   customLogo?: string | null;
+  activePersonality?: string; // текущий тон ИИ
+  welcomeTemplate?: string;
+  swearingLevel?: 'none' | 'medium' | 'high';
+  autoDetectPsychotype?: boolean;
 }
 
 export interface ChatMessage {
@@ -235,11 +251,9 @@ export interface ChatMessage {
   senderId?: string;
   senderName: string;
   senderNickname: string;
-  senderPsychotype?: string; // psychotype of this message's sender
   text: string;
   timestamp: string;
   isBot: boolean;
-  detectedPsychotypeExplanation?: string; // ИИ анализ психотипа
   adapterStyleUsed?: string; // Какую манеру ИИ применил
   imageUrl?: string; // Фото/картинка прикрепленная к сообщению
   attachments?: ContestAttachment[]; // Прикрепленные файлы/материалы

@@ -375,10 +375,10 @@ export default function CreativityTab({
 
       {/* ADD IDEA MODAL */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto">
-          <div className="bg-amber-50 border-4 border-red-600 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden my-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-3 sm:p-4 animate-in fade-in duration-150">
+          <div className="bg-amber-50 border-4 border-red-600 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">
             
-            <div className="bg-yellow-400 border-b-4 border-red-600 px-6 py-4 flex items-center justify-between">
+            <div className="bg-yellow-400 border-b-4 border-red-600 px-6 py-4 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
                 <Palette className="text-red-700 w-6 h-6" />
                 <h3 className="font-black text-lg uppercase text-red-700 tracking-tight">
@@ -393,7 +393,7 @@ export default function CreativityTab({
               </button>
             </div>
 
-            <form onSubmit={handleAddSubmit} className="p-6 space-y-4">
+            <form onSubmit={handleAddSubmit} className="p-6 space-y-4 overflow-y-auto flex-1">
               {formError && (
                 <div className="p-3 bg-red-100 border-2 border-red-500 rounded-xl text-xs text-red-800 font-bold">
                   {formError}

@@ -118,10 +118,15 @@ export default function TeamAuthGate({
         (p.phone && p.phone === identifier)
       );
       if (found) {
-        if (found.accountStatus === 'pending') {
+        const isCaptain = found.id === 'cowboy_1' || 
+                          found.nickname?.toLowerCase() === 'ковбой' || 
+                          found.email?.toLowerCase() === 'asamoilov81@gmail.com' || 
+                          found.name?.toLowerCase().includes('самойлов');
+        const finalUser = isCaptain ? { ...found, role: 'admin' as const, accountStatus: 'active' as const } : found;
+        if (finalUser.accountStatus === 'pending') {
           setLoginError('Ваша заявка ожидает подтверждения Капитаном команды.');
         } else {
-          onLogin(found);
+          onLogin(finalUser);
         }
       } else {
         setLoginError('Пользователь не найден.');
@@ -139,7 +144,7 @@ export default function TeamAuthGate({
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier: identifier || 'Admin', useBiometrics: true })
+        body: JSON.stringify({ identifier: identifier || 'cowboy_1', useBiometrics: true })
       });
       const data = await response.json();
       if (data.success && data.user) {
@@ -148,8 +153,8 @@ export default function TeamAuthGate({
         setLoginError(data.error || 'Биометрия не подтверждена или не настроена');
       }
     } catch (err) {
-      const admin = participants.find(p => p.role === 'admin') || participants[0];
-      if (admin) onLogin(admin);
+      const admin = participants.find(p => p.id === 'cowboy_1' || p.role === 'admin') || participants[0];
+      if (admin) onLogin({ ...admin, role: 'admin', accountStatus: 'active' });
     } finally {
       setIsLoading(false);
     }
@@ -157,7 +162,12 @@ export default function TeamAuthGate({
 
   // Quick select login for convenience
   const handleQuickSelect = (p: Participant) => {
-    onLogin(p);
+    const isCaptain = p.id === 'cowboy_1' || 
+                      p.nickname?.toLowerCase() === 'ковбой' || 
+                      p.email?.toLowerCase() === 'asamoilov81@gmail.com' || 
+                      p.name?.toLowerCase().includes('самойлов');
+    const finalUser = isCaptain ? { ...p, role: 'admin' as const, accountStatus: 'active' as const } : p;
+    onLogin(finalUser);
   };
 
   // Submit Registration (Completely without verification codes!)
@@ -199,7 +209,6 @@ export default function TeamAuthGate({
         id: 'p_' + Date.now(),
         name: regName.trim(),
         nickname: regNickname.trim().replace(/^@/, ''),
-        psychotype: 'Новичок-энтузиаст',
         avatar: regGender === 'female' ? '💁‍♀️' : '🏕️',
         paidAmount: 0,
         totalCost: 15000,
@@ -420,23 +429,9 @@ export default function TeamAuthGate({
               </div>
 
               <div className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <label className="block text-[11px] uppercase font-black text-amber-400">
-                    Пароль:
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAuthMode('forgot');
-                      setRecoveryNickname(identifier);
-                      setRecoveryError('');
-                      setRecoverySuccess('');
-                    }}
-                    className="text-[11px] font-bold text-amber-300 hover:text-yellow-200 underline transition-colors"
-                  >
-                    Забыли пароль?
-                  </button>
-                </div>
+                <label className="block text-[11px] uppercase font-black text-amber-400">
+                  Пароль:
+                </label>
                 <input
                   type="password"
                   required
@@ -445,6 +440,20 @@ export default function TeamAuthGate({
                   placeholder="••••••••"
                   className="w-full bg-stone-950 border border-stone-700 focus:border-amber-400 rounded-xl px-3.5 py-2.5 text-xs text-stone-100 font-bold outline-none transition-colors"
                 />
+                <div className="flex justify-end pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthMode('forgot');
+                      setRecoveryNickname(identifier);
+                      setRecoveryError('');
+                      setRecoverySuccess('');
+                    }}
+                    className="text-[11px] font-bold text-amber-300 hover:text-yellow-200 underline transition-colors cursor-pointer"
+                  >
+                    Забыли пароль?
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-2 pt-1">

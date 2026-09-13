@@ -1,10 +1,27 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   Send, MessageSquare, Paperclip, Image as ImageIcon, 
-  Search, Users, Smile, ArrowDown, Shield, Award, CheckCheck, X
+  Search, Users, Smile, ArrowDown, Shield, Award, CheckCheck, X, Bot, Sparkles, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { ChatMessage, Participant } from '../types';
 import { getSafeAvatar, getParticipantAvatar } from '../utils/avatar';
+
+const MAXIMKA_INTERNAL_COMMANDS = [
+  { label: 'Как гуляет Негодяй?', text: 'Как гуляет Негодяй?' },
+  { label: 'Кто с Негодяем дрался?', text: 'Кто с Негодяем дрался?' },
+  { label: 'Давай Негодяй!', text: 'Давай Негодяй!' },
+  { label: 'Тост (Запись дубля)', text: 'Запись дубля' },
+  { label: 'Записьдень!', text: 'Записьдень!' },
+  { label: 'Пизда на глаза', text: 'Пизда на глаза' },
+  { label: '🎂 Дни рождения', text: 'Максимка, кто именинник и у кого ближайшие дни рождения?' },
+  { label: '💰 Взносы и казна', text: 'Максимка, кто должен по деньгам и взносам?' },
+  { label: '🍲 Меню', text: 'Максимка, что у нас по меню и еде на слёт?' },
+  { label: '📋 Задачи', text: 'Максимка, какие задачи и дежурства горят?' },
+  { label: '🏕️ Инвентарь', text: 'Максимка, что по инвентарю и палаткам?' },
+  { label: '🪢 Узлы', text: 'Максимка, покажи схемы вязки туристических узлов' },
+  { label: '🧭 Ориентирование', text: 'Максимка, покажи условные знаки ориентирования и КП' },
+  { label: '📜 Документы', text: 'Максимка, покажи официальные документы и устав команды' },
+];
 
 interface InternalChatProps {
   messages: ChatMessage[];
@@ -27,12 +44,18 @@ export default function InternalChat({
   const [showMembersList, setShowMembersList] = useState(false);
   const [autoScroll, setAutoScroll] = useState(true);
 
+  const [showBotCommands, setShowBotCommands] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Filter out any bot messages strictly: only real registered members!
-  const realMessages = messages.filter(m => !m.isBot);
+  // Chat includes real registered members and Bot Maximka (negodyai_bot)
+  const realMessages = messages.filter(m => 
+    !m.isBot || 
+    m.senderNickname === 'negodyai_bot' || 
+    m.senderName === 'Бот Максимка' ||
+    m.senderName?.toLowerCase().includes('максимк')
+  );
 
   const filteredMessages = realMessages.filter(m => 
     m.text.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -157,13 +180,21 @@ export default function InternalChat({
             ) : (
               filteredMessages.map((msg) => {
                 const isMe = currentUser && (currentUser.nickname === msg.senderNickname || currentUser.name === msg.senderName);
-                const roleBadge = getParticipantRoleBadge(msg.senderNickname, msg.senderName);
+                const isBot = Boolean(msg.isBot || msg.senderNickname === 'negodyai_bot' || msg.senderName?.toLowerCase().includes('максимк'));
+                const roleBadge = isBot ? (
+                  <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-yellow-400 text-stone-950 border border-yellow-500">
+                    🤖 Главный Негодяй
+                  </span>
+                ) : getParticipantRoleBadge(msg.senderNickname, msg.senderName);
+                
                 const senderParticipant = participants.find(
                   p => p.nickname === msg.senderNickname || p.name === msg.senderName
                 );
-                const senderAvatar = senderParticipant
-                  ? getParticipantAvatar(senderParticipant)
-                  : getSafeAvatar(null);
+                const senderAvatar = isBot
+                  ? "https://api.dicebear.com/7.x/bottts/svg?seed=MaximkaNegodyai&backgroundColor=b6e3f4"
+                  : senderParticipant
+                    ? getParticipantAvatar(senderParticipant)
+                    : getSafeAvatar(null);
 
                 return (
                   <div
@@ -173,7 +204,9 @@ export default function InternalChat({
                     }`}
                   >
                     {/* Avatar */}
-                    <div className="w-9 h-9 rounded-full border-2 border-amber-300 bg-white overflow-hidden shrink-0 shadow-sm">
+                    <div className={`w-9 h-9 rounded-full border-2 bg-white overflow-hidden shrink-0 shadow-sm ${
+                      isBot ? 'border-yellow-400 ring-2 ring-yellow-300' : 'border-amber-300'
+                    }`}>
                       <img 
                         src={senderAvatar} 
                         alt={msg.senderName} 
@@ -186,16 +219,22 @@ export default function InternalChat({
                       className={`p-3.5 rounded-2xl shadow-sm border-2 text-xs sm:text-sm ${
                         isMe
                           ? 'bg-red-600 text-yellow-100 border-red-700 rounded-tr-none'
-                          : 'bg-white text-amber-950 border-amber-200 rounded-tl-none'
+                          : isBot
+                            ? 'bg-amber-950 text-yellow-100 border-yellow-400 rounded-tl-none shadow-md'
+                            : 'bg-white text-amber-950 border-amber-200 rounded-tl-none'
                       }`}
                     >
                       {/* Sender Meta */}
                       <div className="flex items-center gap-1.5 mb-1">
-                        <span className={`font-black text-xs ${isMe ? 'text-yellow-300' : 'text-amber-950'}`}>
-                          {msg.senderName}
+                        <span className={`font-black text-xs ${
+                          isMe ? 'text-yellow-300' : isBot ? 'text-yellow-400' : 'text-amber-950'
+                        }`}>
+                          {isBot ? '🤖 Бот Максимка' : msg.senderName}
                         </span>
-                        <span className={`text-[10px] font-bold ${isMe ? 'text-yellow-200/80' : 'text-red-600'}`}>
-                          @{msg.senderNickname}
+                        <span className={`text-[10px] font-bold ${
+                          isMe ? 'text-yellow-200/80' : isBot ? 'text-amber-300' : 'text-red-600'
+                        }`}>
+                          @{isBot ? 'negodyai_bot' : msg.senderNickname}
                         </span>
                         {roleBadge}
                       </div>
@@ -240,6 +279,84 @@ export default function InternalChat({
               <ArrowDown size={16} />
               <span>Вниз</span>
             </button>
+          )}
+
+          {/* Bot Maximka Quick Commands Bar */}
+          <div className="bg-amber-100/80 px-3 py-1.5 border-t-2 border-amber-300 flex items-center justify-between gap-1.5 shrink-0">
+            <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5">
+              <button
+                type="button"
+                onClick={() => setShowBotCommands(prev => !prev)}
+                className="text-[10px] font-black uppercase px-2 py-1 rounded-lg bg-red-600 hover:bg-red-700 text-yellow-300 flex items-center gap-1 shrink-0 transition-all shadow-xs active:scale-95 cursor-pointer"
+              >
+                <Bot size={13} />
+                <span>Команды Максимки</span>
+                {showBotCommands ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              </button>
+              <button
+                type="button"
+                onClick={() => { onSendMessage('Как гуляет Негодяй?'); scrollToBottom(true); }}
+                className="text-[10px] font-bold px-2 py-1 rounded-lg bg-white hover:bg-amber-200 text-amber-950 border border-amber-300 whitespace-nowrap shrink-0 transition-colors shadow-xs"
+              >
+                🔥 Как гуляет Негодяй?
+              </button>
+              <button
+                type="button"
+                onClick={() => { onSendMessage('Кто с Негодяем дрался?'); scrollToBottom(true); }}
+                className="text-[10px] font-bold px-2 py-1 rounded-lg bg-white hover:bg-amber-200 text-amber-950 border border-amber-300 whitespace-nowrap shrink-0 transition-colors shadow-xs"
+              >
+                🌲 Кто дрался?
+              </button>
+              <button
+                type="button"
+                onClick={() => { onSendMessage('Максимка, кто именинник и у кого ближайшие дни рождения?'); scrollToBottom(true); }}
+                className="text-[10px] font-bold px-2 py-1 rounded-lg bg-white hover:bg-amber-200 text-amber-950 border border-amber-300 whitespace-nowrap shrink-0 transition-colors shadow-xs"
+              >
+                🎂 Дни рождения
+              </button>
+              <button
+                type="button"
+                onClick={() => { onSendMessage('Запись дубля'); scrollToBottom(true); }}
+                className="text-[10px] font-bold px-2 py-1 rounded-lg bg-white hover:bg-amber-200 text-amber-950 border border-amber-300 whitespace-nowrap shrink-0 transition-colors shadow-xs"
+              >
+                🍻 Тост
+              </button>
+            </div>
+          </div>
+
+          {/* Expanded Bot Commands Grid */}
+          {showBotCommands && (
+            <div className="bg-amber-50 border-t border-amber-200 p-2.5 max-h-48 overflow-y-auto scrollbar-thin">
+              <div className="text-[11px] font-black uppercase text-amber-950 mb-1.5 flex items-center justify-between">
+                <span className="flex items-center gap-1 text-red-600">
+                  <Sparkles size={13} /> Все команды для чат-бота Максимка
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowBotCommands(false)}
+                  className="text-[10px] text-amber-700 hover:text-red-600 uppercase font-bold cursor-pointer"
+                >
+                  Закрыть
+                </button>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-1.5">
+                {MAXIMKA_INTERNAL_COMMANDS.map(cmd => (
+                  <button
+                    key={cmd.label}
+                    type="button"
+                    onClick={() => {
+                      onSendMessage(cmd.text);
+                      setShowBotCommands(false);
+                      scrollToBottom(true);
+                    }}
+                    className="p-1.5 bg-white hover:bg-amber-100 text-left border border-amber-200 hover:border-amber-400 rounded-lg text-[10px] font-bold text-amber-950 truncate transition-all shadow-xs"
+                    title={cmd.text}
+                  >
+                    {cmd.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
 
           {/* Input Area */}
