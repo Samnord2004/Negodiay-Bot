@@ -206,8 +206,8 @@ export default function AdminPanel({
     }
   };
 
-  const loadResetRequests = async () => {
-    setIsLoadingResetRequests(true);
+  const loadResetRequests = async (showLoading = false) => {
+    if (showLoading) setIsLoadingResetRequests(true);
     try {
       const res = await fetch('/api/admin/password-reset-requests');
       if (res.ok) {
@@ -217,13 +217,17 @@ export default function AdminPanel({
     } catch (err) {
       console.error("Failed to load reset requests:", err);
     } finally {
-      setIsLoadingResetRequests(false);
+      if (showLoading) setIsLoadingResetRequests(false);
     }
   };
 
   useEffect(() => {
     if (isAdmin) {
-      loadResetRequests();
+      loadResetRequests(false);
+      const interval = setInterval(() => {
+        loadResetRequests(false);
+      }, 10000);
+      return () => clearInterval(interval);
     }
   }, [isAdmin]);
 
@@ -242,7 +246,7 @@ export default function AdminPanel({
           onUpdateParticipants(data.participants);
         }
         setResetSuccessMessage(`Пароль для ${data.user.name} (@${data.user.nickname}) успешно изменён на: ${newPass}`);
-        loadResetRequests();
+        loadResetRequests(false);
         setTimeout(() => {
           setResetModalUser(null);
           setResetSuccessMessage(null);
@@ -258,19 +262,19 @@ export default function AdminPanel({
     }
   };
 
-  const handleRefreshPending = async () => {
+  const handleManualRefresh = async () => {
     setIsRefreshingPending(true);
     try {
       const res = await fetch('/api/sync');
       if (res.ok) {
         const data = await res.json();
-        if (data.participants) {
+        if (data.participants && Array.isArray(data.participants)) {
           onUpdateParticipants(data.participants);
         }
       }
-      await loadResetRequests();
+      await loadResetRequests(true);
     } catch (err) {
-      console.error("Refresh pending error:", err);
+      console.error("Manual refresh error:", err);
     } finally {
       setIsRefreshingPending(false);
     }
@@ -526,7 +530,7 @@ export default function AdminPanel({
               <div className="flex items-center gap-3">
                 <button
                   type="button"
-                  onClick={handleRefreshPending}
+                  onClick={handleManualRefresh}
                   disabled={isRefreshingPending || isLoadingResetRequests}
                   className="px-3 py-1 bg-amber-200 hover:bg-amber-300 text-amber-950 font-black text-xs uppercase rounded-xl border border-amber-400 flex items-center gap-1.5 shadow-2xs transition-colors"
                   title="Обновить список заявок с сервера"
@@ -626,7 +630,7 @@ export default function AdminPanel({
                 <div className="bg-amber-50 rounded-2xl p-6 text-center border-2 border-dashed border-amber-300">
                   <CheckCircle className="w-10 h-10 text-emerald-500 mx-auto mb-1.5" />
                   <p className="font-black text-amber-950 text-sm uppercase">Все заявки рассмотрены!</p>
-                  <p className="text-xs text-amber-700 mt-1">Новые участники регистрируются без проверочных кодов и сразу направляются сюда.</p>
+                  <p className="text-xs text-amber-700 mt-1">Новые заявки на регистрацию в команду сразу поступают сюда на рассмотрение.</p>
                 </div>
               ) : (
                 <div className="space-y-3">

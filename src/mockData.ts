@@ -11,7 +11,8 @@ import {
   GalleryPhoto,
   TeamDocument,
   FundRecord,
-  CreativityIdea
+  CreativityIdea,
+  RallyCoin
 } from './types';
 
 export const initialParticipants: Participant[] = [
@@ -816,4 +817,68 @@ export const INITIAL_STORIES: any[] = [
     createdAt: "2026-06-15"
   }
 ];
+
+export const initialRallyCoins: RallyCoin[] = [
+  {
+    id: "coin_1",
+    participantId: "cowboy_1",
+    participantName: "Андрей Самойлов",
+    participantNickname: "Ковбой",
+    taskTitle: "Строительство и обустройство лагеря",
+    category: "task",
+    comment: "Обустройство штабного шатра, возведение флагштока Негодяев и расчистка поляны",
+    awardedAt: "2026-06-12T14:30:00.000Z",
+    awardedBy: "Капитан Андрей Самойлов",
+    year: 2026
+  },
+  {
+    id: "coin_2",
+    participantId: "cowboy_1",
+    participantName: "Андрей Самойлов",
+    participantNickname: "Ковбой",
+    taskTitle: "Идея года / креативный вклад",
+    category: "merit",
+    comment: "Внедрение мотивационной системы со скидкой на слёт для команды",
+    awardedAt: "2026-06-25T18:00:00.000Z",
+    awardedBy: "Капитан Андрей Самойлов",
+    year: 2026
+  },
+  {
+    id: "coin_3",
+    participantId: "cowboy_1",
+    participantName: "Андрей Самойлов",
+    participantNickname: "Ковбой",
+    taskTitle: "Удача Негодяя (Колесо Фортуны)",
+    category: "fortune",
+    comment: "Счастливый сектор на праздничном открытии Колеса Фортуны!",
+    awardedAt: "2026-07-04T12:00:00.000Z",
+    awardedBy: "Колесо Фортуны",
+    year: 2026
+  },
+  {
+    id: "coin_4",
+    participantId: "user_1789431236481",
+    participantName: "тест",
+    participantNickname: "тест",
+    taskTitle: "Закупка продуктов и провианта",
+    category: "task",
+    comment: "Доставка стратегического запаса тушенки и круп на базу лагеря",
+    awardedAt: "2026-07-15T11:20:00.000Z",
+    awardedBy: "Капитан Андрей Самойлов",
+    year: 2026
+  },
+  {
+    id: "coin_5",
+    participantId: "user_1789431236481",
+    participantName: "тест",
+    participantNickname: "тест",
+    taskTitle: "Удача Негодяя (Колесо Фортуны)",
+    category: "fortune",
+    comment: "Удача улыбнулась в ежедневном вращении Колеса Фортуны!",
+    awardedAt: "2026-08-10T16:45:00.000Z",
+    awardedBy: "Колесо Фортуны",
+    year: 2026
+  }
+];
+
 

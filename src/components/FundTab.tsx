@@ -3,7 +3,7 @@ import {
   PiggyBank, ShieldCheck, UserCheck, AlertCircle, 
   CheckCircle, Bell, DollarSign, Calendar, RefreshCw, Send, Award,
   Edit2, Plus, Check, X, CreditCard, ChevronRight, User, ShoppingBag,
-  TrendingUp, Wallet, Lock, Unlock, ArrowDownCircle, ArrowUpCircle
+  TrendingUp, Wallet, Lock, Unlock, ArrowDownCircle, ArrowUpCircle, Eye, Info
 } from 'lucide-react';
 import { FundRecord, Participant, FundExpense } from '../types';
 import { getSafeAvatar, getParticipantAvatar } from '../utils/avatar';
@@ -112,13 +112,29 @@ export default function FundTab({
                            participants.find(p => p.nickname.toLowerCase().includes('булочк')) || 
                            null;
 
-  // Check if current user has treasurer rights
-  const hasTreasurerRights = 
+  // Strict role detection: Captain or Treasurer
+  const isCaptain = Boolean(
     isAdmin || 
+    currentUser?.role === 'admin' || 
+    (currentUser && (
+      (currentUser.nickname || '').toLowerCase().replace(/^@/, '') === 'ковбой' ||
+      (currentUser.nickname || '').toLowerCase().replace(/^@/, '') === 'cowboy' ||
+      (currentUser.email || '').toLowerCase() === 'asamoilov81@gmail.com' ||
+      (currentUser.name || '').toLowerCase().includes('самойлов') ||
+      currentUser.id === 'cowboy_1'
+    ))
+  );
+
+  const isUserTreasurer = Boolean(
     isTreasurer || 
+    currentUser?.role === 'treasurer' || 
     (currentUser && currentTreasurer && currentUser.id === currentTreasurer.id) ||
-    (currentUser && currentUser.role === 'treasurer') ||
-    editMode; // If edit mode is toggled, allow editing
+    (currentUser && (currentUser.nickname || '').toLowerCase().includes('булочк'))
+  );
+
+  // STRICT REQUIREMENT: Only Treasurer and Captain have rights to make changes to the Fund!
+  // For all other users, this page is strictly read-only / informational.
+  const canEdit = Boolean(isCaptain || isUserTreasurer);
 
   // Helper to find or synthesize record for participant & month
   const getRecord = (pId: string, month: number): { isPaid: boolean; amount: number; id?: string; paidAt?: string; note?: string } => {
@@ -150,6 +166,10 @@ export default function FundTab({
 
   // Quick toggle month payment
   const handleToggleMonth = async (p: Participant, month: number) => {
+    if (!canEdit) {
+      setNotificationToast("Только Казначей и Капитан команды имеют право изменять отметки взносов в фонде.");
+      return;
+    }
     const currentRec = getRecord(p.id, month);
     const nextPaidState = !currentRec.isPaid;
 
@@ -163,7 +183,8 @@ export default function FundTab({
       amount: currentRec.amount || monthlyRate,
       isPaid: nextPaidState,
       paidAt: nextPaidState ? new Date().toISOString().split('T')[0] : undefined,
-      note: currentRec.note || ""
+      note: currentRec.note || "",
+      operatorId: currentUser?.id
     };
 
     // Optimistic UI update
@@ -189,6 +210,10 @@ export default function FundTab({
 
   // Open detailed editor for a cell
   const handleOpenCellEditor = (p: Participant, month: number) => {
+    if (!canEdit) {
+      setNotificationToast("Только Казначей и Капитан команды имеют право редактировать взносы.");
+      return;
+    }
     const rec = getRecord(p.id, month);
     setEditingRecord({
       id: rec.id,
@@ -204,6 +229,10 @@ export default function FundTab({
 
   // Save detailed record from modal
   const handleSaveDetailedRecord = async () => {
+    if (!canEdit) {
+      setNotificationToast("Только Казначей и Капитан команды имеют право сохранять изменения в фонде.");
+      return;
+    }
     if (!editingRecord) return;
 
     const payload = {
@@ -216,7 +245,8 @@ export default function FundTab({
       amount: Number(editingRecord.amount) || monthlyRate,
       isPaid: editingRecord.isPaid,
       paidAt: editingRecord.isPaid ? editingRecord.paidAt : undefined,
-      note: editingRecord.note
+      note: editingRecord.note,
+      operatorId: currentUser?.id
     };
 
     onPaymentToggled(payload);
@@ -240,6 +270,10 @@ export default function FundTab({
 
   // Mark all past months as paid for a participant
   const handleMarkAllPaid = async (p: Participant) => {
+    if (!canEdit) {
+      setNotificationToast("Только Казначей и Капитан команды имеют право вносить изменения.");
+      return;
+    }
     const maxMonth = selectedYear === currentYear ? currentMonth : 12;
     for (let m = 1; m <= maxMonth; m++) {
       const rec = getRecord(p.id, m);
@@ -252,6 +286,10 @@ export default function FundTab({
 
   // Create manual payment
   const handleAddManualPayment = async () => {
+    if (!canEdit) {
+      setNotificationToast("Только Казначей и Капитан команды имеют право вносить взносы.");
+      return;
+    }
     const p = participants.find(part => part.id === newPaymentParticipantId) || participants[0];
     if (!p) return;
 
@@ -265,7 +303,8 @@ export default function FundTab({
       amount: Number(newPaymentAmount) || monthlyRate,
       isPaid: newPaymentIsPaid,
       paidAt: newPaymentIsPaid ? newPaymentDate : undefined,
-      note: newPaymentNote
+      note: newPaymentNote,
+      operatorId: currentUser?.id
     };
 
     onPaymentToggled(payload);
@@ -289,6 +328,10 @@ export default function FundTab({
 
   // Add expense
   const handleAddExpense = () => {
+    if (!canEdit) {
+      setNotificationToast("Только Казначей и Капитан команды имеют право фиксировать расходы фонда.");
+      return;
+    }
     if (!expenseTitle.trim() || !expenseAmount) return;
     const newExp: FundExpense = {
       id: `exp_${Date.now()}`,
@@ -314,6 +357,10 @@ export default function FundTab({
   };
 
   const handleDeleteExpense = (id: string) => {
+    if (!canEdit) {
+      setNotificationToast("Только Казначей и Капитан команды имеют право удалять расходы фонда.");
+      return;
+    }
     const updated = expenses.filter(e => e.id !== id);
     setExpenses(updated);
     try {
@@ -324,6 +371,10 @@ export default function FundTab({
   };
 
   const handleNotifyDebtors = () => {
+    if (!canEdit) {
+      setNotificationToast("Только Казначей и Капитан команды могут отправлять напоминания о задолженностях.");
+      return;
+    }
     const debtors = participants
       .map(p => ({ participant: p, debt: calculateParticipantFundDebt(p.id) }))
       .filter(d => d.debt > 0);
@@ -338,6 +389,10 @@ export default function FundTab({
   };
 
   const handleAssignTreasurer = async () => {
+    if (!isCaptain) {
+      setNotificationToast("Только Капитан команды имеет право назначать или менять Казначея фонда.");
+      return;
+    }
     if (!selectedTreasurerId) return;
     const target = participants.find(p => p.id === selectedTreasurerId);
     if (!target) return;
@@ -372,13 +427,6 @@ export default function FundTab({
     }
   };
 
-  const handleSwitchToTreasurer = () => {
-    if (currentTreasurer && onSwitchUser) {
-      onSwitchUser(currentTreasurer);
-      setNotificationToast(`Вход выполнен под аккаунтом Казначея: ${currentTreasurer.name}. Права управления фондом активны!`);
-    }
-  };
-
   return (
     <div className="space-y-6">
 
@@ -398,47 +446,46 @@ export default function FundTab({
           </div>
 
           <div className="flex items-center flex-wrap gap-2">
-            {/* Toggle Edit Mode */}
-            <button
-              type="button"
-              onClick={() => setEditMode(!editMode)}
-              className={`px-3.5 py-2 font-black uppercase text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 border ${
-                editMode 
-                  ? 'bg-emerald-600 text-white border-emerald-800' 
-                  : 'bg-white text-stone-700 border-stone-300 hover:bg-stone-50'
-              }`}
-              title="Включить или отключить режим редактирования данных фонда"
-            >
-              {editMode ? <Unlock size={15} /> : <Lock size={15} />}
-              <span>{editMode ? 'Редактирование: ВКЛ' : 'Редактирование: ВЫКЛ'}</span>
-            </button>
+            {canEdit ? (
+              <>
+                <div className="px-3 py-2 font-black uppercase text-xs rounded-xl shadow-xs flex items-center gap-1.5 bg-emerald-600 text-white border border-emerald-800">
+                  <ShieldCheck size={15} />
+                  <span>{isCaptain ? 'Управление: Капитан' : 'Управление: Казначей'}</span>
+                </div>
 
-            <button
-              type="button"
-              onClick={() => setIsAddingPayment(true)}
-              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5"
-            >
-              <Plus size={15} />
-              <span>Внести взнос</span>
-            </button>
+                <button
+                  type="button"
+                  onClick={() => setIsAddingPayment(true)}
+                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Plus size={15} />
+                  <span>Внести взнос</span>
+                </button>
 
-            <button
-              type="button"
-              onClick={() => setIsAddingExpense(true)}
-              className="px-3.5 py-2 bg-amber-800 hover:bg-amber-900 text-yellow-300 font-black uppercase text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5"
-            >
-              <ShoppingBag size={15} />
-              <span>Расход кассы</span>
-            </button>
+                <button
+                  type="button"
+                  onClick={() => setIsAddingExpense(true)}
+                  className="px-3.5 py-2 bg-amber-800 hover:bg-amber-900 text-yellow-300 font-black uppercase text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <ShoppingBag size={15} />
+                  <span>Расход кассы</span>
+                </button>
 
-            <button
-              type="button"
-              onClick={handleNotifyDebtors}
-              className="px-3.5 py-2 bg-red-600 hover:bg-red-700 text-yellow-300 font-black uppercase text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5"
-            >
-              <Bell size={15} />
-              <span>Должники</span>
-            </button>
+                <button
+                  type="button"
+                  onClick={handleNotifyDebtors}
+                  className="px-3.5 py-2 bg-red-600 hover:bg-red-700 text-yellow-300 font-black uppercase text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Bell size={15} />
+                  <span>Должники</span>
+                </button>
+              </>
+            ) : (
+              <div className="px-3.5 py-2 bg-stone-900 text-amber-300 font-black uppercase text-xs rounded-xl shadow-xs border-2 border-amber-400 flex items-center gap-2">
+                <Eye size={15} className="text-amber-400" />
+                <span>Ознакомительный режим</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -476,16 +523,18 @@ export default function FundTab({
               <span className="text-[10px] font-black uppercase text-amber-900 block">
                 Взнос в месяц
               </span>
-              <button
-                type="button"
-                onClick={() => {
-                  setTempRate(String(monthlyRate));
-                  setIsEditingRate(true);
-                }}
-                className="text-[9px] font-black uppercase text-red-700 hover:underline flex items-center gap-0.5"
-              >
-                <Edit2 size={10} /> Изменить
-              </button>
+              {canEdit && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTempRate(String(monthlyRate));
+                    setIsEditingRate(true);
+                  }}
+                  className="text-[9px] font-black uppercase text-red-700 hover:underline flex items-center gap-0.5 cursor-pointer"
+                >
+                  <Edit2 size={10} /> Изменить
+                </button>
+              )}
             </div>
             <span className="text-lg sm:text-2xl font-black text-amber-950 block mt-0.5">
               {monthlyRate} ₽
@@ -493,6 +542,28 @@ export default function FundTab({
           </div>
         </div>
       </div>
+
+      {/* Informational Notice Banner for read-only participants */}
+      {!canEdit && (
+        <div className="bg-amber-50 border-3 border-amber-400 rounded-2xl p-4 shadow-sm flex items-start gap-3">
+          <div className="p-2.5 bg-amber-200 text-amber-950 rounded-xl shrink-0 mt-0.5 shadow-2xs">
+            <Eye size={22} className="text-amber-900" />
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-black uppercase text-amber-950 bg-amber-200 px-2.5 py-0.5 rounded-md border border-amber-300">
+                Ознакомительный просмотр
+              </span>
+              <span className="text-xs font-bold text-stone-600">
+                Режим чтения
+              </span>
+            </div>
+            <p className="text-xs text-amber-950 leading-relaxed font-medium">
+              Для вас страница фонда открыта только для ознакомления. Вносить любые изменения в ведомость (отмечать оплату взносов, списывать расходы кассы и настраивать тариф) имеют право исключительно <strong>Капитан команды</strong> и <strong>Казначей</strong>.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Rate editor modal/dialog */}
       {isEditingRate && (
@@ -602,20 +673,8 @@ export default function FundTab({
           </div>
 
           <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
-            {/* Fast switch to treasurer user button if current user isn't treasurer */}
-            {currentTreasurer && currentUser?.id !== currentTreasurer.id && onSwitchUser && (
-              <button
-                type="button"
-                onClick={handleSwitchToTreasurer}
-                className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-black uppercase flex items-center gap-1.5 transition-colors"
-              >
-                <User size={13} />
-                <span>Войти как Казначей</span>
-              </button>
-            )}
-
-            {/* Admin role assignment */}
-            {isAdmin && (
+            {/* Captain role assignment */}
+            {isCaptain && (
               <div className="bg-amber-50 p-2 rounded-xl border border-amber-300 flex items-center gap-1.5">
                 <select
                   value={selectedTreasurerId || (currentTreasurer?.id || '')}
@@ -629,7 +688,7 @@ export default function FundTab({
                 <button
                   type="button"
                   onClick={handleAssignTreasurer}
-                  className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase text-[11px] rounded-lg shadow whitespace-nowrap"
+                  className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase text-[11px] rounded-lg shadow whitespace-nowrap cursor-pointer"
                 >
                   Назначить
                 </button>
@@ -643,7 +702,15 @@ export default function FundTab({
           <div className="flex items-center gap-2">
             <span className="text-base">💡</span>
             <span>
-              <strong>Быстрое редактирование:</strong> кликните на ячейку месяца для отметки оплаты, либо нажмите значок карандаша для ввода произвольной суммы или чека.
+              {canEdit ? (
+                <>
+                  <strong>Управление взносами:</strong> кликните на ячейку месяца для отметки оплаты, либо нажмите значок карандаша для ввода произвольной суммы или чека.
+                </>
+              ) : (
+                <>
+                  <strong>Ознакомительный просмотр:</strong> клик по ячейкам заблокирован. Все записи о взносах и расходах ведутся Казначеем и Капитаном команды.
+                </>
+              )}
             </span>
           </div>
         </div>
@@ -693,7 +760,9 @@ export default function FundTab({
                     {m.slice(0, 3)}
                   </th>
                 ))}
-                <th className="px-3 py-3 text-center min-w-[80px]">Действие</th>
+                <th className="px-3 py-3 text-center min-w-[80px]">
+                  {canEdit ? 'Действие' : 'Статус'}
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-amber-100">
@@ -737,46 +806,73 @@ export default function FundTab({
                           className={`px-1 py-1.5 text-center ${isCurrentM ? 'bg-yellow-50' : ''}`}
                         >
                           <div className="relative group/cell inline-block">
-                            <button
-                              type="button"
-                              onClick={() => handleToggleMonth(p, monthNum)}
-                              className={`w-8 h-8 rounded-lg font-black text-[10px] transition-all flex items-center justify-center cursor-pointer shadow-2xs ${
-                                rec.isPaid
-                                  ? 'bg-emerald-500 hover:bg-emerald-600 text-white'
-                                  : 'bg-stone-100 hover:bg-red-100 text-stone-400 hover:text-red-700 border border-dashed border-stone-300'
-                              }`}
-                              title={`${MONTHS_NAMES[idx]}: ${rec.isPaid ? `Оплачено ${rec.amount || monthlyRate} ₽` : 'Не оплачено'}. Кликните для переключения`}
-                            >
-                              {rec.isPaid ? '✓' : String(rec.amount || monthlyRate)}
-                            </button>
+                            {canEdit ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleMonth(p, monthNum)}
+                                  className={`w-8 h-8 rounded-lg font-black text-[10px] transition-all flex items-center justify-center cursor-pointer shadow-2xs ${
+                                    rec.isPaid
+                                      ? 'bg-emerald-500 hover:bg-emerald-600 text-white'
+                                      : 'bg-stone-100 hover:bg-red-100 text-stone-400 hover:text-red-700 border border-dashed border-stone-300'
+                                  }`}
+                                  title={`${MONTHS_NAMES[idx]}: ${rec.isPaid ? `Оплачено ${rec.amount || monthlyRate} ₽` : 'Не оплачено'}. Кликните для переключения`}
+                                >
+                                  {rec.isPaid ? '✓' : String(rec.amount || monthlyRate)}
+                                </button>
 
-                            {/* Small edit dot/button */}
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleOpenCellEditor(p, monthNum);
-                              }}
-                              className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-amber-500 hover:bg-amber-600 text-white rounded-full flex items-center justify-center opacity-0 group-hover/cell:opacity-100 transition-opacity shadow-xs"
-                              title="Редактировать сумму или комментарий"
-                            >
-                              <Edit2 size={8} />
-                            </button>
+                                {/* Small edit dot/button */}
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleOpenCellEditor(p, monthNum);
+                                  }}
+                                  className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-amber-500 hover:bg-amber-600 text-white rounded-full flex items-center justify-center opacity-0 group-hover/cell:opacity-100 transition-opacity shadow-xs cursor-pointer"
+                                  title="Редактировать сумму или комментарий"
+                                >
+                                  <Edit2 size={8} />
+                                </button>
+                              </>
+                            ) : (
+                              <div
+                                className={`w-8 h-8 rounded-lg font-black text-[10px] flex items-center justify-center select-none shadow-2xs ${
+                                  rec.isPaid
+                                    ? 'bg-emerald-500 text-white'
+                                    : 'bg-stone-100 text-stone-400 border border-dashed border-stone-300'
+                                }`}
+                                title={`${MONTHS_NAMES[idx]}: ${rec.isPaid ? `Оплачено ${rec.amount || monthlyRate} ₽` : `Не оплачено (${rec.amount || monthlyRate} ₽)`} (ознакомительный просмотр)`}
+                              >
+                                {rec.isPaid ? '✓' : String(rec.amount || monthlyRate)}
+                              </div>
+                            )}
                           </div>
                         </td>
                       );
                     })}
 
-                    {/* Action: mark all paid */}
+                    {/* Action or Status */}
                     <td className="px-3 py-2.5 text-center">
-                      <button
-                        type="button"
-                        onClick={() => handleMarkAllPaid(p)}
-                        className="py-1 px-2 bg-amber-100 hover:bg-amber-200 text-amber-950 text-[10px] font-black uppercase rounded-lg transition-colors whitespace-nowrap"
-                        title="Отметить все прошедшие месяцы оплаченными"
-                      >
-                        Оплатить всё
-                      </button>
+                      {canEdit ? (
+                        <button
+                          type="button"
+                          onClick={() => handleMarkAllPaid(p)}
+                          className="py-1 px-2 bg-amber-100 hover:bg-amber-200 text-amber-950 text-[10px] font-black uppercase rounded-lg transition-colors whitespace-nowrap cursor-pointer"
+                          title="Отметить все прошедшие месяцы оплаченными"
+                        >
+                          Оплатить всё
+                        </button>
+                      ) : (
+                        debt > 0 ? (
+                          <span className="inline-block py-1 px-2 bg-red-50 text-red-700 border border-red-200 text-[10px] font-bold rounded-lg whitespace-nowrap">
+                            К оплате
+                          </span>
+                        ) : (
+                          <span className="inline-block py-1 px-2 bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold rounded-lg whitespace-nowrap">
+                            В норме
+                          </span>
+                        )
+                      )}
                     </td>
                   </tr>
                 );
@@ -799,14 +895,16 @@ export default function FundTab({
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setIsAddingExpense(true)}
-            className="px-3 py-1.5 bg-amber-800 hover:bg-amber-900 text-yellow-300 font-black uppercase text-xs rounded-xl shadow-xs flex items-center gap-1.5"
-          >
-            <Plus size={14} />
-            <span>Добавить расход</span>
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => setIsAddingExpense(true)}
+              className="px-3 py-1.5 bg-amber-800 hover:bg-amber-900 text-yellow-300 font-black uppercase text-xs rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer"
+            >
+              <Plus size={14} />
+              <span>Добавить расход</span>
+            </button>
+          )}
         </div>
 
         {/* Expenses List */}
@@ -842,14 +940,16 @@ export default function FundTab({
                   )}
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => handleDeleteExpense(exp.id)}
-                  className="text-stone-400 hover:text-red-600 p-1 rounded-lg transition-colors"
-                  title="Удалить запись расхода"
-                >
-                  <X size={14} />
-                </button>
+                {canEdit && (
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteExpense(exp.id)}
+                    className="text-stone-400 hover:text-red-600 p-1 rounded-lg transition-colors cursor-pointer"
+                    title="Удалить запись расхода"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
               </div>
             ))}
           </div>

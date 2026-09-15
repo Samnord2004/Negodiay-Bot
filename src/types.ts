@@ -356,4 +356,95 @@ export const DEFAULT_THEME_CONFIG: ThemeConfig = {
   contrast: 100
 };
 
+// ==========================================
+// МОТИВАЦИОННАЯ ИГРА "СКИДКА НА СЛЁТ"
+// ==========================================
+
+export type CoinCategory = 'task' | 'fortune' | 'merit' | 'contest';
+
+export interface RallyCoin {
+  id: string;
+  participantId: string;
+  participantName: string;
+  participantNickname: string;
+  participantAvatar?: string;
+  participantPhotoProfile?: string;
+  taskTitle: string; // Название задачи, например "Закупка продуктов", "Строительство лагеря"
+  category: CoinCategory;
+  comment?: string; // Похвала/описание от Капитана или системы
+  awardedAt: string; // ISO дата
+  awardedBy: string; // "Капитан Андрей Самойлов" или "Колесо Фортуны"
+  year: number; // e.g. 2026
+}
+
+export interface GameLevelInfo {
+  level: number;
+  title: string;
+  badge: string;
+  minCoins: number;
+  maxCoins: number | null;
+  color: string;
+  textColor: string;
+  perk: string;
+}
+
+export const GAME_LEVELS: GameLevelInfo[] = [
+  {
+    level: 1,
+    title: 'Салага Негодяев',
+    badge: 'Новичок',
+    minCoins: 0,
+    maxCoins: 9,
+    color: 'bg-amber-100 border-amber-300',
+    textColor: 'text-amber-800',
+    perk: 'Первые шаги по лесной тропе. Сбор первых монет слёта.'
+  },
+  {
+    level: 2,
+    title: 'Бывалый Негодяй',
+    badge: 'Бывалый (10+)',
+    minCoins: 10,
+    maxCoins: 24,
+    color: 'bg-blue-100 border-blue-300',
+    textColor: 'text-blue-800',
+    perk: 'Надёжный боец лагеря. Право первого куска у походного казана.'
+  },
+  {
+    level: 3,
+    title: 'Волк тайги',
+    badge: 'Волк (25+)',
+    minCoins: 25,
+    maxCoins: 49,
+    color: 'bg-emerald-100 border-emerald-300',
+    textColor: 'text-emerald-800',
+    perk: 'Костровой авторитет. Лучшие места у костра и уважение братства.'
+  },
+  {
+    level: 4,
+    title: 'Легенда Негодяев',
+    badge: 'Легенда (50+)',
+    minCoins: 50,
+    maxCoins: null,
+    color: 'bg-yellow-100 border-yellow-400',
+    textColor: 'text-yellow-900',
+    perk: 'Золотой фонд команды. Главный фаворит на 100% бесплатный слёт!'
+  }
+];
+
+export const DEFAULT_GAME_TASKS: string[] = [
+  'Закупка продуктов и провианта',
+  'Строительство и обустройство лагеря',
+  'Участие в конкурсной программе',
+  'Лучший костюм / командный образ',
+  'Идея года / креативный вклад',
+  'Шеф-повар / полевая кулинария',
+  'Запевала и костровые песни',
+  'Помощь товарищу в трудную минуту',
+  'Дежурство по костру и лагерю',
+  'Сборка шатров и натяжка тента',
+  'Фото и видеохроника слёта',
+  'Транспортная логистика и доставка'
+];
+
+
 

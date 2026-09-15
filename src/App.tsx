@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Tent, MessageSquare, Image as ImageIcon, FolderArchive, 
   Coins, Palette, Shield, Cake, User, 
@@ -34,21 +34,22 @@ import {
   Participant, Excursion, ChatMessage, BotConfig, 
   TaskItem, MenuItem, GroceryItem, InventoryItem, 
   Contest, GalleryPhoto, TeamDocument, FundRecord, CreativityIdea,
-  TeamStory, UserRole, ROLE_DEFINITIONS, ThemeConfig, DEFAULT_THEME_CONFIG
+  TeamStory, UserRole, ROLE_DEFINITIONS, ThemeConfig, DEFAULT_THEME_CONFIG,
+  RallyCoin
 } from './types';
 import { 
   initialParticipants, initialExcursions, initialMessages, 
   initialBotConfig, initialTasks, initialMenuItems, 
   initialGroceryItems, initialInventoryItems, initialContests,
   initialPhotos, initialDocuments, initialFundRecords, initialCreativityIdeas,
-  INITIAL_STORIES
+  INITIAL_STORIES, initialRallyCoins
 } from './mockData';
 
 export default function App() {
   // Navigation
   type TabType = 'history' | 'birthdays' | 'home' | 'tasks' | 'menu' | 'inventory' | 'contests' | 'gallery' | 'documents' | 'fund' | 'creativity' | 'admin';
   const [activeTab, setActiveTab] = useState<TabType>('history');
-  const [homeSubTab, setHomeSubTab] = useState<'overview' | 'tasks' | 'menu' | 'contests' | 'creativity'>('overview');
+  const [homeSubTab, setHomeSubTab] = useState<'overview' | 'game' | 'tasks' | 'menu' | 'contests' | 'creativity'>('overview');
 
   // Chat State
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -89,6 +90,8 @@ export default function App() {
 
   // Domain Entities from PostgreSQL / Server Sync
   const [participants, setParticipants] = useState<Participant[]>(initialParticipants);
+  const isIncomingSyncRef = useRef<boolean>(false);
+  const lastSyncPayloadRef = useRef<string>("");
   const [excursions, setExcursions] = useState<Excursion[]>(initialExcursions);
   const [tasks, setTasks] = useState<TaskItem[]>(initialTasks);
   const [menuItems, setMenuItems] = useState<MenuItem[]>(initialMenuItems);
@@ -96,12 +99,26 @@ export default function App() {
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>(initialInventoryItems);
   const [botConfig, setBotConfig] = useState<BotConfig>(initialBotConfig);
   const [contests, setContests] = useState<Contest[]>(initialContests);
-  const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    try {
+      const saved = localStorage.getItem('negodyai_chat_messages_v2');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch {
+      // fallback to initial
+    }
+    return initialMessages;
+  });
   const [photos, setPhotos] = useState<GalleryPhoto[]>(initialPhotos);
   const [documents, setDocuments] = useState<TeamDocument[]>(initialDocuments);
   const [fundRecords, setFundRecords] = useState<FundRecord[]>(initialFundRecords);
   const [creativityIdeas, setCreativityIdeas] = useState<CreativityIdea[]>(initialCreativityIdeas);
   const [stories, setStories] = useState<TeamStory[]>(INITIAL_STORIES);
+  const [rallyCoins, setRallyCoins] = useState<RallyCoin[]>(initialRallyCoins);
 
   // Theme & Appearance Configuration
   const [themeConfig, setThemeConfig] = useState<ThemeConfig>(() => {
@@ -193,10 +210,32 @@ export default function App() {
         if (!text || text.trim().startsWith("<")) {
           return;
         }
-        const data = JSON.parse(text);
         if (!isMounted) return;
 
-        if (data.participants) setParticipants(data.participants);
+        // Skip state updates if incoming payload is identical to avoid render loops
+        if (text === lastSyncPayloadRef.current) {
+          return;
+        }
+        lastSyncPayloadRef.current = text;
+
+        const data = JSON.parse(text);
+
+        // Guard against pushSync echoing incoming server state
+        isIncomingSyncRef.current = true;
+
+        if (data.participants && Array.isArray(data.participants)) {
+          setParticipants(data.participants);
+          // If currentUser account status changed (e.g. approved by Captain), update current user state
+          if (currentUser) {
+            const freshMe = data.participants.find((p: Participant) => p.id === currentUser.id);
+            if (freshMe && freshMe.accountStatus !== currentUser.accountStatus) {
+              setCurrentUser(freshMe);
+              try {
+                localStorage.setItem('negodyai_active_user', JSON.stringify(freshMe));
+              } catch {}
+            }
+          }
+        }
         if (data.excursions) setExcursions(data.excursions);
         if (data.tasks) setTasks(data.tasks);
         if (data.menuItems) setMenuItems(data.menuItems);
@@ -210,28 +249,49 @@ export default function App() {
           });
         }
         if (data.contests) setContests(data.contests);
-        if (data.messages) setMessages(data.messages);
+        if (data.messages && Array.isArray(data.messages) && data.messages.length > 0) {
+          setMessages(prev => {
+            const map = new Map<string, ChatMessage>();
+            prev.forEach(m => map.set(m.id, m));
+            data.messages.forEach((m: ChatMessage) => map.set(m.id, m));
+            const merged = Array.from(map.values());
+            try {
+              localStorage.setItem('negodyai_chat_messages_v2', JSON.stringify(merged));
+            } catch {}
+            return merged;
+          });
+        }
         if (data.photos) setPhotos(data.photos);
         if (data.documents) setDocuments(data.documents);
         if (data.fundRecords) setFundRecords(data.fundRecords);
         if (data.creativityIdeas) setCreativityIdeas(data.creativityIdeas);
         if (data.stories) setStories(data.stories);
+        if (data.rallyCoins && Array.isArray(data.rallyCoins)) setRallyCoins(data.rallyCoins);
+
+        setTimeout(() => {
+          isIncomingSyncRef.current = false;
+        }, 500);
       } catch {
         // Silently ignore transient network or non-JSON payloads during server restart
       }
     };
 
     fetchSync();
-    const interval = setInterval(fetchSync, 2000);
+    const interval = setInterval(fetchSync, 5000);
     return () => {
       isMounted = false;
       clearInterval(interval);
     };
   }, []);
 
-  // Sync local changes back to server
+  // Sync local changes back to server with debounce and loop prevention
   useEffect(() => {
-    const pushSync = async () => {
+    if (isIncomingSyncRef.current) return;
+    if (!currentUser) return;
+    if (participants.length === 0) return;
+
+    const timer = setTimeout(async () => {
+      if (isIncomingSyncRef.current) return;
       try {
         await fetch("/api/sync", {
           method: "POST",
@@ -247,18 +307,28 @@ export default function App() {
             contests,
             messages,
             fundRecords,
-            stories
+            stories,
+            rallyCoins
           })
         });
       } catch (err) {
         console.error("Push sync error:", err);
       }
-    };
+    }, 1200);
 
-    if (participants.length > 0) {
-      pushSync();
+    return () => clearTimeout(timer);
+  }, [participants, excursions, tasks, menuItems, groceryItems, inventoryItems, botConfig, contests, messages, fundRecords, stories, rallyCoins]);
+
+  // Persist messages to local storage whenever message array updates
+  useEffect(() => {
+    if (messages && messages.length > 0) {
+      try {
+        localStorage.setItem('negodyai_chat_messages_v2', JSON.stringify(messages));
+      } catch (err) {
+        console.warn("Could not persist messages locally:", err);
+      }
     }
-  }, [participants, excursions, tasks, menuItems, groceryItems, inventoryItems, botConfig, contests, messages, fundRecords, stories]);
+  }, [messages]);
 
   // Update current user if participant data changed
   useEffect(() => {
@@ -269,11 +339,13 @@ export default function App() {
       }
       if (match) {
         const resolvedRole = isCaptainUser(match) ? 'admin' : match.role;
-        const updatedUser = { ...match, role: resolvedRole, accountStatus: 'active' as const };
+        const resolvedAccountStatus = isCaptainUser(match) ? ('active' as const) : (match.accountStatus || 'active');
+        const updatedUser = { ...match, role: resolvedRole, accountStatus: resolvedAccountStatus };
         if (
           match.name !== currentUser.name ||
           match.avatar !== currentUser.avatar ||
           resolvedRole !== currentUser.role ||
+          resolvedAccountStatus !== currentUser.accountStatus ||
           match.nickname !== currentUser.nickname ||
           match.phone !== currentUser.phone ||
           match.email !== currentUser.email ||
@@ -290,6 +362,15 @@ export default function App() {
     }
   }, [participants]);
 
+  const isCaptain = isCaptainUser(currentUser);
+
+  // Prevent non-captains from navigating to or remaining on the admin tab (must be called unconditionally before early returns)
+  useEffect(() => {
+    if (activeTab === 'admin' && !isCaptain) {
+      setActiveTab('fund');
+    }
+  }, [activeTab, isCaptain]);
+
   // Auth Handlers
   const handleLoginSuccess = (user: Participant) => {
     const finalUser = { ...user };
@@ -299,7 +380,9 @@ export default function App() {
     }
     setCurrentUser(finalUser);
     localStorage.setItem('negodyai_active_user', JSON.stringify(finalUser));
-    showToast(`Добро пожаловать в команду, ${finalUser.name}!`, 'success');
+    if (finalUser.accountStatus === 'active') {
+      showToast(`Добро пожаловать в команду, ${finalUser.name}!`, 'success');
+    }
   };
 
   const handleLogout = () => {
@@ -317,7 +400,12 @@ export default function App() {
         body: JSON.stringify({ userId })
       });
       if (res.ok) {
-        setParticipants(prev => prev.map(p => p.id === userId ? { ...p, accountStatus: 'active' as const } : p));
+        const data = await res.json();
+        if (data.participants && Array.isArray(data.participants)) {
+          setParticipants(data.participants);
+        } else {
+          setParticipants(prev => prev.map(p => p.id === userId ? { ...p, accountStatus: 'active' as const } : p));
+        }
         showToast("Участник успешно принят в команду!", "success");
       }
     } catch (err) {
@@ -333,7 +421,12 @@ export default function App() {
         body: JSON.stringify({ userId })
       });
       if (res.ok) {
-        setParticipants(prev => prev.map(p => p.id === userId ? { ...p, accountStatus: 'rejected' as const } : p));
+        const data = await res.json();
+        if (data.participants && Array.isArray(data.participants)) {
+          setParticipants(data.participants);
+        } else {
+          setParticipants(prev => prev.map(p => p.id === userId ? { ...p, accountStatus: 'rejected' as const } : p));
+        }
         showToast("Заявка отклонена", "info");
       }
     } catch (err) {
@@ -412,6 +505,51 @@ export default function App() {
     } catch (err) {
       console.error("Delete user error:", err);
       showToast("Ошибка соединения при удалении пользователя", "alert");
+    }
+  };
+
+  // Motivation Game coin awarding & deleting
+  const handleAwardCoin = async (coinData: {
+    participantId: string;
+    participantName: string;
+    participantNickname: string;
+    taskTitle: string;
+    category: 'task' | 'merit' | 'contest' | 'fortune';
+    comment: string;
+    awardedBy: string;
+  }) => {
+    try {
+      const res = await fetch('/api/coins', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(coinData)
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.coin) {
+          setRallyCoins(prev => [data.coin, ...prev.filter(c => c.id !== data.coin.id)]);
+          showToast(`🪙 Именная монета успешно вручена: ${coinData.participantName}!`, 'success');
+        }
+      } else {
+        showToast('Не удалось вручить монету', 'alert');
+      }
+    } catch (err) {
+      console.error('Award coin error:', err);
+      showToast('Ошибка при вручении монеты', 'alert');
+    }
+  };
+
+  const handleDeleteCoin = async (coinId: string) => {
+    try {
+      const res = await fetch(`/api/coins/${coinId}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        setRallyCoins(prev => prev.filter(c => c.id !== coinId));
+        showToast('Монета удалена', 'info');
+      }
+    } catch (err) {
+      console.error('Delete coin error:', err);
     }
   };
 
@@ -545,8 +683,17 @@ export default function App() {
           onLogout={handleLogout}
           participants={participants}
           customLogo={botConfig.customLogo}
-          onRegisterSuccess={(newUser) => {
-            setParticipants(prev => [newUser, ...prev]);
+          onRegisterSuccess={(newUser, updatedParticipants) => {
+            if (updatedParticipants && Array.isArray(updatedParticipants)) {
+              setParticipants(updatedParticipants);
+            } else {
+              setParticipants(prev => {
+                const map = new Map<string, Participant>();
+                map.set(newUser.id, newUser);
+                prev.forEach(p => map.set(p.id, p));
+                return Array.from(map.values());
+              });
+            }
             handleLoginSuccess(newUser);
           }}
         />
@@ -572,6 +719,10 @@ export default function App() {
   const pendingApprovalsCount = participants.filter(p => p.accountStatus === 'pending').length;
 
   const handleNavigate = (tabId: string, subTab?: 'overview' | 'tasks' | 'menu' | 'contests' | 'creativity') => {
+    if (tabId === 'admin' && !isCaptain) {
+      setActiveTab('fund');
+      return;
+    }
     if (tabId === 'tasks') {
       setActiveTab('home');
       setHomeSubTab('tasks');
@@ -598,6 +749,7 @@ export default function App() {
   const todayBirthdaysCount = birthdaysWithInfo.filter(i => i.isToday).length;
   const upcomingBirthdaysCount = birthdaysWithInfo.filter(i => i.days <= 7).length;
 
+  // Tabs list: For all non-captains, tabs strictly end at "Фонд Негодяев". Only the captain sees "Штаб Капитана".
   const MAIN_TABS: TabItem[] = [
     { id: 'history', label: 'История команды', icon: BookOpen },
     { 
@@ -611,7 +763,12 @@ export default function App() {
     { id: 'gallery', label: 'Фотогалерея', icon: ImageIcon },
     { id: 'documents', label: 'Документы', icon: FolderArchive },
     { id: 'fund', label: 'Фонд Негодяев', icon: Coins },
-    { id: 'admin', label: 'Штаб Капитана', icon: Shield, badge: pendingApprovalsCount > 0 ? pendingApprovalsCount : undefined }
+    ...(isCaptain ? [{ 
+      id: 'admin', 
+      label: 'Штаб Капитана', 
+      icon: Shield, 
+      badge: pendingApprovalsCount > 0 ? pendingApprovalsCount : undefined 
+    }] : [])
   ];
 
   return (
@@ -620,7 +777,9 @@ export default function App() {
       style={{
         backgroundColor: themeConfig.bgColor,
         color: themeConfig.textColor,
-        filter: `brightness(${themeConfig.brightness}%) contrast(${themeConfig.contrast}%)`
+        filter: (themeConfig.brightness !== 100 || themeConfig.contrast !== 100)
+          ? `brightness(${themeConfig.brightness}%) contrast(${themeConfig.contrast}%)`
+          : undefined
       }}
     >
       
@@ -679,59 +838,58 @@ export default function App() {
             </div>
           </div>
 
-          {/* SITE SEARCH BAR IN TOP HEADER */}
-          <div className="w-full md:w-auto flex-1 max-w-xl mx-0 md:mx-4">
-            <SiteSearch
-              participants={participants}
-              tasks={tasks}
-              contests={contests}
-              documents={documents}
-              inventoryItems={inventoryItems}
-              menuItems={menuItems}
-              groceryItems={groceryItems}
-              creativityIdeas={creativityIdeas}
-              fundRecords={fundRecords}
-              stories={stories}
-              currentUser={currentUser}
-              onNavigateTab={handleNavigate}
-              onOpenBirthdays={() => handleNavigate('birthdays')}
-              onOpenProfileEdit={() => setIsProfileEditOpen(true)}
-              onDeleteUser={handleDeleteUser}
-            />
-          </div>
-
-          {/* TEAM CHAT BUTTON PINNED IN TOP HEADER BETWEEN SEARCH AND TOP MENU */}
-          <button
-            type="button"
-            onClick={() => setIsChatOpen(prev => !prev)}
-            aria-label={isChatOpen ? 'Свернуть чат команды' : 'Открыть чат команды «Негодяи»'}
-            className={`px-3.5 py-2 rounded-2xl border-2 font-black text-xs uppercase flex items-center gap-2 transition-all shadow-md active:scale-95 cursor-pointer shrink-0 ${
-              isChatOpen
-                ? 'bg-red-700 text-yellow-300 border-yellow-300 shadow-lg ring-2 ring-yellow-400'
-                : 'bg-gradient-to-r from-red-600 to-amber-600 hover:from-red-500 hover:to-amber-500 text-yellow-300 border-amber-950 hover:border-yellow-300'
-            }`}
-            title="Открыть чат команды «Негодяи»"
-          >
-            <div className="relative">
-              <MessageSquare size={17} className="text-yellow-300" />
-              {unreadChatCount > 0 && !isChatOpen && (
-                <span className="absolute -top-2.5 -right-2.5 bg-yellow-300 text-stone-950 text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow animate-bounce border border-amber-950">
-                  {unreadChatCount}
-                </span>
-              )}
+          {/* SITE SEARCH BAR, CHAT BUTTON & TOP MENU */}
+          <div className="w-full md:w-auto flex-1 flex items-center gap-2 max-w-3xl mx-0 md:mx-4">
+            <div className="flex-1 min-w-0">
+              <SiteSearch
+                participants={participants}
+                tasks={tasks}
+                contests={contests}
+                documents={documents}
+                inventoryItems={inventoryItems}
+                menuItems={menuItems}
+                groceryItems={groceryItems}
+                creativityIdeas={creativityIdeas}
+                fundRecords={fundRecords}
+                stories={stories}
+                currentUser={currentUser}
+                onNavigateTab={handleNavigate}
+                onOpenBirthdays={() => handleNavigate('birthdays')}
+                onOpenProfileEdit={() => setIsProfileEditOpen(true)}
+                onDeleteUser={handleDeleteUser}
+              />
             </div>
-            <span className="tracking-tight hidden sm:inline">Чат команды</span>
-            <span className="tracking-tight sm:hidden">Чат</span>
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
-          </button>
 
-          {/* Open Top Menu Actions */}
-          <div className="flex items-center gap-2 flex-wrap shrink-0">
-            
+            {/* TEAM CHAT BUTTON PINNED IN TOP HEADER STRICTLY BETWEEN SEARCH AND TOP MENU */}
+            <button
+              type="button"
+              onClick={() => setIsChatOpen(prev => !prev)}
+              aria-label={isChatOpen ? 'Свернуть чат команды' : 'Открыть чат команды «Негодяи»'}
+              className={`px-3 sm:px-3.5 py-2 rounded-2xl border-2 font-black text-xs uppercase flex items-center gap-1.5 sm:gap-2 transition-all shadow-md active:scale-95 cursor-pointer shrink-0 ${
+                isChatOpen
+                  ? 'bg-red-700 text-yellow-300 border-yellow-300 shadow-lg ring-2 ring-yellow-400'
+                  : 'bg-gradient-to-r from-red-600 to-amber-600 hover:from-red-500 hover:to-amber-500 text-yellow-300 border-amber-950 hover:border-yellow-300'
+              }`}
+              title="Открыть чат команды «Негодяи»"
+            >
+              <div className="relative">
+                <MessageSquare size={17} className="text-yellow-300" />
+                {unreadChatCount > 0 && !isChatOpen && (
+                  <span className="absolute -top-2.5 -right-2.5 bg-yellow-300 text-stone-950 text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow animate-bounce border border-amber-950">
+                    {unreadChatCount}
+                  </span>
+                )}
+              </div>
+              <span className="tracking-tight hidden sm:inline">Чат команды</span>
+              <span className="tracking-tight sm:hidden">Чат</span>
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+            </button>
+
             {/* Top Dropdown Menu */}
             <TopSiteMenu
               currentUser={currentUser}
               activeTab={activeTab}
+              isCaptain={isCaptain}
               onNavigateTab={handleNavigate}
               onOpenProfileEdit={() => setIsProfileEditOpen(true)}
               onOpenSecurity={() => setIsSecurityModalOpen(true)}
@@ -751,13 +909,12 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => setIsAuthModalOpen(true)}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-yellow-300 border-2 border-amber-950 rounded-xl text-xs font-black uppercase flex items-center gap-1.5 shadow transition-all active:scale-95"
+                className="px-2.5 sm:px-3 py-2 bg-red-600 hover:bg-red-700 text-yellow-300 border-2 border-amber-950 rounded-xl text-xs font-black uppercase flex items-center gap-1 shadow transition-all active:scale-95 shrink-0"
               >
-                <User size={15} />
-                <span>Войти / Регистрация</span>
+                <User size={14} />
+                <span className="hidden sm:inline">Войти</span>
               </button>
             )}
-
           </div>
 
         </div>
@@ -862,6 +1019,10 @@ export default function App() {
             }}
             currentUser={currentUser}
             isAdmin={currentUser?.role === 'admin'}
+            rallyCoins={rallyCoins}
+            onAwardCoin={handleAwardCoin}
+            onDeleteCoin={handleDeleteCoin}
+            onOpenProfileEdit={() => setIsProfileEditOpen(true)}
             activeSubTab={
               activeTab === 'tasks' ? 'tasks' : 
               activeTab === 'menu' ? 'menu' : 
@@ -916,8 +1077,8 @@ export default function App() {
             fundRecords={fundRecords}
             participants={participants}
             currentUser={currentUser}
-            isAdmin={currentUser?.role === 'admin'}
-            isTreasurer={currentUser?.role === 'treasurer' || currentUser?.role === 'admin'}
+            isAdmin={Boolean(isCaptainUser(currentUser) || currentUser?.role === 'admin')}
+            isTreasurer={Boolean(currentUser?.role === 'treasurer')}
             onPaymentToggled={(rec) => {
               setFundRecords(prev => {
                 const idx = prev.findIndex(r => r.id === rec.id || (r.participantId === rec.participantId && r.year === rec.year && r.month === rec.month));
@@ -943,10 +1104,10 @@ export default function App() {
           />
         )}
 
-        {/* TAB 7: ADMIN PANEL (USER APPROVALS, ROLES, TASKS, MENU, INVENTORY, CONTESTS, RALLIES) */}
-        {activeTab === 'admin' && (
+        {/* TAB 8: ADMIN PANEL (CAPTAIN HEADQUARTERS - STRICTLY FOR CAPTAIN ONLY) */}
+        {activeTab === 'admin' && isCaptain && (
           <AdminPanel
-            isAdmin={currentUser?.role === 'admin'}
+            isAdmin={isCaptain}
             currentUser={currentUser}
             onOpenLogin={() => setIsAuthModalOpen(true)}
             onLogout={handleLogout}

@@ -319,16 +319,28 @@ export default function SiteSearch({
   }, [cleanQuery, participants, tasks, contests, creativityIdeas, fundRecords, inventoryItems, groceryItems, currentUser]);
 
   // 2. SECTIONS & KEYWORDS MATCHING
+  const isCaptain = Boolean(
+    currentUser && (
+      currentUser.role === 'admin' ||
+      (currentUser.nickname || '').toLowerCase().replace(/^@/, '') === 'ковбой' ||
+      (currentUser.nickname || '').toLowerCase().replace(/^@/, '') === 'cowboy' ||
+      (currentUser.email || '').toLowerCase() === 'asamoilov81@gmail.com' ||
+      (currentUser.name || '').toLowerCase().includes('самойлов') ||
+      currentUser.id === 'cowboy_1'
+    )
+  );
+
   const matchingSections = useMemo(() => {
     if (!cleanQuery || cleanQuery.length < 2) return [];
 
     return SITE_SECTIONS.filter(sec => {
+      if (sec.id === 'sec_admin' && !isCaptain) return false;
       const titleMatch = sec.title.toLowerCase().includes(cleanQuery);
       const descMatch = sec.description.toLowerCase().includes(cleanQuery);
       const keyMatch = sec.keywords.some(k => k.includes(cleanQuery) || cleanQuery.includes(k));
       return titleMatch || descMatch || keyMatch;
     });
-  }, [cleanQuery]);
+  }, [cleanQuery, isCaptain]);
 
   // 3. DOCUMENTS MATCHING
   const matchingDocuments = useMemo(() => {

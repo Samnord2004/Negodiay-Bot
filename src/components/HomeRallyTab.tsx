@@ -4,7 +4,6 @@ import {
   CheckCircle, Plus, Send, ChevronDown, ChevronUp, Sparkles, MessageSquare,
   CheckSquare, Coffee, Tent, Trophy, Palette, Edit, Trash2
 } from 'lucide-react';
-import { Participant, Excursion, TaskItem, MenuItem, GroceryItem, Contest, CreativityIdea } from '../types';
 import { getSafeAvatar, getParticipantAvatar } from '../utils/avatar';
 import { formatBirthdayShort } from '../utils/dateUtils';
 import TasksTab from './TasksTab';
@@ -12,8 +11,10 @@ import MenuGroceriesTab from './MenuGroceriesTab';
 import ContestsTab from './ContestsTab';
 import CreativityTab from './CreativityTab';
 import DeleteParticipantModal from './DeleteParticipantModal';
+import RallyGameHub from './game/RallyGameHub';
+import { Participant, Excursion, TaskItem, MenuItem, GroceryItem, Contest, CreativityIdea, RallyCoin } from '../types';
 
-export type HomeRallySubTab = 'overview' | 'tasks' | 'menu' | 'contests' | 'creativity';
+export type HomeRallySubTab = 'overview' | 'game' | 'tasks' | 'menu' | 'contests' | 'creativity';
 
 interface HomeRallyTabProps {
   participants: Participant[];
@@ -42,6 +43,18 @@ interface HomeRallyTabProps {
   onDeleteUser?: (userId: string) => Promise<void> | void;
   activeSubTab?: HomeRallySubTab;
   onSubTabChange?: (tab: HomeRallySubTab) => void;
+  rallyCoins?: RallyCoin[];
+  onAwardCoin?: (newCoinData: {
+    participantId: string;
+    participantName: string;
+    participantNickname: string;
+    taskTitle: string;
+    category: 'task' | 'merit' | 'contest' | 'fortune';
+    comment: string;
+    awardedBy: string;
+  }) => Promise<void> | void;
+  onDeleteCoin?: (coinId: string) => Promise<void> | void;
+  onOpenProfileEdit?: () => void;
 }
 
 export default function HomeRallyTab({
@@ -68,7 +81,11 @@ export default function HomeRallyTab({
   isAdmin,
   onDeleteUser,
   activeSubTab = 'overview',
-  onSubTabChange
+  onSubTabChange,
+  rallyCoins = [],
+  onAwardCoin = async () => {},
+  onDeleteCoin = async () => {},
+  onOpenProfileEdit
 }: HomeRallyTabProps) {
   const [internalSubTab, setInternalSubTab] = useState<HomeRallySubTab>(activeSubTab);
   const [expandedParticipantId, setExpandedParticipantId] = useState<string | null>(null);
@@ -105,10 +122,11 @@ export default function HomeRallyTab({
   const isCaptain = isAdmin || currentUser?.role === 'admin';
   const canManagePayments = isCaptain || currentUser?.role === 'treasurer';
 
-  const totalTargetFunds = participants.reduce((sum, p) => sum + (p.totalCost || 0), 0);
-  const totalPaidFunds = participants.reduce((sum, p) => sum + (p.paidAmount || 0), 0);
+  const activeParticipants = participants.filter(p => p.accountStatus !== 'pending' && p.accountStatus !== 'rejected');
+  const totalTargetFunds = activeParticipants.reduce((sum, p) => sum + (p.totalCost || 0), 0);
+  const totalPaidFunds = activeParticipants.reduce((sum, p) => sum + (p.paidAmount || 0), 0);
   const totalDebt = Math.max(0, totalTargetFunds - totalPaidFunds);
-  const debtorsCount = participants.filter(p => (p.debtAmount || 0) > 0).length;
+  const debtorsCount = activeParticipants.filter(p => (p.debtAmount || 0) > 0).length;
 
   const pendingTasksCount = tasks.filter(t => !t.isCompleted).length;
   const unboughtGroceriesCount = groceryItems.filter(g => !g.isBought).length;
@@ -219,6 +237,24 @@ export default function HomeRallyTab({
           >
             <Tent size={16} className={internalSubTab === 'overview' ? 'text-red-600' : 'text-stone-400'} />
             <span>Обзор и взносы</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleSubTabSwitch('game')}
+            className={`flex-1 min-w-[160px] py-2 px-3 rounded-xl font-black text-xs uppercase flex items-center justify-center gap-2 transition-all ${
+              internalSubTab === 'game'
+                ? 'bg-gradient-to-r from-amber-500 to-yellow-500 text-stone-950 shadow-xs border border-yellow-300'
+                : 'text-stone-700 hover:text-stone-950 hover:bg-stone-200/50'
+            }`}
+          >
+            <span>🪙</span>
+            <span>Скидка на слёт</span>
+            <span className={`text-[10px] font-black px-1.5 py-0.2 rounded-full ${
+              internalSubTab === 'game' ? 'bg-stone-950 text-amber-300' : 'bg-amber-100 text-amber-800'
+            }`}>
+              {rallyCoins.length}
+            </span>
           </button>
 
           <button
@@ -398,16 +434,50 @@ export default function HomeRallyTab({
             </div>
           </div>
 
+          {/* MOTIVATION GAME PROMO BANNER */}
+          <div className="bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 rounded-3xl p-5 sm:p-6 text-stone-950 shadow-md flex flex-col md:flex-row items-center justify-between gap-4 border border-yellow-300">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 rounded-2xl bg-stone-950 text-amber-400 flex items-center justify-center font-black text-2xl shadow-md shrink-0 border border-yellow-400">
+                🪙
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="bg-stone-950 text-yellow-300 font-black text-[10px] uppercase px-2 py-0.5 rounded-md">
+                    Мотивационная игра команды
+                  </span>
+                  <span className="text-xs font-black uppercase text-stone-900">
+                    «Скидка на слёт 2026»
+                  </span>
+                </div>
+                <h3 className="text-lg sm:text-xl font-black text-stone-950 mt-1">
+                  Победитель по монеткам едет на слёт БЕСПЛАТНО!
+                </h3>
+                <p className="text-xs font-semibold text-stone-900/85 mt-0.5">
+                  Капитан чеканит именные монеты с силуэтом профиля за обустройство лагеря. Крутите Колесо Фортуны!
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => handleSubTabSwitch('game')}
+              className="px-5 py-2.5 bg-stone-950 hover:bg-stone-900 text-yellow-300 font-black text-xs uppercase tracking-wider rounded-xl shadow-md transition-all active:scale-95 shrink-0 flex items-center gap-2 cursor-pointer"
+            >
+              <span>Вступить в игру</span>
+              <span>→</span>
+            </button>
+          </div>
+
           {/* Participants Roster & Debt Register */}
           <div className="bg-white border border-stone-200 rounded-3xl p-6 shadow-xs space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-stone-100">
               <div>
                 <h3 className="text-lg font-black text-stone-900 uppercase flex items-center gap-2">
                   <Users size={20} className="text-red-600" />
-                  Реестр команды негодяи ({participants.length})
+                  Реестр команды негодяи ({activeParticipants.length})
                 </h3>
                 <p className="text-xs text-stone-500 mt-0.5">
-                  Учет взносов на текущий слёт, стаж в команде и дни рождения
+                  Учет взносов на текущий слёт, именные монетки, стаж в команде и дни рождения
                 </p>
               </div>
               {!canManagePayments && (
@@ -424,6 +494,7 @@ export default function HomeRallyTab({
                   <tr>
                     <th className="p-3">Негодяй</th>
                     <th className="p-3">Роль</th>
+                    <th className="p-3 text-center">🪙 Монетки</th>
                     <th className="p-3">Стаж</th>
                     <th className="p-3">🎂 Днюха (ДД.ММ.ГГ)</th>
                     <th className="p-3">Сдано / Всего</th>
@@ -432,7 +503,7 @@ export default function HomeRallyTab({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-stone-100">
-                  {participants.map(p => {
+                  {activeParticipants.map(p => {
                     const isDebtor = (p.debtAmount || 0) > 0;
                     return (
                       <tr key={p.id} className="hover:bg-stone-50/70 transition-colors">
@@ -474,6 +545,24 @@ export default function HomeRallyTab({
                               {p.roleTitle || p.role}
                             </span>
                           )}
+                        </td>
+
+                        {/* Rally Coins */}
+                        <td className="p-3 text-center">
+                          {(() => {
+                            const userCoins = rallyCoins.filter(c => c.participantId === p.id);
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => handleSubTabSwitch('game')}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-stone-900 font-bold text-xs transition-colors shadow-2xs group cursor-pointer"
+                                title={`Личный кабинет: ${p.name} (🪙 ${userCoins.length})`}
+                              >
+                                <span className="text-sm">🪙</span>
+                                <span className="font-black text-amber-950">{userCoins.length}</span>
+                              </button>
+                            );
+                          })()}
                         </td>
 
                         {/* Team Age & Skipped Years */}
@@ -634,6 +723,21 @@ export default function HomeRallyTab({
             </div>
           </div>
 
+        </div>
+      )}
+
+      {/* SUBTAB: MOTIVATION GAME "СКИДКА НА СЛЁТ" */}
+      {internalSubTab === 'game' && (
+        <div className="animate-in fade-in duration-200">
+          <RallyGameHub
+            participants={participants}
+            coins={rallyCoins}
+            currentUser={currentUser}
+            isCaptain={isCaptain}
+            onAwardCoin={onAwardCoin}
+            onDeleteCoin={onDeleteCoin}
+            onOpenProfileEdit={onOpenProfileEdit}
+          />
         </div>
       )}
 

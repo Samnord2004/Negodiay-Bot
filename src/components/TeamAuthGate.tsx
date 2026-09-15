@@ -12,7 +12,7 @@ interface TeamAuthGateProps {
   onLogout: () => void;
   participants: Participant[];
   customLogo?: string | null;
-  onRegisterSuccess: (newUser: Participant) => void;
+  onRegisterSuccess: (newUser: Participant, updatedParticipants?: Participant[]) => void;
 }
 
 export default function TeamAuthGate({
@@ -24,6 +24,8 @@ export default function TeamAuthGate({
   onRegisterSuccess
 }: TeamAuthGateProps) {
   const [authMode, setAuthMode] = useState<'login' | 'register' | 'forgot'>('login');
+  const [isCheckingPending, setIsCheckingPending] = useState(false);
+  const [pendingCheckMessage, setPendingCheckMessage] = useState<string | null>(null);
   
   // Dynamic logo matching captain's configuration
   const [effectiveLogo, setEffectiveLogo] = useState<string | null>(() => {
@@ -202,30 +204,10 @@ export default function TeamAuthGate({
         setRegError(data.error || 'Ошибка при регистрации');
       } else {
         setRegSuccessMessage('Заявка успешно отправлена! Ожидайте подтверждения от Капитана команды.');
-        onRegisterSuccess(data.user);
+        onRegisterSuccess(data.user, data.participants);
       }
     } catch (err) {
-      const fallbackUser: Participant = {
-        id: 'p_' + Date.now(),
-        name: regName.trim(),
-        nickname: regNickname.trim().replace(/^@/, ''),
-        avatar: regGender === 'female' ? '💁‍♀️' : '🏕️',
-        paidAmount: 0,
-        totalCost: 15000,
-        debtAmount: 15000,
-        joined: false,
-        joinedYear: new Date().getFullYear(),
-        skippedYears: [],
-        gender: regGender,
-        role: 'member',
-        accountStatus: 'pending',
-        biometricEnabled: regBiometric,
-        email: regEmail.trim(),
-        phone: regPhone.trim(),
-        birthday: regBirthday.trim()
-      };
-      setRegSuccessMessage('Заявка успешно отправлена! Ожидайте подтверждения от Капитана команды.');
-      onRegisterSuccess(fallbackUser);
+      setRegError('Ошибка связи с сервером. Пожалуйста, попробуйте отправить заявку ещё раз.');
     } finally {
       setIsLoading(false);
     }
@@ -258,6 +240,48 @@ export default function TeamAuthGate({
       setRecoveryLoading(false);
     }
   };
+
+  // Check pending approval
+  const handleCheckApprovalStatus = async (isManual = false) => {
+    if (!currentUser) return;
+    if (isManual) {
+      setIsCheckingPending(true);
+      setPendingCheckMessage(null);
+    }
+    try {
+      const res = await fetch('/api/sync');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.participants && Array.isArray(data.participants)) {
+          const fresh = data.participants.find((p: Participant) => p.id === currentUser.id);
+          if (fresh) {
+            if (fresh.accountStatus === 'active') {
+              onLogin(fresh);
+              return;
+            } else if (fresh.accountStatus === 'rejected') {
+              setPendingCheckMessage('Заявка отклонена Капитаном команды.');
+              return;
+            } else if (isManual) {
+              setPendingCheckMessage('Заявка в очереди на рассмотрение Капитаном.');
+            }
+          }
+        }
+      }
+    } catch (e) {
+      if (isManual) setPendingCheckMessage('Ошибка связи при проверке статуса');
+    } finally {
+      if (isManual) setIsCheckingPending(false);
+    }
+  };
+
+  useEffect(() => {
+    if (currentUser && currentUser.accountStatus === 'pending') {
+      const interval = setInterval(() => {
+        handleCheckApprovalStatus(false);
+      }, 4000);
+      return () => clearInterval(interval);
+    }
+  }, [currentUser]);
 
   // If user is logged in but pending approval
   if (currentUser && currentUser.accountStatus === 'pending') {
@@ -294,16 +318,22 @@ export default function TeamAuthGate({
             <p className="text-[11px] text-amber-300/80 font-medium">
               Информация на сайте (история команды, слёты, взносы, задачи, инвентарь и фотогалерея) станет доступна сразу после одобрения профиля.
             </p>
+            {pendingCheckMessage && (
+              <p className="text-[11px] text-yellow-300 font-bold bg-amber-950/80 p-2 rounded-lg border border-amber-500/40">
+                {pendingCheckMessage}
+              </p>
+            )}
           </div>
 
           <div className="pt-2 space-y-3">
             <button
               type="button"
-              onClick={() => window.location.reload()}
+              onClick={() => handleCheckApprovalStatus(true)}
+              disabled={isCheckingPending}
               className="w-full bg-amber-500 hover:bg-amber-400 text-stone-950 font-black uppercase text-xs py-3 rounded-xl transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2"
             >
-              <RefreshCw size={14} />
-              Проверить статус одобрения
+              <RefreshCw size={14} className={isCheckingPending ? 'animate-spin' : ''} />
+              <span>{isCheckingPending ? 'Проверка...' : 'Проверить статус одобрения'}</span>
             </button>
             <button
               type="button"
@@ -517,14 +547,6 @@ export default function TeamAuthGate({
                   <span>{regSuccessMessage}</span>
                 </div>
               )}
-
-              {/* Strict Notice: No codes, approved by Captain */}
-              <div className="bg-amber-950/50 border border-amber-500/40 rounded-xl p-2.5 text-[11px] text-amber-200 flex items-start gap-2">
-                <Shield size={16} className="text-amber-400 shrink-0 mt-0.5" />
-                <span>
-                  <strong>Проверочный код не требуется!</strong> Доступ на портал закрытый. Ваша заявка сразу поступит Капитану команды для активации профиля.
-                </span>
-              </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div>

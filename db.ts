@@ -1,3 +1,5 @@
+import fs from "fs";
+import path from "path";
 import pg from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { eq } from "drizzle-orm";
@@ -16,7 +18,8 @@ import {
   initialDocuments,
   initialFundRecords,
   initialCreativityIdeas,
-  INITIAL_STORIES
+  INITIAL_STORIES,
+  initialRallyCoins
 } from "./src/mockData";
 import { 
   Participant, 
@@ -27,14 +30,15 @@ import {
   InventoryItem, 
   BotConfig, 
   Contest, 
-  ChatMessage,
-  GalleryPhoto,
-  TeamDocument,
-  FundRecord,
-  CreativityIdea,
-  TeamStory,
-  UserRole,
-  AccountStatus
+  ChatMessage, 
+  GalleryPhoto, 
+  TeamDocument, 
+  FundRecord, 
+  CreativityIdea, 
+  TeamStory, 
+  UserRole, 
+  AccountStatus,
+  RallyCoin
 } from "./src/types";
 
 const user = process.env.SQL_ADMIN_USER || process.env.SQL_USER || "postgres";
@@ -42,38 +46,133 @@ const password = process.env.SQL_ADMIN_PASSWORD || process.env.SQL_PASSWORD || "
 const host = process.env.SQL_HOST || "127.0.0.1";
 const database = process.env.SQL_DB_NAME || "cloud_sql_development_database";
 
+export const isBannedBotParticipant = (p: { id?: string; nickname?: string; name?: string }): boolean => {
+  const bannedIds = new Set(['p_alex', 'p_irina', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20']);
+  if (p.id && (bannedIds.has(p.id) || p.id.startsWith('bot_'))) return true;
+  const nick = (p.nickname || '').toLowerCase();
+  const name = (p.name || '').toLowerCase();
+  if (nick.includes('навигатор') || nick.includes('булочк') || nick.includes('хорёк') || nick.includes('лесник') || nick.includes('запевал') || nick.includes('alex') || nick.includes('irina')) return true;
+  if (name.includes('смирнов') || name.includes('васильева')) return true;
+  return false;
+};
+
 export const pool = new pg.Pool(
   process.env.DATABASE_URL
-    ? { connectionString: process.env.DATABASE_URL }
+    ? { connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 5000 }
     : {
         user,
         password,
         host,
         database,
         port: 5432,
+        connectionTimeoutMillis: 5000,
       }
 );
 
+// Prevent process crash on unexpected backend database pool drops
+pool.on("error", (err) => {
+  console.warn("[DB Pool Notice] Database background connection:", err.message);
+});
+
 export const db = drizzle(pool, { schema });
 
-// In-memory sync state backed asynchronously by PostgreSQL
-let cacheParticipants: Participant[] = [];
-let cacheExcursions: Excursion[] = [];
-let cacheTasks: TaskItem[] = [];
-let cacheMenuItems: MenuItem[] = [];
-let cacheGroceryItems: GroceryItem[] = [];
-let cacheInventoryItems: InventoryItem[] = [];
-let cacheBotConfig: BotConfig = initialBotConfig;
-let cacheContests: Contest[] = [];
-let cacheMessages: ChatMessage[] = [];
-let cachePhotos: GalleryPhoto[] = [];
-let cacheDocuments: TeamDocument[] = [];
-let cacheFundRecords: FundRecord[] = [];
-let cacheCreativityIdeas: CreativityIdea[] = [];
-let cacheStories: TeamStory[] = [];
+// Local persistent JSON storage fallback for Beget / offline deployment
+const DATA_DIR = path.join(process.cwd(), "data");
+const STORAGE_FILE = path.join(DATA_DIR, "app_storage.json");
+export let isPgConnected = false;
+
+function ensureDataDir() {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+  } catch (e) {
+    console.error("[Storage] Failed to create data dir:", e);
+  }
+}
+
+export function saveLocalFileBackup() {
+  try {
+    ensureDataDir();
+    const data = {
+      participants: cacheParticipants,
+      excursions: cacheExcursions,
+      tasks: cacheTasks,
+      menuItems: cacheMenuItems,
+      groceryItems: cacheGroceryItems,
+      inventoryItems: cacheInventoryItems,
+      botConfig: cacheBotConfig,
+      contests: cacheContests,
+      messages: cacheMessages,
+      photos: cachePhotos,
+      documents: cacheDocuments,
+      fundRecords: cacheFundRecords,
+      creativityIdeas: cacheCreativityIdeas,
+      stories: cacheStories,
+      rallyCoins: cacheRallyCoins,
+      adminPassword: cacheAdminPassword,
+      savedAt: new Date().toISOString()
+    };
+    fs.writeFileSync(STORAGE_FILE, JSON.stringify(data, null, 2), "utf-8");
+  } catch (err) {
+    console.error("[Storage] Error writing local file backup:", err);
+  }
+}
+
+export function loadLocalFileBackup(): boolean {
+  try {
+    if (fs.existsSync(STORAGE_FILE)) {
+      const raw = fs.readFileSync(STORAGE_FILE, "utf-8");
+      const data = JSON.parse(raw);
+      if (Array.isArray(data.participants) && data.participants.length > 0) {
+        cacheParticipants = data.participants.filter((p: any) => !isBannedBotParticipant(p));
+      }
+      if (Array.isArray(data.excursions)) cacheExcursions = data.excursions;
+      if (Array.isArray(data.tasks)) cacheTasks = data.tasks;
+      if (Array.isArray(data.menuItems)) cacheMenuItems = data.menuItems;
+      if (Array.isArray(data.groceryItems)) cacheGroceryItems = data.groceryItems;
+      if (Array.isArray(data.inventoryItems)) cacheInventoryItems = data.inventoryItems;
+      if (data.botConfig) cacheBotConfig = data.botConfig;
+      if (Array.isArray(data.contests)) cacheContests = data.contests;
+      if (Array.isArray(data.messages)) cacheMessages = data.messages;
+      if (Array.isArray(data.photos)) cachePhotos = data.photos;
+      if (Array.isArray(data.documents)) cacheDocuments = data.documents;
+      if (Array.isArray(data.fundRecords)) cacheFundRecords = data.fundRecords;
+      if (Array.isArray(data.creativityIdeas)) cacheCreativityIdeas = data.creativityIdeas;
+      if (Array.isArray(data.stories)) cacheStories = data.stories;
+      if (Array.isArray(data.rallyCoins)) cacheRallyCoins = data.rallyCoins;
+      if (data.adminPassword) cacheAdminPassword = data.adminPassword;
+      console.log(`[Storage] Loaded persistent state from disk (${STORAGE_FILE})`);
+      return true;
+    }
+  } catch (err) {
+    console.error("[Storage] Error reading local file backup:", err);
+  }
+  return false;
+}
+
+// In-memory sync state initialized with safe baseline, backed by local file & PostgreSQL
+let cacheParticipants: Participant[] = [...initialParticipants].filter(p => !isBannedBotParticipant(p));
+let cacheExcursions: Excursion[] = [...initialExcursions];
+let cacheTasks: TaskItem[] = [...initialTasks];
+let cacheMenuItems: MenuItem[] = [...initialMenuItems];
+let cacheGroceryItems: GroceryItem[] = [...initialGroceryItems];
+let cacheInventoryItems: InventoryItem[] = [...initialInventoryItems];
+let cacheBotConfig: BotConfig = { ...initialBotConfig };
+let cacheContests: Contest[] = [...initialContests];
+let cacheMessages: ChatMessage[] = [...initialMessages];
+let cachePhotos: GalleryPhoto[] = [...initialPhotos];
+let cacheDocuments: TeamDocument[] = [...initialDocuments];
+let cacheFundRecords: FundRecord[] = [...initialFundRecords];
+let cacheCreativityIdeas: CreativityIdea[] = [...initialCreativityIdeas];
+let cacheStories: TeamStory[] = [...INITIAL_STORIES];
+let cacheRallyCoins: RallyCoin[] = [...initialRallyCoins];
 let cacheAdminPassword = "admin";
 
 export async function initDb() {
+  // First, restore any persistent data from local file storage
+  loadLocalFileBackup();
+
   try {
     // Ensure tables exist in PostgreSQL
     await pool.query(`
@@ -516,28 +615,35 @@ export async function initDb() {
     }
 
     // Load or seed Messages
-    const resMsg = await pool.query("SELECT * FROM messages");
+    const resMsg = await pool.query("SELECT * FROM messages ORDER BY ctid ASC");
     if (resMsg.rows.length === 0) {
-      for (const m of initialMessages) {
+      const messagesToSeed = (cacheMessages && cacheMessages.length > 0) ? cacheMessages : initialMessages;
+      for (const m of messagesToSeed) {
         await pool.query(
           `INSERT INTO messages (id, sender_name, sender_nickname, sender_psychotype, text, timestamp, is_bot, detected_psychotype_explanation, adapter_style_used, image_url, attachments)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) ON CONFLICT (id) DO NOTHING`,
           [m.id, m.senderName, m.senderNickname, (m as any).senderPsychotype || "Участник", m.text, m.timestamp, m.isBot, (m as any).detectedPsychotypeExplanation || "", m.adapterStyleUsed || "", m.imageUrl || null, JSON.stringify(m.attachments || null)]
         );
       }
-      cacheMessages = [...initialMessages];
+      cacheMessages = [...messagesToSeed];
     } else {
-      cacheMessages = resMsg.rows.map(r => ({
-        id: r.id,
-        senderName: r.sender_name,
-        senderNickname: r.sender_nickname,
-        text: r.text,
-        timestamp: r.timestamp,
-        isBot: Boolean(r.is_bot),
-        adapterStyleUsed: r.adapter_style_used || undefined,
-        imageUrl: r.image_url || undefined,
-        attachments: r.attachments ? (Array.isArray(r.attachments) ? r.attachments : JSON.parse(r.attachments)) : undefined
-      }));
+      const map = new Map<string, ChatMessage>();
+      cacheMessages.forEach(m => map.set(m.id, m));
+      resMsg.rows.forEach(r => {
+        map.set(r.id, {
+          id: r.id,
+          senderName: r.sender_name,
+          senderNickname: r.sender_nickname,
+          text: r.text,
+          timestamp: r.timestamp,
+          isBot: Boolean(r.is_bot),
+          adapterStyleUsed: r.adapter_style_used || undefined,
+          imageUrl: r.image_url || undefined,
+          attachments: r.attachments ? (Array.isArray(r.attachments) ? r.attachments : JSON.parse(r.attachments)) : undefined
+        });
+      });
+      cacheMessages = Array.from(map.values());
+      saveLocalFileBackup();
     }
 
     // Load or seed Admin Settings
@@ -683,36 +789,51 @@ export async function initDb() {
       }));
     }
 
+    isPgConnected = true;
+    saveLocalFileBackup();
     console.log("PostgreSQL database successfully initialized and synced.");
   } catch (err) {
-    console.error("Error initializing PostgreSQL database:", err);
+    isPgConnected = false;
+    console.warn("[Storage] PostgreSQL database connection unavailable. Continuing in resilient local-file storage mode.");
   }
 }
 
 // Data Getters and Setters with PSQL Persistence
 
-export const isBannedBotParticipant = (p: { id?: string; nickname?: string; name?: string }): boolean => {
-  const bannedIds = new Set(['p_alex', 'p_irina', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20']);
-  if (p.id && (bannedIds.has(p.id) || p.id.startsWith('bot_'))) return true;
-  const nick = (p.nickname || '').toLowerCase();
-  const name = (p.name || '').toLowerCase();
-  if (nick.includes('навигатор') || nick.includes('булочк') || nick.includes('хорёк') || nick.includes('лесник') || nick.includes('запевал') || nick.includes('alex') || nick.includes('irina')) return true;
-  if (name.includes('смирнов') || name.includes('васильева')) return true;
-  return false;
-};
-
 export function getParticipants(): Participant[] {
   return cacheParticipants.filter(p => !isBannedBotParticipant(p));
 }
 
+const deletedParticipantIds = new Set<string>();
+
 export async function saveParticipants(participants: Participant[]) {
-  const filtered = participants.filter(p => !isBannedBotParticipant(p));
-  cacheParticipants = filtered;
-  try {
-    const currentIds = cacheParticipants.map(p => p.id);
-    if (currentIds.length > 0) {
-      await pool.query("DELETE FROM participants WHERE NOT (id = ANY($1))", [currentIds]);
+  const filtered = participants.filter(p => !isBannedBotParticipant(p) && !deletedParticipantIds.has(p.id));
+  
+  // Safe merge: Never wipe out pending registration applications that exist on server!
+  const map = new Map<string, Participant>();
+  // 1. Preload with current cached participants
+  for (const existing of cacheParticipants) {
+    map.set(existing.id, existing);
+  }
+  // 2. Apply incoming updates
+  for (const incoming of filtered) {
+    const existing = map.get(incoming.id);
+    if (existing) {
+      // Server is authoritative for accountStatus and role
+      map.set(incoming.id, {
+        ...incoming,
+        accountStatus: existing.accountStatus || incoming.accountStatus || 'active',
+        role: existing.role || incoming.role || 'member'
+      });
+    } else {
+      map.set(incoming.id, incoming);
     }
+  }
+
+  cacheParticipants = Array.from(map.values());
+  saveLocalFileBackup();
+  if (!isPgConnected) return;
+  try {
     for (const p of cacheParticipants) {
       await pool.query(
         `INSERT INTO participants (id, name, nickname, psychotype, avatar, photo_front, photo_profile, selected_avatar_source, paid_amount, total_cost, debt_amount, joined, birthday, joined_year, skipped_years, gender, role, email, phone, password, account_status, biometric_enabled)
@@ -723,8 +844,8 @@ export async function saveParticipants(participants: Participant[]) {
          paid_amount = EXCLUDED.paid_amount, total_cost = EXCLUDED.total_cost, debt_amount = EXCLUDED.debt_amount,
          joined = EXCLUDED.joined, birthday = EXCLUDED.birthday, joined_year = EXCLUDED.joined_year,
          skipped_years = EXCLUDED.skipped_years, gender = EXCLUDED.gender,
-          role = EXCLUDED.role, email = EXCLUDED.email, phone = EXCLUDED.phone, password = EXCLUDED.password,
-          account_status = EXCLUDED.account_status, biometric_enabled = EXCLUDED.biometric_enabled`,
+         role = EXCLUDED.role, email = EXCLUDED.email, phone = EXCLUDED.phone, password = EXCLUDED.password,
+         account_status = EXCLUDED.account_status, biometric_enabled = EXCLUDED.biometric_enabled`,
         [p.id, p.name, p.nickname, (p as any).psychotype || 'Участник', p.avatar || '', p.photoFront || null, p.photoProfile || null, p.selectedAvatarSource || 'front', p.paidAmount || 0, p.totalCost || 0, p.debtAmount || 0, p.joined !== false, p.birthday || null, p.joinedYear || 2018, JSON.stringify(p.skippedYears || []), p.gender || 'boy', p.role || 'member', p.email || '', p.phone || '', p.password || '123', p.accountStatus || 'active', p.biometricEnabled || false]
       );
     }
@@ -746,6 +867,9 @@ export async function addOrUpdateParticipant(p: Participant) {
   if (index >= 0) cacheParticipants[index] = sanitizedP;
   else cacheParticipants.push(sanitizedP);
 
+  saveLocalFileBackup();
+  if (!isPgConnected) return;
+
   try {
     await pool.query(
       `INSERT INTO participants (id, name, nickname, psychotype, avatar, photo_front, photo_profile, selected_avatar_source, paid_amount, total_cost, debt_amount, joined, birthday, joined_year, skipped_years, gender, role, email, phone, password, account_status, biometric_enabled)
@@ -766,8 +890,12 @@ export async function addOrUpdateParticipant(p: Participant) {
 }
 
 export async function deleteParticipant(id: string) {
+  deletedParticipantIds.add(id);
   cacheParticipants = cacheParticipants.filter(p => p.id !== id);
   cacheFundRecords = cacheFundRecords.filter(f => f.participantId !== id);
+  saveLocalFileBackup();
+  if (!isPgConnected) return;
+
   try {
     await pool.query("DELETE FROM participants WHERE id = $1", [id]);
     await pool.query("DELETE FROM fund_records WHERE participant_id = $1", [id]);
@@ -783,8 +911,12 @@ export function getExcursions(): Excursion[] {
 export async function saveExcursions(excursions: Excursion[]) {
   const unique = Array.from(new Map(excursions.map(e => [e.id, e])).values());
   cacheExcursions = [...unique];
-  const client = await pool.connect();
+  saveLocalFileBackup();
+  if (!isPgConnected) return;
+
+  let client: any = null;
   try {
+    client = await pool.connect();
     await client.query("BEGIN");
     if (unique.length > 0) {
       const ids = unique.map(e => e.id);
@@ -805,10 +937,10 @@ export async function saveExcursions(excursions: Excursion[]) {
     }
     await client.query("COMMIT");
   } catch (e) {
-    await client.query("ROLLBACK");
+    if (client) await client.query("ROLLBACK");
     console.error("PSQL saveExcursions error:", e);
   } finally {
-    client.release();
+    if (client) client.release();
   }
 }
 
@@ -816,6 +948,8 @@ export async function addOrUpdateExcursion(e: Excursion) {
   const idx = cacheExcursions.findIndex(x => x.id === e.id);
   if (idx >= 0) cacheExcursions[idx] = e;
   else cacheExcursions.push(e);
+  saveLocalFileBackup();
+  if (!isPgConnected) return;
 
   try {
     await pool.query(
@@ -834,6 +968,9 @@ export async function addOrUpdateExcursion(e: Excursion) {
 
 export async function deleteExcursion(id: string) {
   cacheExcursions = cacheExcursions.filter(x => x.id !== id);
+  saveLocalFileBackup();
+  if (!isPgConnected) return;
+
   try {
     await pool.query("DELETE FROM excursions WHERE id = $1", [id]);
   } catch (err) {
@@ -848,9 +985,13 @@ export function getTasks(): TaskItem[] {
 export function saveTasks(tasks: TaskItem[]) {
   const unique = Array.from(new Map(tasks.map(t => [t.id, t])).values());
   cacheTasks = [...unique];
+  saveLocalFileBackup();
+  if (!isPgConnected) return;
+
   (async () => {
-    const client = await pool.connect();
+    let client: any = null;
     try {
+      client = await pool.connect();
       await client.query("BEGIN");
       if (unique.length > 0) {
         const ids = unique.map(t => t.id);
@@ -871,10 +1012,10 @@ export function saveTasks(tasks: TaskItem[]) {
       }
       await client.query("COMMIT");
     } catch (e) {
-      await client.query("ROLLBACK");
+      if (client) await client.query("ROLLBACK");
       console.error("PSQL saveTasks error:", e);
     } finally {
-      client.release();
+      if (client) client.release();
     }
   })();
 }
@@ -886,9 +1027,13 @@ export function getMenuItems(): MenuItem[] {
 export function saveMenuItems(items: MenuItem[]) {
   const unique = Array.from(new Map(items.map(m => [m.id, m])).values());
   cacheMenuItems = [...unique];
+  saveLocalFileBackup();
+  if (!isPgConnected) return;
+
   (async () => {
-    const client = await pool.connect();
+    let client: any = null;
     try {
+      client = await pool.connect();
       await client.query("BEGIN");
       if (unique.length > 0) {
         const ids = unique.map(m => m.id);
@@ -907,10 +1052,10 @@ export function saveMenuItems(items: MenuItem[]) {
       }
       await client.query("COMMIT");
     } catch (e) {
-      await client.query("ROLLBACK");
+      if (client) await client.query("ROLLBACK");
       console.error("PSQL saveMenuItems error:", e);
     } finally {
-      client.release();
+      if (client) client.release();
     }
   })();
 }
@@ -922,9 +1067,13 @@ export function getGroceryItems(): GroceryItem[] {
 export function saveGroceryItems(items: GroceryItem[]) {
   const unique = Array.from(new Map(items.map(g => [g.id, g])).values());
   cacheGroceryItems = [...unique];
+  saveLocalFileBackup();
+  if (!isPgConnected) return;
+
   (async () => {
-    const client = await pool.connect();
+    let client: any = null;
     try {
+      client = await pool.connect();
       await client.query("BEGIN");
       if (unique.length > 0) {
         const ids = unique.map(g => g.id);
@@ -943,10 +1092,10 @@ export function saveGroceryItems(items: GroceryItem[]) {
       }
       await client.query("COMMIT");
     } catch (e) {
-      await client.query("ROLLBACK");
+      if (client) await client.query("ROLLBACK");
       console.error("PSQL saveGroceryItems error:", e);
     } finally {
-      client.release();
+      if (client) client.release();
     }
   })();
 }
@@ -958,9 +1107,13 @@ export function getInventoryItems(): InventoryItem[] {
 export function saveInventoryItems(items: InventoryItem[]) {
   const unique = Array.from(new Map(items.map(i => [i.id, i])).values());
   cacheInventoryItems = [...unique];
+  saveLocalFileBackup();
+  if (!isPgConnected) return;
+
   (async () => {
-    const client = await pool.connect();
+    let client: any = null;
     try {
+      client = await pool.connect();
       await client.query("BEGIN");
       if (unique.length > 0) {
         const ids = unique.map(i => i.id);
@@ -979,10 +1132,10 @@ export function saveInventoryItems(items: InventoryItem[]) {
       }
       await client.query("COMMIT");
     } catch (e) {
-      await client.query("ROLLBACK");
+      if (client) await client.query("ROLLBACK");
       console.error("PSQL saveInventoryItems error:", e);
     } finally {
-      client.release();
+      if (client) client.release();
     }
   })();
 }
@@ -993,6 +1146,9 @@ export function getBotConfig(): BotConfig {
 
 export function saveBotConfig(config: BotConfig) {
   cacheBotConfig = { ...config };
+  saveLocalFileBackup();
+  if (!isPgConnected) return;
+
   (async () => {
     try {
       await pool.query(
@@ -1020,9 +1176,13 @@ export function getContests(): Contest[] {
 export function saveContests(contests: Contest[]) {
   const unique = Array.from(new Map(contests.map(c => [c.id, c])).values());
   cacheContests = [...unique];
+  saveLocalFileBackup();
+  if (!isPgConnected) return;
+
   (async () => {
-    const client = await pool.connect();
+    let client: any = null;
     try {
+      client = await pool.connect();
       await client.query("BEGIN");
       if (unique.length > 0) {
         const ids = unique.map(c => c.id);
@@ -1043,10 +1203,10 @@ export function saveContests(contests: Contest[]) {
       }
       await client.query("COMMIT");
     } catch (e) {
-      await client.query("ROLLBACK");
+      if (client) await client.query("ROLLBACK");
       console.error("PSQL saveContests error:", e);
     } finally {
-      client.release();
+      if (client) client.release();
     }
   })();
 }
@@ -1059,6 +1219,8 @@ export function addMessage(m: ChatMessage) {
   const index = cacheMessages.findIndex(x => x.id === m.id);
   if (index >= 0) cacheMessages[index] = m;
   else cacheMessages.push(m);
+  saveLocalFileBackup();
+  if (!isPgConnected) return;
 
   (async () => {
     try {
@@ -1082,14 +1244,25 @@ export function addMessage(m: ChatMessage) {
 }
 
 export function saveMessages(messages: ChatMessage[]) {
-  const unique = Array.from(new Map(messages.map(m => [m.id, m])).values());
-  cacheMessages = [...unique];
+  if (!Array.isArray(messages) || messages.length === 0) return;
+  // Merge messages: keep existing cacheMessages and add/update new incoming messages
+  const map = new Map<string, ChatMessage>();
+  for (const m of cacheMessages) {
+    map.set(m.id, m);
+  }
+  for (const m of messages) {
+    map.set(m.id, m);
+  }
+  cacheMessages = Array.from(map.values());
+  saveLocalFileBackup();
+  if (!isPgConnected) return;
+
   (async () => {
-    const client = await pool.connect();
+    let client: any = null;
     try {
+      client = await pool.connect();
       await client.query("BEGIN");
-      await client.query("DELETE FROM messages");
-      for (const m of unique) {
+      for (const m of messages) {
         await client.query(
           `INSERT INTO messages (id, sender_name, sender_nickname, sender_psychotype, text, timestamp, is_bot, detected_psychotype_explanation, adapter_style_used, image_url, attachments)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
@@ -1106,10 +1279,10 @@ export function saveMessages(messages: ChatMessage[]) {
       }
       await client.query("COMMIT");
     } catch (e) {
-      await client.query("ROLLBACK");
+      if (client) await client.query("ROLLBACK");
       console.error("PSQL saveMessages error:", e);
     } finally {
-      client.release();
+      if (client) client.release();
     }
   })();
 }
@@ -1120,6 +1293,9 @@ export function getAdminPassword(): string {
 
 export function saveAdminPassword(password: string) {
   cacheAdminPassword = password;
+  saveLocalFileBackup();
+  if (!isPgConnected) return;
+
   (async () => {
     try {
       await pool.query(
@@ -1138,6 +1314,8 @@ export async function approveParticipant(id: string) {
   const p = cacheParticipants.find(x => x.id === id);
   if (p) {
     p.accountStatus = "active";
+    saveLocalFileBackup();
+    if (!isPgConnected) return;
     try {
       await pool.query("UPDATE participants SET account_status = 'active' WHERE id = $1", [id]);
     } catch (e) {
@@ -1150,6 +1328,8 @@ export async function rejectParticipant(id: string) {
   const p = cacheParticipants.find(x => x.id === id);
   if (p) {
     p.accountStatus = "rejected";
+    saveLocalFileBackup();
+    if (!isPgConnected) return;
     try {
       await pool.query("UPDATE participants SET account_status = 'rejected' WHERE id = $1", [id]);
     } catch (e) {
@@ -1292,12 +1472,15 @@ export function updateParticipantBiometrics(id: string, enabled: boolean) {
 }
 
 export async function registerNewParticipant(p: Participant) {
+  deletedParticipantIds.delete(p.id);
   const idx = cacheParticipants.findIndex(x => x.id === p.id);
   if (idx >= 0) {
     cacheParticipants[idx] = p;
   } else {
-    cacheParticipants.push(p);
+    cacheParticipants.unshift(p);
   }
+  saveLocalFileBackup();
+  if (!isPgConnected) return;
   try {
     await pool.query(
       `INSERT INTO participants (id, name, nickname, psychotype, avatar, paid_amount, total_cost, debt_amount, joined, birthday, joined_year, skipped_years, gender, role, email, phone, password, account_status, biometric_enabled)
@@ -1325,6 +1508,8 @@ export function getPhotos(): GalleryPhoto[] {
 
 export function addPhoto(photo: GalleryPhoto) {
   cachePhotos.unshift(photo);
+  saveLocalFileBackup();
+  if (!isPgConnected) return;
   (async () => {
     try {
       await pool.query(
@@ -1345,6 +1530,8 @@ export function addPhoto(photo: GalleryPhoto) {
 
 export function deletePhoto(id: string) {
   cachePhotos = cachePhotos.filter(p => p.id !== id);
+  saveLocalFileBackup();
+  if (!isPgConnected) return;
   (async () => {
     try {
       await pool.query("DELETE FROM gallery_photos WHERE id = $1", [id]);
@@ -1365,6 +1552,8 @@ export function togglePhotoLike(photoId: string, userId: string) {
     photo.likedUserIds.push(userId);
     photo.likes += 1;
   }
+  saveLocalFileBackup();
+  if (!isPgConnected) return;
   (async () => {
     try {
       await pool.query("UPDATE gallery_photos SET likes = $1, liked_user_ids = $2 WHERE id = $3", [photo.likes, JSON.stringify(photo.likedUserIds), photo.id]);
@@ -1381,6 +1570,8 @@ export function getTeamDocuments(): TeamDocument[] {
 
 export function addTeamDocument(doc: TeamDocument) {
   cacheDocuments.unshift(doc);
+  saveLocalFileBackup();
+  if (!isPgConnected) return;
   (async () => {
     try {
       await pool.query(
@@ -1400,6 +1591,8 @@ export function addTeamDocument(doc: TeamDocument) {
 
 export function deleteTeamDocument(id: string) {
   cacheDocuments = cacheDocuments.filter(d => d.id !== id);
+  saveLocalFileBackup();
+  if (!isPgConnected) return;
   (async () => {
     try {
       await pool.query("DELETE FROM team_documents WHERE id = $1", [id]);
@@ -1416,6 +1609,8 @@ export function getFundRecords(): FundRecord[] {
 
 export function saveFundRecords(records: FundRecord[]) {
   cacheFundRecords = [...records];
+  saveLocalFileBackup();
+  if (!isPgConnected) return;
   (async () => {
     try {
       for (const f of records) {
@@ -1479,6 +1674,9 @@ export function upsertFundRecord(data: {
     cacheFundRecords.push(finalRec);
   }
 
+  saveLocalFileBackup();
+  if (!isPgConnected) return finalRec;
+
   (async () => {
     try {
       await pool.query(
@@ -1514,6 +1712,8 @@ export function updateFundRecord(id: string, updates: Partial<FundRecord>) {
   if (index >= 0) {
     cacheFundRecords[index] = { ...cacheFundRecords[index], ...updates };
     const f = cacheFundRecords[index];
+    saveLocalFileBackup();
+    if (!isPgConnected) return;
     (async () => {
       try {
         await pool.query(
@@ -1534,6 +1734,8 @@ export function getCreativityIdeas(): CreativityIdea[] {
 
 export function addCreativityIdea(idea: CreativityIdea) {
   cacheCreativityIdeas.unshift(idea);
+  saveLocalFileBackup();
+  if (!isPgConnected) return;
   (async () => {
     try {
       await pool.query(
@@ -1558,6 +1760,8 @@ export function updateCreativityIdea(id: string, updates: Partial<CreativityIdea
   if (index >= 0) {
     cacheCreativityIdeas[index] = { ...cacheCreativityIdeas[index], ...updates };
     const idea = cacheCreativityIdeas[index];
+    saveLocalFileBackup();
+    if (!isPgConnected) return;
     (async () => {
       try {
         await pool.query(
@@ -1582,6 +1786,8 @@ export function toggleIdeaVote(ideaId: string, userId: string) {
     idea.votedUserIds.push(userId);
     idea.votes += 1;
   }
+  saveLocalFileBackup();
+  if (!isPgConnected) return;
   (async () => {
     try {
       await pool.query("UPDATE creativity_ideas SET votes = $1, voted_user_ids = $2 WHERE id = $3", [idea.votes, JSON.stringify(idea.votedUserIds), idea.id]);
@@ -1595,6 +1801,8 @@ export function addIdeaComment(ideaId: string, comment: { id: string; authorId: 
   const idea = cacheCreativityIdeas.find(i => i.id === ideaId);
   if (!idea) return;
   idea.comments.push(comment);
+  saveLocalFileBackup();
+  if (!isPgConnected) return;
   (async () => {
     try {
       await pool.query("UPDATE creativity_ideas SET comments = $1 WHERE id = $2", [JSON.stringify(idea.comments), idea.id]);
@@ -1611,6 +1819,8 @@ export function getStories(): TeamStory[] {
 
 export function addStory(story: TeamStory) {
   cacheStories.unshift(story);
+  saveLocalFileBackup();
+  if (!isPgConnected) return;
   (async () => {
     try {
       await pool.query(
@@ -1634,6 +1844,8 @@ export function updateStory(id: string, updates: Partial<TeamStory>) {
   if (idx >= 0) {
     cacheStories[idx] = { ...cacheStories[idx], ...updates };
     const s = cacheStories[idx];
+    saveLocalFileBackup();
+    if (!isPgConnected) return;
     (async () => {
       try {
         await pool.query(
@@ -1649,6 +1861,8 @@ export function updateStory(id: string, updates: Partial<TeamStory>) {
 
 export function deleteStory(id: string) {
   cacheStories = cacheStories.filter(s => s.id !== id);
+  saveLocalFileBackup();
+  if (!isPgConnected) return;
   (async () => {
     try {
       await pool.query("DELETE FROM team_stories WHERE id = $1", [id]);
@@ -1661,9 +1875,12 @@ export function deleteStory(id: string) {
 export function saveStories(stories: TeamStory[]) {
   const unique = Array.from(new Map(stories.map(s => [s.id, s])).values());
   cacheStories = [...unique];
+  saveLocalFileBackup();
+  if (!isPgConnected) return;
   (async () => {
-    const client = await pool.connect();
+    let client: any = null;
     try {
+      client = await pool.connect();
       await client.query("BEGIN");
       if (unique.length > 0) {
         const ids = unique.map(s => s.id);
@@ -1685,10 +1902,36 @@ export function saveStories(stories: TeamStory[]) {
       }
       await client.query("COMMIT");
     } catch (e) {
-      await client.query("ROLLBACK");
+      if (client) await client.query("ROLLBACK");
       console.error("PSQL saveStories error:", e);
     } finally {
-      client.release();
+      if (client) client.release();
     }
   })();
 }
+
+// ==========================================
+// RALLY COINS (МОТИВАЦИОННАЯ ИГРА "СКИДКА НА СЛЁТ")
+// ==========================================
+
+export function getRallyCoins(): RallyCoin[] {
+  return cacheRallyCoins;
+}
+
+export function saveRallyCoins(coins: RallyCoin[]) {
+  cacheRallyCoins = [...coins];
+  saveLocalFileBackup();
+}
+
+export function addRallyCoin(coin: RallyCoin): RallyCoin[] {
+  cacheRallyCoins = [coin, ...cacheRallyCoins];
+  saveLocalFileBackup();
+  return cacheRallyCoins;
+}
+
+export function deleteRallyCoin(coinId: string): RallyCoin[] {
+  cacheRallyCoins = cacheRallyCoins.filter(c => c.id !== coinId);
+  saveLocalFileBackup();
+  return cacheRallyCoins;
+}
+

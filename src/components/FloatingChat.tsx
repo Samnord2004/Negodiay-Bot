@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Send, Image as ImageIcon, X, Minimize2, 
   Maximize2, ArrowDown, Bot, ChevronDown, ChevronUp, Sparkles
@@ -24,27 +25,39 @@ const QUICK_EMOJIS = ['🏕️', '🔥', '🍻', '🌲', '🏆', '🧭', '🍖',
 interface BotCommand {
   label: string;
   text: string;
-  category: 'Девизы' | 'Слёт и этапы' | 'Быт и сборы';
+  category: 'Девизы' | 'Сборы и казна' | 'Слёт и этапы' | 'Команды /';
   badge?: string;
 }
 
 const MAXIMKA_BOT_COMMANDS: BotCommand[] = [
-  { label: 'Как гуляет Негодяй?', text: 'Как гуляет Негодяй?', category: 'Девизы', badge: '🔥 Фирменное' },
-  { label: 'Кто с негодяем дрался', text: 'Кто с Негодяем дрался?', category: 'Девизы' },
-  { label: 'Давай Негодяй!', text: 'Давай Негодяй!', category: 'Девизы' },
-  { label: 'Тост (Запись дубля)', text: 'Запись дубля', category: 'Девизы', badge: '🍻 Тост' },
-  { label: 'Записьдень!', text: 'Записьдень!', category: 'Девизы' },
-  { label: 'Пизда на глаза', text: 'Пизда на глаза', category: 'Девизы' },
-  { label: '🎉 Дни рождения', text: 'Максимка, кто именинник и у кого ближайшие дни рождения?', category: 'Быт и сборы', badge: '🎂 Днюхи' },
-  { label: '💰 Долги и взносы', text: 'Максимка, кто должен по деньгам и взносам?', category: 'Быт и сборы', badge: '💵 Казна' },
-  { label: '🍲 Меню и закупка', text: 'Максимка, что у нас по меню и еде на слёт?', category: 'Быт и сборы' },
-  { label: '📋 Задачи слёта', text: 'Максимка, какие задачи и дежурства горят?', category: 'Быт и сборы' },
-  { label: '🏕️ Инвентарь и снаряга', text: 'Максимка, что по инвентарю и палаткам?', category: 'Быт и сборы' },
-  { label: '📜 Устав и документы', text: 'Максимка, покажи официальные документы и устав команды', category: 'Быт и сборы' },
+  // Девизы и фирменные возгласы
+  { label: '🔥 Как гуляет Негодяй?', text: 'Как гуляет Негодяй?', category: 'Девизы', badge: 'Ахуенно!' },
+  { label: '🌲 Кто с Негодяем дрался?', text: 'Кто с Негодяем дрался?', category: 'Девизы', badge: 'Поломался' },
+  { label: '🚩 Давай Негодяй!', text: 'Давай Негодяй!', category: 'Девизы', badge: 'Боевой клич' },
+  { label: '🍻 Тост Негодяев (Запись дубля)', text: 'Запись дубля', category: 'Девизы', badge: 'За пизду бля!' },
+  { label: '🤐 Записьдень!', text: 'Записьдень!', category: 'Девизы' },
+  { label: '👀 Пизда на глаза', text: 'Пизда на глаза', category: 'Девизы' },
+
+  // Сборы, лагерь и казна
+  { label: '🎂 Дни рождения команды', text: 'Максимка, кто именинник и у кого ближайшие дни рождения?', category: 'Сборы и казна', badge: 'Именинники' },
+  { label: '💰 Долги и взносы', text: 'Максимка, кто должен по деньгам и взносам?', category: 'Сборы и казна', badge: 'Казна' },
+  { label: '🍲 Меню и закупка', text: 'Максимка, что у нас по меню и еде на слёт?', category: 'Сборы и казна', badge: 'Казан' },
+  { label: '📋 Задачи слёта', text: 'Максимка, какие задачи и дежурства горят?', category: 'Сборы и казна', badge: 'Дежурства' },
+  { label: '🏕️ Инвентарь и палатки', text: 'Максимка, что по инвентарю и палаткам?', category: 'Сборы и казна' },
+  { label: '📜 Устав и документы', text: 'Максимка, покажи официальные документы и устав команды', category: 'Сборы и казна' },
+
+  // Слёт, этапы и соревнования
   { label: '🪢 Схемы узлов', text: 'Максимка, покажи схемы вязки туристических узлов', category: 'Слёт и этапы', badge: 'Схемы' },
   { label: '🧭 Знаки ориентирования', text: 'Максимка, покажи условные знаки ориентирования и КП', category: 'Слёт и этапы', badge: 'Карты' },
   { label: '⏱️ График соревнований', text: 'Максимка, какое расписание соревнований и этапов?', category: 'Слёт и этапы' },
   { label: '🏆 Конкурсы команды', text: 'Максимка, какие конкурсы запланированы на слёте?', category: 'Слёт и этапы' },
+
+  // Слэш-команды
+  { label: '❓ /help — Все команды бота', text: '/help', category: 'Команды /', badge: 'Справка' },
+  { label: '📊 /status — Сводка готовности', text: '/status', category: 'Команды /', badge: 'Готовность' },
+  { label: '📜 /rules — Законы лагеря', text: '/rules', category: 'Команды /', badge: 'Правила' },
+  { label: '🎲 /joke — Анекдот от Максимки', text: '/joke', category: 'Команды /', badge: 'Байка' },
+  { label: '🎭 /psychotype — Психотипы', text: '/psychotype', category: 'Команды /', badge: '15 типов' },
 ];
 
 export default function FloatingChat({
@@ -79,7 +92,7 @@ export default function FloatingChat({
   const [showPhotoInput, setShowPhotoInput] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [showBotCommands, setShowBotCommands] = useState(false);
-  const [selectedBotCategory, setSelectedBotCategory] = useState<'Все' | 'Девизы' | 'Слёт и этапы' | 'Быт и сборы'>('Все');
+  const [selectedBotCategory, setSelectedBotCategory] = useState<'Все' | 'Девизы' | 'Сборы и казна' | 'Слёт и этапы' | 'Команды /'>('Все');
 
   // Sync prefillText if provided
   useEffect(() => {
@@ -164,6 +177,16 @@ export default function FloatingChat({
     onUnreadCountChange?.(unreadCount);
   }, [unreadCount, onUnreadCountChange]);
 
+  // Lock background scrolling while chat is open to keep chat fixed on screen
+  useEffect(() => {
+    if (!isOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [isOpen]);
+
   const handleSend = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!inputText.trim() && !imageUrl) return;
@@ -209,26 +232,28 @@ export default function FloatingChat({
     ? MAXIMKA_BOT_COMMANDS
     : MAXIMKA_BOT_COMMANDS.filter(c => c.category === selectedBotCategory);
 
-  return (
-    <>
-      {/* OPEN CHAT WINDOW - ANCHORED FROM THE TOP UNDER THE HEADER BUTTON */}
-      {isOpen && (
-        <div className="fixed inset-0 z-[99999] pointer-events-none">
-          {/* Backdrop overlay */}
-          <div 
-            className="absolute inset-0 bg-stone-950/45 sm:bg-stone-950/25 backdrop-blur-2xs pointer-events-auto transition-opacity duration-150"
-            onClick={closeChat}
-          />
+  if (!isOpen) return null;
 
-          {/* Chat Window Container anchored at top right (immediately under sticky header button) */}
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className={`fixed top-16 sm:top-[68px] right-2 sm:right-6 lg:right-12 bg-stone-900 border-4 border-amber-500 rounded-2xl sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden transition-all duration-200 animate-in fade-in-50 slide-in-from-top-4 origin-top-right pointer-events-auto z-[99999] ${
-              isExpanded
-                ? 'w-[calc(100vw-16px)] sm:w-[620px] max-w-[96vw] h-[calc(100vh-80px)] max-h-[840px]'
-                : 'w-[calc(100vw-16px)] sm:w-[480px] max-w-[96vw] h-[calc(100vh-85px)] sm:h-[650px] max-h-[720px]'
-            }`}
-          >
+  return createPortal(
+    <div className="fixed inset-0 z-[99999] pointer-events-none">
+      {/* Backdrop overlay */}
+      <div 
+        className="absolute inset-0 bg-stone-950/45 sm:bg-stone-950/25 backdrop-blur-2xs pointer-events-auto transition-opacity duration-150"
+        onClick={closeChat}
+      />
+
+      {/* Chat Window Container anchored at top right (immediately under sticky header button) */}
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className={`fixed top-14 sm:top-16 md:top-[74px] left-2 right-2 sm:left-auto sm:right-4 md:right-8 lg:right-16 bg-stone-900 border-4 border-amber-500 rounded-2xl sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden transition-all duration-200 animate-in fade-in-50 slide-in-from-top-4 origin-top-right pointer-events-auto z-[99999] ${
+          isExpanded
+            ? 'sm:w-[640px] md:w-[700px] max-w-[96vw] h-[calc(100dvh-70px)] sm:h-[calc(100dvh-88px)] max-h-[860px]'
+            : 'sm:w-[480px] md:w-[520px] max-w-[96vw] h-[calc(100dvh-70px)] sm:h-[660px] max-h-[740px]'
+        }`}
+      >
+        {/* Pointer arrow to button on desktop */}
+        <div className="hidden md:block absolute -top-2.5 right-28 w-5 h-5 bg-amber-500 rotate-45 border-t-2 border-l-2 border-amber-300 pointer-events-none" />
+
             {/* Header */}
             <div className="bg-gradient-to-r from-amber-600 via-red-600 to-amber-700 p-3 sm:p-3.5 flex items-center justify-between text-yellow-300 border-b-2 border-amber-400 shrink-0">
               <div className="flex items-center gap-2.5">
@@ -254,7 +279,7 @@ export default function FloatingChat({
                 <button
                   type="button"
                   onClick={() => setShowBotCommands(prev => !prev)}
-                  className={`p-1.5 rounded-lg transition-all flex items-center gap-1 text-xs font-black uppercase ${
+                  className={`p-1.5 rounded-lg transition-all flex items-center gap-1 text-xs font-black uppercase cursor-pointer ${
                     showBotCommands 
                       ? 'bg-yellow-300 text-amber-950 shadow' 
                       : 'hover:bg-white/20 text-yellow-300'
@@ -267,7 +292,7 @@ export default function FloatingChat({
                 <button
                   type="button"
                   onClick={() => setIsExpanded(!isExpanded)}
-                  className="p-1.5 hover:bg-white/20 rounded-lg transition-colors hidden sm:block"
+                  className="p-1.5 hover:bg-white/20 rounded-lg transition-colors hidden sm:block cursor-pointer"
                   title={isExpanded ? 'Обычный размер' : 'Развернуть'}
                 >
                   {isExpanded ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
@@ -275,7 +300,7 @@ export default function FloatingChat({
                 <button
                   type="button"
                   onClick={closeChat}
-                  className="p-1.5 hover:bg-white/20 rounded-lg transition-colors"
+                  className="p-1.5 hover:bg-white/20 rounded-lg transition-colors cursor-pointer"
                   title="Закрыть чат"
                 >
                   <X size={18} />
@@ -285,16 +310,16 @@ export default function FloatingChat({
 
             {/* BOT COMMANDS DRAWER / QUICK BAR */}
             {showBotCommands && (
-              <div className="bg-stone-900 border-b-2 border-amber-500/50 p-2.5 max-h-56 overflow-y-auto scrollbar-thin shrink-0 animate-in slide-in-from-top-2">
+              <div className="bg-stone-900 border-b-2 border-amber-500/50 p-2.5 max-h-60 overflow-y-auto scrollbar-thin shrink-0 animate-in slide-in-from-top-2">
                 <div className="flex items-center justify-between gap-2 mb-2">
                   <div className="flex items-center gap-1.5 text-xs font-black text-yellow-300 uppercase tracking-tight">
                     <Sparkles size={14} className="text-yellow-400" />
-                    Команды для бота Максимка
+                    Основные команды для бота Максимка
                   </div>
                   <button
                     type="button"
                     onClick={() => setShowBotCommands(false)}
-                    className="text-[10px] text-stone-400 hover:text-white uppercase font-bold"
+                    className="text-[10px] text-stone-400 hover:text-white uppercase font-bold cursor-pointer"
                   >
                     Скрыть
                   </button>
@@ -302,12 +327,12 @@ export default function FloatingChat({
 
                 {/* Category filters */}
                 <div className="flex items-center gap-1.5 mb-2 overflow-x-auto scrollbar-none pb-1">
-                  {(['Все', 'Девизы', 'Слёт и этапы', 'Быт и сборы'] as const).map(cat => (
+                  {(['Все', 'Девизы', 'Сборы и казна', 'Слёт и этапы', 'Команды /'] as const).map(cat => (
                     <button
                       key={cat}
                       type="button"
                       onClick={() => setSelectedBotCategory(cat)}
-                      className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full transition-all whitespace-nowrap ${
+                      className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full transition-all whitespace-nowrap cursor-pointer ${
                         selectedBotCategory === cat
                           ? 'bg-red-600 text-yellow-300 shadow-sm'
                           : 'bg-stone-800 text-stone-300 hover:bg-stone-700'
@@ -506,39 +531,87 @@ export default function FloatingChat({
 
             {/* Quick Bot Commands Bar + Emojis */}
             <div className="bg-stone-900 px-3 py-1.5 border-t border-stone-800 flex items-center justify-between gap-1.5 shrink-0">
-              <div className="flex items-center gap-1 overflow-x-auto scrollbar-none">
+              <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5">
                 <button
                   type="button"
                   onClick={() => setShowBotCommands(prev => !prev)}
                   className="text-[10px] font-black uppercase px-2 py-1 rounded-lg bg-red-600 hover:bg-red-500 text-yellow-300 flex items-center gap-1 shrink-0 transition-all shadow-xs active:scale-95 cursor-pointer"
                 >
                   <Bot size={12} />
-                  <span>Команды Максимка</span>
+                  <span>Команды</span>
                   {showBotCommands ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
                 </button>
                 <button
                   type="button"
                   onClick={() => handleExecuteCommand('Как гуляет Негодяй?')}
-                  className="text-[10px] font-bold px-2 py-1 rounded-lg bg-stone-800 hover:bg-amber-600/40 text-amber-200 border border-stone-700 whitespace-nowrap shrink-0 transition-colors"
+                  className="text-[10px] font-bold px-2 py-1 rounded-lg bg-stone-800 hover:bg-amber-600/40 text-amber-200 border border-stone-700 whitespace-nowrap shrink-0 transition-colors cursor-pointer"
                   title="Спросить у Максимки: Как гуляет Негодяй?"
                 >
-                  🔥 Как гуляет Негодяй?
+                  🔥 Как гуляет?
                 </button>
                 <button
                   type="button"
                   onClick={() => handleExecuteCommand('Кто с Негодяем дрался?')}
-                  className="text-[10px] font-bold px-2 py-1 rounded-lg bg-stone-800 hover:bg-amber-600/40 text-amber-200 border border-stone-700 whitespace-nowrap shrink-0 transition-colors"
+                  className="text-[10px] font-bold px-2 py-1 rounded-lg bg-stone-800 hover:bg-amber-600/40 text-amber-200 border border-stone-700 whitespace-nowrap shrink-0 transition-colors cursor-pointer"
                   title="Спросить у Максимки: Кто с Негодяем дрался?"
                 >
                   🌲 Кто дрался?
                 </button>
                 <button
                   type="button"
+                  onClick={() => handleExecuteCommand('Запись дубля')}
+                  className="text-[10px] font-bold px-2 py-1 rounded-lg bg-stone-800 hover:bg-amber-600/40 text-amber-200 border border-stone-700 whitespace-nowrap shrink-0 transition-colors cursor-pointer"
+                  title="Походный тост Негодяев"
+                >
+                  🍻 Тост
+                </button>
+                <button
+                  type="button"
                   onClick={() => handleExecuteCommand('Максимка, кто именинник и у кого ближайшие дни рождения?')}
-                  className="text-[10px] font-bold px-2 py-1 rounded-lg bg-stone-800 hover:bg-amber-600/40 text-amber-200 border border-stone-700 whitespace-nowrap shrink-0 transition-colors"
+                  className="text-[10px] font-bold px-2 py-1 rounded-lg bg-stone-800 hover:bg-amber-600/40 text-amber-200 border border-stone-700 whitespace-nowrap shrink-0 transition-colors cursor-pointer"
                   title="Спросить у Максимки про дни рождения команды"
                 >
                   🎂 Днюхи
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleExecuteCommand('Максимка, кто должен по деньгам и взносам?')}
+                  className="text-[10px] font-bold px-2 py-1 rounded-lg bg-stone-800 hover:bg-amber-600/40 text-amber-200 border border-stone-700 whitespace-nowrap shrink-0 transition-colors cursor-pointer"
+                  title="Спросить у Максимки про долги и взносы"
+                >
+                  💰 Долги
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleExecuteCommand('/status')}
+                  className="text-[10px] font-bold px-2 py-1 rounded-lg bg-stone-800 hover:bg-amber-600/40 text-amber-200 border border-stone-700 whitespace-nowrap shrink-0 transition-colors cursor-pointer"
+                  title="Сводка готовности лагеря к слёту"
+                >
+                  📊 /status
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleExecuteCommand('/help')}
+                  className="text-[10px] font-bold px-2 py-1 rounded-lg bg-stone-800 hover:bg-amber-600/40 text-amber-200 border border-stone-700 whitespace-nowrap shrink-0 transition-colors cursor-pointer"
+                  title="Все команды бота Максимка"
+                >
+                  ❓ /help
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleExecuteCommand('/joke')}
+                  className="text-[10px] font-bold px-2 py-1 rounded-lg bg-stone-800 hover:bg-amber-600/40 text-amber-200 border border-stone-700 whitespace-nowrap shrink-0 transition-colors cursor-pointer"
+                  title="Походная байка от Максимки"
+                >
+                  🎲 /joke
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleExecuteCommand('/rules')}
+                  className="text-[10px] font-bold px-2 py-1 rounded-lg bg-stone-800 hover:bg-amber-600/40 text-amber-200 border border-stone-700 whitespace-nowrap shrink-0 transition-colors cursor-pointer"
+                  title="Незыблемые законы лагеря"
+                >
+                  📜 /rules
                 </button>
               </div>
 
@@ -573,6 +646,43 @@ export default function FloatingChat({
               </div>
             )}
 
+            {/* Slash Command Autocomplete Popover */}
+            {inputText.startsWith('/') && (
+              <div className="bg-stone-950 border-t-2 border-amber-500 p-2 max-h-40 overflow-y-auto scrollbar-thin shrink-0 animate-in slide-in-from-bottom-2">
+                <div className="text-[10px] font-black text-yellow-400 uppercase mb-1">
+                  Слэш-команды бота Максимка:
+                </div>
+                <div className="space-y-1">
+                  {[
+                    { cmd: '/help', desc: 'Все возможности и девизы бота' },
+                    { cmd: '/status', desc: 'Сводка готовности лагеря к слёту' },
+                    { cmd: '/rules', desc: 'Незыблемые законы лагеря Негодяев' },
+                    { cmd: '/joke', desc: 'Походная байка от Максимки' },
+                    { cmd: '/psychotype', desc: '15 походных психотипов команды' }
+                  ]
+                    .filter(c => c.cmd.startsWith(inputText.toLowerCase()))
+                    .map(item => (
+                      <button
+                        key={item.cmd}
+                        type="button"
+                        onClick={() => {
+                          setInputText(item.cmd);
+                          handleExecuteCommand(item.cmd);
+                        }}
+                        className="w-full text-left px-2 py-1 rounded-lg bg-stone-900 hover:bg-red-950/60 border border-stone-800 hover:border-amber-400/60 flex items-center justify-between text-xs cursor-pointer group"
+                      >
+                        <span className="font-mono font-bold text-amber-300 group-hover:text-yellow-300">
+                          {item.cmd}
+                        </span>
+                        <span className="text-[10px] text-stone-400 truncate">
+                          {item.desc}
+                        </span>
+                      </button>
+                    ))}
+                </div>
+              </div>
+            )}
+
             {/* Input Footer Form */}
             <form onSubmit={handleSend} className="bg-stone-900 p-2.5 border-t-2 border-amber-500/40 flex items-center gap-2 shrink-0">
               <label className="p-2 text-stone-400 hover:text-yellow-400 cursor-pointer rounded-xl hover:bg-stone-800 transition-colors">
@@ -603,8 +713,7 @@ export default function FloatingChat({
             </form>
 
           </div>
-        </div>
-      )}
-    </>
+        </div>,
+    document.body
   );
 }

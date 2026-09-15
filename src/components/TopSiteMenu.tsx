@@ -13,6 +13,7 @@ import AppearanceTab from './AppearanceTab';
 interface TopSiteMenuProps {
   currentUser: Participant | null;
   activeTab: string;
+  isCaptain?: boolean;
   onNavigateTab: (tabId: string, subTab?: 'overview' | 'tasks' | 'menu' | 'contests' | 'creativity') => void;
   onOpenProfileEdit: () => void;
   onOpenSecurity: () => void;
@@ -30,6 +31,7 @@ interface TopSiteMenuProps {
 export default function TopSiteMenu({
   currentUser,
   activeTab,
+  isCaptain,
   onNavigateTab,
   onOpenProfileEdit,
   onOpenSecurity,
@@ -46,6 +48,19 @@ export default function TopSiteMenu({
   const [isOpen, setIsOpen] = useState(false);
   const [menuTab, setMenuTab] = useState<'nav' | 'appearance'>('nav');
   const menuRef = useRef<HTMLDivElement>(null);
+
+  const isCaptainEffective = isCaptain !== undefined 
+    ? isCaptain 
+    : Boolean(
+        currentUser && (
+          currentUser.role === 'admin' ||
+          (currentUser.nickname || '').toLowerCase().replace(/^@/, '') === 'ковбой' ||
+          (currentUser.nickname || '').toLowerCase().replace(/^@/, '') === 'cowboy' ||
+          (currentUser.email || '').toLowerCase() === 'asamoilov81@gmail.com' ||
+          (currentUser.name || '').toLowerCase().includes('самойлов') ||
+          currentUser.id === 'cowboy_1'
+        )
+      );
 
   // Close when clicking outside
   useEffect(() => {
@@ -462,34 +477,36 @@ export default function TopSiteMenu({
                   <ArrowRight size={14} className="opacity-60" />
                 </button>
 
-                {/* 7: Штаб Капитана (Админка) */}
-                <button
-                  type="button"
-                  onClick={() => handleSelectNav('admin')}
-                  className={`w-full text-left p-2.5 rounded-xl border-2 transition-all flex items-center justify-between ${
-                    activeTab === 'admin'
-                      ? 'bg-red-600 text-yellow-300 border-amber-950 shadow-sm'
-                      : 'bg-white hover:bg-amber-100/70 text-amber-950 border-amber-200'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Shield size={17} className={activeTab === 'admin' ? 'text-yellow-300' : 'text-red-600'} />
-                    <div>
-                      <div className="font-black text-xs uppercase leading-tight flex items-center gap-2">
-                        <span>Штаб Капитана</span>
-                        {pendingApprovalsCount > 0 && (
-                          <span className="bg-red-600 text-white text-[9px] font-black px-1.5 py-0.2 rounded-full">
-                            +{pendingApprovalsCount}
-                          </span>
-                        )}
-                      </div>
-                      <div className={`text-[10px] ${activeTab === 'admin' ? 'text-yellow-100' : 'text-stone-500'}`}>
-                        Роли команды, модерация, слёты
+                {/* 7: Штаб Капитана (Админка) - Только для Капитана */}
+                {isCaptainEffective && (
+                  <button
+                    type="button"
+                    onClick={() => handleSelectNav('admin')}
+                    className={`w-full text-left p-2.5 rounded-xl border-2 transition-all flex items-center justify-between ${
+                      activeTab === 'admin'
+                        ? 'bg-red-600 text-yellow-300 border-amber-950 shadow-sm'
+                        : 'bg-white hover:bg-amber-100/70 text-amber-950 border-amber-200'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Shield size={17} className={activeTab === 'admin' ? 'text-yellow-300' : 'text-red-600'} />
+                      <div>
+                        <div className="font-black text-xs uppercase leading-tight flex items-center gap-2">
+                          <span>Штаб Капитана</span>
+                          {pendingApprovalsCount > 0 && (
+                            <span className="bg-red-600 text-white text-[9px] font-black px-1.5 py-0.2 rounded-full">
+                              +{pendingApprovalsCount}
+                            </span>
+                          )}
+                        </div>
+                        <div className={`text-[10px] ${activeTab === 'admin' ? 'text-yellow-100' : 'text-stone-500'}`}>
+                          Роли команды, модерация, слёты
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <ArrowRight size={14} className="opacity-60" />
-                </button>
+                    <ArrowRight size={14} className="opacity-60" />
+                  </button>
+                )}
 
               </div>
             </div>

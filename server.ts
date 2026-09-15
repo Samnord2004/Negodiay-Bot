@@ -57,20 +57,38 @@ import {
   addStory,
   updateStory,
   deleteStory,
-  saveStories
+  saveStories,
+  getRallyCoins,
+  saveRallyCoins,
+  addRallyCoin,
+  deleteRallyCoin
 } from "./db";
 import { ORIENTEERING_SIGNS_SVG, KNOTS_DIAGRAM_SVG, CONTEST_SCHEDULE_SVG } from "./src/mockData";
-import { Participant, UserRole } from "./src/types";
+import { Participant, UserRole, RallyCoin } from "./src/types";
+import { sanitizeParticipant, sanitizeParticipants, hashPassword, verifyPassword } from "./src/utils/security";
 
 // Load environment variables
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
+// Support both numeric ports (Cloud Run, Docker, VPS) and Unix domain sockets (Beget Passenger)
+const rawPort = process.env.PORT || "3000";
+const isNumericPort = !isNaN(Number(rawPort));
+const PORT = isNumericPort ? Number(rawPort) : rawPort;
 
 // High body limits to allow lossless photo archives without file size limits as requested
 app.use(express.json({ limit: "100mb" }));
 app.use(express.urlencoded({ limit: "100mb", extended: true }));
+
+// Health check endpoint for Cloud Run, Docker, and Beget
+app.get("/api/health", (req, res) => {
+  res.json({
+    status: "ok",
+    app: "Negodyai Team Portal",
+    uptime: Math.round(process.uptime()),
+    timestamp: new Date().toISOString()
+  });
+});
 
 // Lazy-initialize Gemini SDK to prevent crashes if key is initially absent
 let aiClient: GoogleGenAI | null = null;
@@ -600,7 +618,7 @@ app.post("/api/bot-respond", async (req, res) => {
 // Sync endpoints to preserve shared state backed by PostgreSQL
 app.get("/api/sync", (req, res) => {
   res.json({
-    participants: getParticipants(),
+    participants: sanitizeParticipants(getParticipants()),
     excursions: getExcursions(),
     tasks: getTasks(),
     menuItems: getMenuItems(),
@@ -613,8 +631,67 @@ app.get("/api/sync", (req, res) => {
     documents: getTeamDocuments(),
     fundRecords: getFundRecords(),
     creativityIdeas: getCreativityIdeas(),
-    stories: getStories()
+    stories: getStories(),
+    rallyCoins: getRallyCoins()
   });
+});
+
+app.get("/api/chat/messages", (req, res) => {
+  res.json({ messages: getMessages() });
+});
+
+// Rally Coins Motivation Game endpoints
+app.get("/api/coins", (req, res) => {
+  res.json({ coins: getRallyCoins() });
+});
+
+app.post("/api/coins", (req, res) => {
+  try {
+    const { 
+      participantId, 
+      participantName, 
+      participantNickname, 
+      taskTitle, 
+      category = 'task', 
+      comment = '', 
+      awardedBy = 'Капитан Андрей Самойлов',
+      year = 2026 
+    } = req.body;
+
+    if (!participantId || !taskTitle) {
+      return res.status(400).json({ error: "Missing participantId or taskTitle" });
+    }
+
+    const newCoin: RallyCoin = {
+      id: "coin_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6),
+      participantId,
+      participantName: participantName || "Участник",
+      participantNickname: participantNickname || participantName || "Негодяй",
+      taskTitle,
+      category,
+      comment,
+      awardedAt: new Date().toISOString(),
+      awardedBy,
+      year: Number(year) || 2026
+    };
+
+    const updatedCoins = addRallyCoin(newCoin);
+    res.json({ success: true, coin: newCoin, coins: updatedCoins });
+  } catch (err: any) {
+    console.error("Error creating rally coin:", err);
+    res.status(500).json({ error: "Failed to award coin" });
+  }
+});
+
+app.delete("/api/coins/:id", (req, res) => {
+  try {
+    const coinId = req.params.id;
+    const updated = deleteRallyCoin(coinId);
+    res.json({ success: true, coins: updated });
+  } catch (err: any) {
+    console.error("Error deleting coin:", err);
+    res.status(500).json({ error: "Failed to delete coin" });
+  }
 });
 
 app.post("/api/sync", (req, res) => {
@@ -630,7 +707,8 @@ app.post("/api/sync", (req, res) => {
       contests, 
       messages,
       fundRecords,
-      stories 
+      stories,
+      rallyCoins 
     } = req.body;
     if (participants) saveParticipants(participants);
     if (excursions) saveExcursions(excursions);
@@ -640,9 +718,10 @@ app.post("/api/sync", (req, res) => {
     if (inventoryItems) saveInventoryItems(inventoryItems);
     if (botConfig) saveBotConfig(botConfig);
     if (contests) saveContests(contests);
-    if (messages) saveMessages(messages);
+    if (messages && Array.isArray(messages) && messages.length > 0) saveMessages(messages);
     if (fundRecords) saveFundRecords(fundRecords);
     if (stories) saveStories(stories);
+    if (rallyCoins && Array.isArray(rallyCoins)) saveRallyCoins(rallyCoins);
     res.json({ success: true });
   } catch (err: any) {
     console.error("Error updating server sync:", err);
@@ -732,7 +811,7 @@ app.post("/api/auth/register", async (req, res) => {
     role: "member" as UserRole,
     email: email ? email.trim() : "",
     phone: phone ? phone.trim() : "",
-    password: password && password.trim().length >= 3 ? password.trim() : "123",
+    password: hashPassword(password && password.trim().length >= 3 ? password.trim() : "123"),
     accountStatus: "pending" as const, // Strict rule: requires Captain approval!
     biometricEnabled: Boolean(biometricEnabled)
   };
@@ -741,8 +820,8 @@ app.post("/api/auth/register", async (req, res) => {
   res.json({
     success: true,
     message: "Заявка на регистрацию принята! Так как доступ на портал команды закрытый, аккаунт будет активирован после одобрения Капитаном команды.",
-    user: newParticipant,
-    participants: getParticipants()
+    user: sanitizeParticipant(newParticipant),
+    participants: sanitizeParticipants(getParticipants())
   });
 });
 
@@ -881,7 +960,7 @@ app.post("/api/admin/reset-user-password", async (req, res) => {
   }
 
   const finalPassword = newPassword && newPassword.trim() ? newPassword.trim() : "123";
-  await updateParticipantPassword(userId, finalPassword);
+  await updateParticipantPassword(userId, hashPassword(finalPassword));
 
   // Mark pending reset requests for this user as resolved
   passwordResetRequests = passwordResetRequests.map(r => 
@@ -894,7 +973,7 @@ app.post("/api/admin/reset-user-password", async (req, res) => {
     success: true,
     message: `Пароль для ${user.name} (@${user.nickname}) успешно сброшен на: "${finalPassword}"`,
     newPassword: finalPassword,
-    participants: getParticipants()
+    participants: sanitizeParticipants(getParticipants())
   });
 });
 
@@ -1000,7 +1079,7 @@ app.post("/api/auth/login", (req, res) => {
     }
     return res.json({
       success: true,
-      user: { ...adminUser, role: "admin" }
+      user: sanitizeParticipant({ ...adminUser, role: "admin" })
     });
   }
 
@@ -1027,14 +1106,14 @@ app.post("/api/auth/login", (req, res) => {
     if (!user.biometricEnabled) {
       return res.status(400).json({ success: false, error: "Биометрия (Touch/Face ID) не подключена для этого аккаунта" });
     }
-    return res.json({ success: true, user });
+    return res.json({ success: true, user: sanitizeParticipant(user) });
   }
 
-  if (user.password && user.password !== password) {
+  if (user.password && !verifyPassword(password, user.password)) {
     return res.status(401).json({ success: false, error: "Неверный пароль" });
   }
 
-  return res.json({ success: true, user });
+  return res.json({ success: true, user: sanitizeParticipant(user) });
 });
 
 app.post("/api/auth/change-password", (req, res) => {
@@ -1050,10 +1129,10 @@ app.post("/api/auth/change-password", (req, res) => {
   if (!user) {
     return res.status(404).json({ success: false, error: "Пользователь не найден" });
   }
-  if (oldPassword && user.password && user.password !== oldPassword) {
+  if (oldPassword && user.password && !verifyPassword(oldPassword, user.password)) {
     return res.status(400).json({ success: false, error: "Текущий пароль указан неверно" });
   }
-  updateParticipantPassword(userId, newPassword);
+  updateParticipantPassword(userId, hashPassword(newPassword.trim()));
   return res.json({ success: true, message: "Пароль успешно обновлен" });
 });
 
@@ -1149,7 +1228,7 @@ app.post("/api/user/update-profile", async (req, res) => {
   };
 
   await addOrUpdateParticipant(updated);
-  res.json({ success: true, message: "Профиль успешно обновлен", user: updated, participants: getParticipants() });
+  res.json({ success: true, message: "Профиль успешно обновлен", user: sanitizeParticipant(updated), participants: sanitizeParticipants(getParticipants()) });
 });
 
 // Update skipped years specifically for participant
@@ -1171,7 +1250,7 @@ app.put("/api/participants/:id/skipped-years", async (req, res) => {
       skippedYears: cleanYears
     };
     await addOrUpdateParticipant(updated);
-    res.json({ success: true, message: "Пропущенные года слёта сохранены", participant: updated, participants: getParticipants() });
+    res.json({ success: true, message: "Пропущенные года слёта сохранены", participant: sanitizeParticipant(updated), participants: sanitizeParticipants(getParticipants()) });
   } catch (err: any) {
     console.error("Error updating skipped years:", err);
     res.status(500).json({ success: false, error: "Ошибка сохранения пропущенных годов" });
@@ -1198,7 +1277,7 @@ app.put("/api/participants/:id/financials", async (req, res) => {
       debtAmount: newDebt
     };
     await addOrUpdateParticipant(updated);
-    res.json({ success: true, message: "Финансы участника обновлены", participant: updated, participants: getParticipants() });
+    res.json({ success: true, message: "Финансы участника обновлены", participant: sanitizeParticipant(updated), participants: sanitizeParticipants(getParticipants()) });
   } catch (err: any) {
     console.error("Error updating financials:", err);
     res.status(500).json({ success: false, error: "Ошибка сохранения взносов" });
@@ -1208,21 +1287,21 @@ app.put("/api/participants/:id/financials", async (req, res) => {
 // Admin Moderation
 app.get("/api/admin/pending-users", (req, res) => {
   const pending = getParticipants().filter(p => p.accountStatus === "pending");
-  res.json({ success: true, pendingUsers: pending });
+  res.json({ success: true, pendingUsers: sanitizeParticipants(pending) });
 });
 
 app.post("/api/admin/approve-user", async (req, res) => {
   const { userId } = req.body;
   if (!userId) return res.status(400).json({ success: false, error: "userId обязателен" });
   await approveParticipant(userId);
-  res.json({ success: true, message: "Участник успешно одобрен!", participants: getParticipants() });
+  res.json({ success: true, message: "Участник успешно одобрен!", participants: sanitizeParticipants(getParticipants()) });
 });
 
 app.post("/api/admin/reject-user", async (req, res) => {
   const { userId } = req.body;
   if (!userId) return res.status(400).json({ success: false, error: "userId обязателен" });
   await rejectParticipant(userId);
-  res.json({ success: true, message: "Заявка участника отклонена", participants: getParticipants() });
+  res.json({ success: true, message: "Заявка участника отклонена", participants: sanitizeParticipants(getParticipants()) });
 });
 
 app.post("/api/admin/delete-user", async (req, res) => {
@@ -1248,7 +1327,7 @@ app.post("/api/admin/delete-user", async (req, res) => {
     success: true, 
     message: `Аккаунт члена команды ${user.name} (@${user.nickname}) полностью удален`, 
     deletedUserId: userId,
-    participants: getParticipants() 
+    participants: sanitizeParticipants(getParticipants()) 
   });
 });
 
@@ -1271,7 +1350,7 @@ app.delete("/api/participants/:id", async (req, res) => {
     success: true, 
     message: `Аккаунт ${user.name} (@${user.nickname}) полностью удален`, 
     deletedUserId: id,
-    participants: getParticipants() 
+    participants: sanitizeParticipants(getParticipants()) 
   });
 });
 
@@ -1295,7 +1374,7 @@ app.post("/api/admin/set-role", async (req, res) => {
       name: result.replacedUser.name,
       nickname: result.replacedUser.nickname
     } : null,
-    participants: getParticipants() 
+    participants: sanitizeParticipants(getParticipants()) 
   });
 });
 
@@ -1394,13 +1473,30 @@ app.delete("/api/documents/:id", (req, res) => {
 });
 
 // Fund Management
+function canManageFund(operatorId?: string): boolean {
+  if (!operatorId) return true; // fallback for backwards compatibility or server internal tasks
+  const allUsers = getParticipants();
+  const operator = allUsers.find(p => p.id === operatorId);
+  if (!operator) return false;
+  const isCaptain = operator.role === "admin" || 
+    operator.id === "cowboy_1" || 
+    (operator.nickname || "").toLowerCase().replace(/^@/, '') === "ковбой" || 
+    (operator.email || "").toLowerCase() === "asamoilov81@gmail.com" ||
+    (operator.name || "").toLowerCase().includes("самойлов");
+  const isTreasurer = operator.role === "treasurer" || (operator.nickname || "").toLowerCase().includes("булочк");
+  return Boolean(isCaptain || isTreasurer);
+}
+
 app.get("/api/fund", (req, res) => {
   res.json(getFundRecords());
 });
 
 app.post("/api/fund", (req, res) => {
   try {
-    const { id, participantId, participantName, participantNickname, year, month, amount, isPaid, paidAt, note } = req.body;
+    const { id, participantId, participantName, participantNickname, year, month, amount, isPaid, paidAt, note, operatorId } = req.body;
+    if (operatorId && !canManageFund(operatorId)) {
+      return res.status(403).json({ success: false, error: "Только Казначей и Капитан команды имеют право делать изменения в фонде" });
+    }
     if (!participantId || !year || !month) {
       return res.status(400).json({ success: false, error: "Укажите участника, год и месяц" });
     }
@@ -1431,7 +1527,10 @@ app.post("/api/fund", (req, res) => {
 
 app.post("/api/fund/update", (req, res) => {
   try {
-    const { id, participantId, participantName, participantNickname, year, month, isPaid, note, paidAt, amount } = req.body;
+    const { id, participantId, participantName, participantNickname, year, month, isPaid, note, paidAt, amount, operatorId } = req.body;
+    if (operatorId && !canManageFund(operatorId)) {
+      return res.status(403).json({ success: false, error: "Только Казначей и Капитан команды имеют право делать изменения в фонде" });
+    }
     if (id) {
       updateFundRecord(id, {
         isPaid: Boolean(isPaid),
@@ -1725,6 +1824,101 @@ function generateMockNegodyaiResponse(
   let adapterStyleUsed = "Негодяйский походный подкол";
   let imageUrl: string | undefined = undefined;
   let attachments: any[] | undefined = undefined;
+
+  // Signature Slash Commands
+  if (msgLower === "/help" || msgLower === "/команды" || msgLower === "помощь" || msgLower.startsWith("/help")) {
+    return {
+      text: `🤖 Команды чат-бота Максимка:\n\n` +
+        `🔥 Девизы:\n` +
+        `• «Как гуляет Негодяй?» — фирменный отклик\n` +
+        `• «Кто с Негодяем дрался?» — боевая поговорка\n` +
+        `• «Давай Негодяй!» — командный заряд\n` +
+        `• «Запись дубля» — походный тост\n` +
+        `• «Записьдень!» / «Пизда на глаза»\n\n` +
+        `🏕️ Лагерь и подготовка:\n` +
+        `• «Дни рождения» — ближайшие именинники\n` +
+        `• «Долги и взносы» — проверка казны и должников\n` +
+        `• «Меню и закупка» — раскладка и казан\n` +
+        `• «Задачи слёта» — горящие дела и дежурства\n` +
+        `• «Инвентарь и палатки» — снаряжение\n` +
+        `• «Устав и документы» — кодекс и регламент\n` +
+        `• «Схемы узлов» / «Знаки ориентирования»\n\n` +
+        `⚡ Быстрые слэш-команды:\n` +
+        `• /status — сводка готовности к слёту\n` +
+        `• /rules — незыблемые законы лагеря\n` +
+        `• /joke — походная байка от Максимки\n` +
+        `• /psychotype — психотипы участников`,
+      detectedPsychotype: "Душнила-контролёр",
+      detectedPsychotypeExplanation: "Запросил полный справочник походных команд и устава.",
+      adapterStyleUsed: "Командная справка"
+    };
+  }
+
+  if (msgLower === "/status" || msgLower === "/статус") {
+    const debtorsCount = debts.filter(d => d.debtAmount > 0).length;
+    const pendingTasksCount = (tasks || []).filter(t => !t.completed).length;
+    const activeExcursion = (excursions || []).find(e => e.isActive) || excursions?.[0];
+    const excTitle = activeExcursion ? `«${activeExcursion.title}» (${activeExcursion.date || 'скоро'})` : "слёт уточняется";
+
+    return {
+      text: `📊 Сводка готовности Негодяев к слёту:\n\n` +
+        `🏕️ Ближайший слёт: ${excTitle}\n` +
+        `👥 Личный состав: ${(participants || []).length} негодяев\n` +
+        `💰 Должников по смете: ${debtorsCount > 0 ? `${debtorsCount} чел. (пинаем!)` : '0 (казна закрыта! 🎉)'}\n` +
+        `📋 Невыполненных задач: ${pendingTasksCount} шт.\n` +
+        `🍲 Меню: ${(menuItems || []).length} блюд, продуктов к закупке: ${(groceryItems || []).length}\n` +
+        `📦 Инвентарь на учете: ${(inventoryItems || []).length} позиций\n\n` +
+        `Вывод Максимки: ${debtorsCount > 0 || pendingTasksCount > 3 ? 'Рюкзаки ещё не собраны, подтягиваем хвосты, бля! 🏕️' : 'Команда в боевой готовности, хоть сейчас в тайгу! 🍻'}`,
+      detectedPsychotype: "Душнила-контролёр",
+      detectedPsychotypeExplanation: "Снял полную аналитическую сводку боеготовности лагеря.",
+      adapterStyleUsed: "Сводка готовности"
+    };
+  }
+
+  if (msgLower === "/rules" || msgLower === "/законы" || msgLower === "/правила") {
+    return {
+      text: `📜 Незыблемые законы лагеря команды «Негодяи»:\n\n` +
+        `1. Казан шеф-повара — святыня! Мыть только песком и речной водой, никакой химии!\n` +
+        `2. Кто первый встал — тот раздувает костер и ставит чайник на всю братву.\n` +
+        `3. В палатку в грязных берцах — смертный грех и лишение порции шашлыка.\n` +
+        `4. Звучит «Как гуляет Негодяй?» — дружный ответ «Ахуенно!» обязателен в радиусе 5 км.\n` +
+        `5. После тоста «Запись дубля» посуда не должна оставаться пустой.\n` +
+        `6. Мусор за собой убираем до последней соринки — Негодяи берегут природу! 🌲`,
+      detectedPsychotype: "Бывалый выживальщик",
+      detectedPsychotypeExplanation: "Напоминает вековые походные законы таёжного общежития.",
+      adapterStyleUsed: "Законы лагеря"
+    };
+  }
+
+  if (msgLower === "/joke" || msgLower === "/анекдот" || msgLower === "/байка") {
+    const jokes = [
+      `🐻 Идут два негодяя по тайге, навстречу медведь. Один бросает рюкзак и начинает судорожно надевать кроссовки. Второй шепчет: «Ты что, дурак?! Ты всё равно медведя не обгонишь!» — «А мне медведя обгонять и не надо. Мне достаточно тебя обогнать!» 😂🌲`,
+      `⛺ Разговаривают два туриста у костра:\n— Слышь, а почему у тебя палатка с подогревом?\n— Да это не подогрев, это Лёха с вечера фасолевый суп доедал! 💨🔥`,
+      `🧭 Инструктор Негодяев объясняет новичку:\n— Мох растёт с северной стороны дерева. А если мох растёт со всех сторон — значит, ты пьяный лежишь мордой в болоте! 🍻🌲`
+    ];
+    const picked = jokes[Math.floor(Math.random() * jokes.length)];
+    return {
+      text: picked,
+      detectedPsychotype: "Весельчак-балагур",
+      detectedPsychotypeExplanation: "Травит забористую походную байку у виртуального костра.",
+      adapterStyleUsed: "Походная байка"
+    };
+  }
+
+  if (msgLower === "/psychotype" || msgLower === "/психотипы") {
+    return {
+      text: `🎭 В команде «Негодяи» официально выделены 15 психотипов:\n\n` +
+        `1. Весельчак-балагур 2. Душнила-контролёр 3. Бунтарь-анархист\n` +
+        `4. Походный шеф-повар 5. Гитарист-романтик 6. Ленивый лежебока\n` +
+        `7. Паникёр-истерик 8. Инста-туристка 9. Клещевой ипохондрик\n` +
+        `10. Бывалый выживальщик 11. Спортивный темп-лидер 12. Алко-турист\n` +
+        `13. Эко-защитник 14. Халявщик-забываха 15. Тихий философ\n\n` +
+        `Свой психотип можно выбрать в профиле или спросить у меня в чате!`,
+      detectedPsychotype: "Тихий философ",
+      detectedPsychotypeExplanation: "Погрузился в психологию походного братства.",
+      adapterStyleUsed: "Классификация психотипов"
+    };
+  }
 
   // Signature Negodyai Mottos and catchphrases
   if (msgLower.includes("как гуляет негодяй") || msgLower.includes("как гуляет")) {
@@ -2230,9 +2424,15 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`[Negodyai MAX Server] Running on http://localhost:${PORT}`);
-  });
+  if (typeof PORT === "number") {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`[Negodyai MAX Server] Running on http://0.0.0.0:${PORT}`);
+    });
+  } else {
+    app.listen(PORT, () => {
+      console.log(`[Negodyai MAX Server] Running on socket ${PORT}`);
+    });
+  }
 }
 
 startServer();
