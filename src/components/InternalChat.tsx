@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { ChatMessage, Participant } from '../types';
 import { getSafeAvatar, getParticipantAvatar } from '../utils/avatar';
+import { formatChatTimestamp } from '../utils/chatUtils';
 
 const MAXIMKA_INTERNAL_COMMANDS = [
   { label: 'Как гуляет Негодяй?', text: 'Как гуляет Негодяй?' },
@@ -255,7 +256,7 @@ export default function InternalChat({
                       <div className={`mt-1.5 text-[10px] flex items-center justify-end gap-1 ${
                         isMe ? 'text-yellow-300/70' : 'text-amber-400'
                       }`}>
-                        <span>{msg.timestamp}</span>
+                        <span>{formatChatTimestamp(msg.timestamp)}</span>
                         {isMe && <CheckCheck size={12} />}
                       </div>
                     </div>

@@ -6,6 +6,7 @@ import {
 import { Participant } from '../types';
 import { getSafeAvatar } from '../utils/avatar';
 import { formatBirthdayShort } from '../utils/dateUtils';
+import { validatePasswordComplexity } from '../utils/password';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -127,8 +128,9 @@ export default function AuthModal({
       setRegError('Укажите ФИО и позывной');
       return;
     }
-    if (!regPassword.trim() || regPassword.length < 3) {
-      setRegError('Пароль должен содержать минимум 3 символа');
+    const pwdCheck = validatePasswordComplexity(regPassword);
+    if (!pwdCheck.isValid) {
+      setRegError(pwdCheck.error || 'Пароль должен состоять как минимум из 6 символов и состоять из обязательной заглавной буквы, строчной буквы и цифры или символа');
       return;
     }
 
@@ -150,10 +152,15 @@ export default function AuthModal({
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        setRegStep('pending');
-        setRegSuccess(data.message || 'Заявка принята!');
+        setRegSuccess(data.message || 'Регистрация успешно завершена! Добро пожаловать в команду.');
         if (data.participants && onRegistered) {
           onRegistered(data.participants);
+        }
+        if (data.user && onLoginSuccess) {
+          onLoginSuccess(data.user);
+          onClose();
+        } else {
+          setRegStep('pending');
         }
       } else {
         setRegError(data.error || 'Ошибка при отправке заявки');

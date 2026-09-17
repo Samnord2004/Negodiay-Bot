@@ -40,7 +40,7 @@ export default function CoinLeaderboard({
   });
 
   // Calculate coins count per participant
-  const activeParticipants = participants.filter(p => p.joined !== false && p.accountStatus !== 'rejected');
+  const activeParticipants = participants.filter(p => p.accountStatus !== 'rejected');
   
   const coinCounts = new Map<string, number>();
   activeParticipants.forEach(p => coinCounts.set(p.id, 0));

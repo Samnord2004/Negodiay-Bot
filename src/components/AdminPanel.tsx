@@ -2,15 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { 
   Users, CheckSquare, Coffee, Package, Award, 
   Plus, Trash, Trash2, Edit, CheckCircle, AlertTriangle, Shield, 
-  UserCheck, UserX, Key, Calendar, MapPin, RefreshCw, Flame
+  UserCheck, UserX, Key, Calendar, MapPin, RefreshCw, Flame, Crown
 } from 'lucide-react';
 import { 
   Participant, TaskItem, MenuItem, GroceryItem, 
   InventoryItem, Contest, Excursion, BotConfig, InventoryCondition,
-  UserRole, ROLE_DEFINITIONS, isUniqueRole
+  UserRole, ROLE_DEFINITIONS, isUniqueRole, RallyCoin
 } from '../types';
 import { getSafeAvatar, getParticipantAvatar } from '../utils/avatar';
 import DeleteParticipantModal from './DeleteParticipantModal';
+import CaptainCoinPanel from './game/CaptainCoinPanel';
 
 interface AdminPanelProps {
   isAdmin: boolean;
@@ -37,6 +38,17 @@ interface AdminPanelProps {
   onRejectUser: (userId: string) => void;
   onDeleteUser?: (userId: string) => Promise<void> | void;
   onSetRole: (userId: string, role: UserRole) => void;
+  coins?: RallyCoin[];
+  onAwardCoin?: (newCoinData: {
+    participantId: string;
+    participantName: string;
+    participantNickname: string;
+    taskTitle: string;
+    category: 'task' | 'merit' | 'contest' | 'fortune';
+    comment: string;
+    awardedBy: string;
+  }) => Promise<void> | void;
+  onDeleteCoin?: (coinId: string) => Promise<void> | void;
 }
 
 export default function AdminPanel({
@@ -63,9 +75,12 @@ export default function AdminPanel({
   onApproveUser,
   onRejectUser,
   onDeleteUser,
-  onSetRole
+  onSetRole,
+  coins,
+  onAwardCoin,
+  onDeleteCoin
 }: AdminPanelProps) {
-  const [activeTab, setActiveTab] = useState<'pending' | 'roles' | 'tasks' | 'menu' | 'inventory' | 'contests' | 'excursions'>('pending');
+  const [activeTab, setActiveTab] = useState<'pending' | 'roles' | 'tasks' | 'menu' | 'inventory' | 'contests' | 'excursions' | 'captain_panel'>('pending');
 
   // Team parameters (Captain control: founding year)
   const [foundingYear, setFoundingYear] = useState<number>(botConfig.foundingYear || 1993);
@@ -487,7 +502,8 @@ export default function AdminPanel({
               { id: 'menu', label: 'Меню и Продукты', icon: Coffee },
               { id: 'inventory', label: 'Инвентарь', icon: Package },
               { id: 'contests', label: 'Конкурсы', icon: Award },
-              { id: 'excursions', label: 'Слёты и Взносы', icon: Calendar }
+              { id: 'excursions', label: 'Слёты и Взносы', icon: Calendar },
+              { id: 'captain_panel', label: 'Панель Капитана', icon: Crown }
             ].map(tab => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -1789,6 +1805,33 @@ export default function AdminPanel({
               ))
             )}
           </div>
+        </div>
+      )}
+
+      {/* TAB: CAPTAIN PANEL (TRANSFERRED FROM GAME HUB AS REQUESTED) */}
+      {activeTab === 'captain_panel' && (
+        <div className="space-y-4">
+          <div className="bg-amber-100/80 border-2 border-amber-300 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-red-600 text-yellow-300 flex items-center justify-center shadow-md shrink-0">
+                <Crown size={22} />
+              </div>
+              <div>
+                <h3 className="font-black text-base uppercase text-red-700">Панель Капитана: Мотивация и Монеты слёта</h3>
+                <p className="text-xs text-amber-900 font-medium">
+                  Чеканка именных монет Негодяев, поощрение за дежурства, помощь лагерю и управление скидками на слёт.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <CaptainCoinPanel
+            participants={participants}
+            coins={coins || []}
+            onAwardCoin={onAwardCoin || (async () => {})}
+            onDeleteCoin={onDeleteCoin || (async () => {})}
+            captainUser={currentUser}
+          />
         </div>
       )}
 

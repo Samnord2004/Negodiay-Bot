@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
 import { 
-  Award, Trophy, Sparkles, Crown, HelpCircle, User, 
+  Award, Trophy, Sparkles, HelpCircle, User, 
   ArrowLeft, Flame, Tent, Shield
 } from 'lucide-react';
 import { Participant, RallyCoin } from '../../types';
 import ParticipantCoinCabinet from './ParticipantCoinCabinet';
-import CaptainCoinPanel from './CaptainCoinPanel';
 import WheelOfFortune from './WheelOfFortune';
 import CoinLeaderboard from './CoinLeaderboard';
 import GameRulesBlock from './GameRulesBlock';
@@ -28,7 +27,7 @@ interface RallyGameHubProps {
   onOpenProfileEdit?: () => void;
 }
 
-export type GameSubTab = 'cabinet' | 'leaderboard' | 'wheel' | 'captain' | 'rules';
+export type GameSubTab = 'cabinet' | 'leaderboard' | 'wheel' | 'rules';
 
 export default function RallyGameHub({
   participants,
@@ -109,22 +108,6 @@ export default function RallyGameHub({
             <span>Колесо Фортуны</span>
           </button>
 
-          {/* Captain Tab ONLY visible to Captain */}
-          {isCaptain && (
-            <button
-              type="button"
-              onClick={() => setActiveTab('captain')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
-                activeTab === 'captain'
-                  ? 'bg-red-600 text-white shadow-xs'
-                  : 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
-              }`}
-            >
-              <Crown size={14} className="text-yellow-300" />
-              <span>Панель капитана</span>
-            </button>
-          )}
-
           <button
             type="button"
             onClick={() => setActiveTab('rules')}
@@ -185,16 +168,6 @@ export default function RallyGameHub({
           currentUser={currentUser}
           isAdmin={isCaptain}
           onAwardCoin={onAwardCoin}
-        />
-      )}
-
-      {activeTab === 'captain' && isCaptain && (
-        <CaptainCoinPanel
-          participants={participants}
-          coins={coins}
-          onAwardCoin={onAwardCoin}
-          onDeleteCoin={onDeleteCoin}
-          captainUser={currentUser}
         />
       )}
 

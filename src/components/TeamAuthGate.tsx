@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Shield, Lock, Fingerprint, Smartphone, Mail, UserPlus, 
-  LogIn, AlertTriangle, CheckCircle, Flame, Key, RefreshCw, ArrowLeft, Send
+  LogIn, AlertTriangle, CheckCircle, Flame, Key, RefreshCw, ArrowLeft, Send,
+  Check, X
 } from 'lucide-react';
 import { Participant } from '../types';
 import Logo from './Logo';
+import { validatePasswordComplexity } from '../utils/password';
 
 interface TeamAuthGateProps {
   currentUser: Participant | null;
@@ -120,7 +122,8 @@ export default function TeamAuthGate({
         (p.phone && p.phone === identifier)
       );
       if (found) {
-        const isCaptain = found.id === 'cowboy_1' || 
+        const isCaptain = found.role === 'admin' ||
+                          found.id === 'cowboy_1' || 
                           found.nickname?.toLowerCase() === 'ковбой' || 
                           found.email?.toLowerCase() === 'asamoilov81@gmail.com' || 
                           found.name?.toLowerCase().includes('самойлов');
@@ -164,7 +167,8 @@ export default function TeamAuthGate({
 
   // Quick select login for convenience
   const handleQuickSelect = (p: Participant) => {
-    const isCaptain = p.id === 'cowboy_1' || 
+    const isCaptain = p.role === 'admin' ||
+                      p.id === 'cowboy_1' || 
                       p.nickname?.toLowerCase() === 'ковбой' || 
                       p.email?.toLowerCase() === 'asamoilov81@gmail.com' || 
                       p.name?.toLowerCase().includes('самойлов');
@@ -181,6 +185,12 @@ export default function TeamAuthGate({
       return;
     }
 
+    const pwdCheck = validatePasswordComplexity(regPassword);
+    if (!pwdCheck.isValid) {
+      setRegError(pwdCheck.error || 'Пароль должен состоять как минимум из 6 символов и состоять из обязательной заглавной буквы, строчной буквы и цифры или символа');
+      return;
+    }
+
     setIsLoading(true);
     try {
       const payload = {
@@ -189,7 +199,7 @@ export default function TeamAuthGate({
         email: regEmail.trim(),
         phone: regPhone.trim(),
         birthday: regBirthday.trim(),
-        password: regPassword.trim() || '123',
+        password: regPassword.trim(),
         biometricEnabled: regBiometric,
         gender: regGender
       };
@@ -203,7 +213,7 @@ export default function TeamAuthGate({
       if (!response.ok || !data.success) {
         setRegError(data.error || 'Ошибка при регистрации');
       } else {
-        setRegSuccessMessage('Заявка успешно отправлена! Ожидайте подтверждения от Капитана команды.');
+        setRegSuccessMessage('Регистрация успешно завершена! Добро пожаловать в команду.');
         onRegisterSuccess(data.user, data.participants);
       }
     } catch (err) {
@@ -401,10 +411,10 @@ export default function TeamAuthGate({
               )}
             </div>
             <h2 className="text-xl sm:text-2xl font-black uppercase text-yellow-400 tracking-tight">
-              туристической команды &laquo;Негодяи&raquo;
+              Туристическая команда
             </h2>
             <p className="text-xs font-semibold text-stone-300 leading-relaxed">
-              Добро пожаловать в закрытый штаб слётов. Вход и доступ к информации открыт исключительно зарегистрированным участникам.
+              Добро пожаловать, вы находитесь на странице входа на закрытый ресурс туристической команды &laquo;Негодяи&raquo;. Вход и доступ к информации открыт исключительно зарегистрированным участникам, одобренным капитаном.
             </p>
           </div>
 
@@ -493,7 +503,7 @@ export default function TeamAuthGate({
                   className="w-full bg-amber-500 hover:bg-amber-400 text-stone-950 font-black uppercase text-xs py-3 rounded-xl shadow-lg transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   <LogIn size={15} />
-                  <span>{isLoading ? 'Проверка...' : 'Войти в штаб команды'}</span>
+                  <span>{isLoading ? 'Проверка...' : 'Войти'}</span>
                 </button>
 
                 <button
@@ -505,29 +515,6 @@ export default function TeamAuthGate({
                   <Fingerprint size={16} className="text-amber-400" />
                   Вход по биометрии (Touch ID / Face ID)
                 </button>
-              </div>
-
-              {/* Quick Profile Selection for easy review */}
-              <div className="pt-3 border-t border-stone-800/80 space-y-2">
-                <span className="block text-[10px] font-black uppercase text-stone-400 text-center">
-                  Быстрый вход для проверки аккаунтов:
-                </span>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {participants.slice(0, 4).map(p => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => handleQuickSelect(p)}
-                      className="text-left bg-stone-950 hover:bg-stone-800 border border-stone-800 p-2 rounded-xl transition-all"
-                    >
-                      <div className="text-[11px] font-black text-yellow-400 truncate">{p.name}</div>
-                      <div className="text-[9px] text-stone-400 flex items-center gap-1">
-                        <span>@{p.nickname}</span>
-                        {p.role === 'admin' && <span className="text-red-400 font-bold">Орг</span>}
-                      </div>
-                    </button>
-                  ))}
-                </div>
               </div>
             </form>
           )}
@@ -649,7 +636,7 @@ export default function TeamAuthGate({
                 />
               </div>
 
-              {/* Password */}
+              {/* Password with security requirements */}
               <div>
                 <label className="block text-[10px] uppercase font-black text-amber-400 mb-1">
                   Пароль для входа:
@@ -658,9 +645,39 @@ export default function TeamAuthGate({
                   type="password"
                   value={regPassword}
                   onChange={(e) => setRegPassword(e.target.value)}
-                  placeholder="Минимум 3 символа (по умолч.: 123)"
+                  placeholder="Минимум 6 знаков: Заглавная, строчная, цифра/знак"
                   className="w-full bg-stone-950 border border-stone-700 focus:border-amber-400 rounded-xl px-3 py-2 text-xs text-stone-100 font-bold outline-none"
                 />
+
+                {/* Live Password Complexity Checklist */}
+                {(() => {
+                  const check = validatePasswordComplexity(regPassword);
+                  return (
+                    <div className="mt-1.5 p-2 bg-stone-950/80 rounded-xl border border-stone-800 text-[10px] space-y-1">
+                      <div className="text-stone-400 font-semibold mb-0.5">
+                        Требования к паролю:
+                      </div>
+                      <div className="grid grid-cols-2 gap-1">
+                        <div className={`flex items-center gap-1 font-medium ${check.hasMinLength ? 'text-emerald-400' : 'text-stone-400'}`}>
+                          {check.hasMinLength ? <Check size={11} className="text-emerald-400 shrink-0" /> : <div className="w-2.5 h-2.5 rounded-full border border-stone-600 shrink-0" />}
+                          <span>Мин. 6 символов</span>
+                        </div>
+                        <div className={`flex items-center gap-1 font-medium ${check.hasUpper ? 'text-emerald-400' : 'text-stone-400'}`}>
+                          {check.hasUpper ? <Check size={11} className="text-emerald-400 shrink-0" /> : <div className="w-2.5 h-2.5 rounded-full border border-stone-600 shrink-0" />}
+                          <span>Заглавная буква (A-Z, А-Я)</span>
+                        </div>
+                        <div className={`flex items-center gap-1 font-medium ${check.hasLower ? 'text-emerald-400' : 'text-stone-400'}`}>
+                          {check.hasLower ? <Check size={11} className="text-emerald-400 shrink-0" /> : <div className="w-2.5 h-2.5 rounded-full border border-stone-600 shrink-0" />}
+                          <span>Строчная буква (a-z, а-я)</span>
+                        </div>
+                        <div className={`flex items-center gap-1 font-medium ${check.hasDigitOrSymbol ? 'text-emerald-400' : 'text-stone-400'}`}>
+                          {check.hasDigitOrSymbol ? <Check size={11} className="text-emerald-400 shrink-0" /> : <div className="w-2.5 h-2.5 rounded-full border border-stone-600 shrink-0" />}
+                          <span>Цифра или спецсимвол</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Biometrics option */}

@@ -66,6 +66,7 @@ import {
 import { ORIENTEERING_SIGNS_SVG, KNOTS_DIAGRAM_SVG, CONTEST_SCHEDULE_SVG } from "./src/mockData";
 import { Participant, UserRole, RallyCoin } from "./src/types";
 import { sanitizeParticipant, sanitizeParticipants, hashPassword, verifyPassword } from "./src/utils/security";
+import { formatChatTimestamp } from "./src/utils/chatUtils";
 
 // Load environment variables
 dotenv.config();
@@ -793,6 +794,19 @@ app.post("/api/auth/register", async (req, res) => {
     return res.status(400).json({ success: false, error: "Участник с таким позывным уже зарегистрирован на портале" });
   }
 
+  const pwd = (password || '').trim();
+  const hasMinLength = pwd.length >= 6;
+  const hasUpper = /[A-ZА-ЯЁ]/.test(pwd);
+  const hasLower = /[a-zа-яё]/.test(pwd);
+  const hasDigitOrSymbol = /[0-9!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~`№]/.test(pwd);
+
+  if (!hasMinLength || !hasUpper || !hasLower || !hasDigitOrSymbol) {
+    return res.status(400).json({ 
+      success: false, 
+      error: "Пароль должен состоять как минимум из 6 символов и состоять из обязательной заглавной буквы, строчной буквы и цифры или символа" 
+    });
+  }
+
   const newId = "user_" + Date.now();
   const newParticipant = {
     id: newId,
@@ -803,7 +817,7 @@ app.post("/api/auth/register", async (req, res) => {
     paidAmount: 0,
     totalCost: 15000,
     debtAmount: 15000,
-    joined: false,
+    joined: true,
     birthday: birthday ? String(birthday).trim() : "",
     joinedYear: new Date().getFullYear(),
     skippedYears: [],
@@ -811,15 +825,15 @@ app.post("/api/auth/register", async (req, res) => {
     role: "member" as UserRole,
     email: email ? email.trim() : "",
     phone: phone ? phone.trim() : "",
-    password: hashPassword(password && password.trim().length >= 3 ? password.trim() : "123"),
-    accountStatus: "pending" as const, // Strict rule: requires Captain approval!
+    password: hashPassword(pwd),
+    accountStatus: "active" as const,
     biometricEnabled: Boolean(biometricEnabled)
   };
 
   await registerNewParticipant(newParticipant);
   res.json({
     success: true,
-    message: "Заявка на регистрацию принята! Так как доступ на портал команды закрытый, аккаунт будет активирован после одобрения Капитаном команды.",
+    message: "Регистрация успешно завершена! Добро пожаловать в команду.",
     user: sanitizeParticipant(newParticipant),
     participants: sanitizeParticipants(getParticipants())
   });
@@ -873,8 +887,17 @@ app.post("/api/auth/reset-password-with-code", async (req, res) => {
     return res.status(400).json({ success: false, error: "Заполните все поля" });
   }
 
-  if (newPassword.trim().length < 3) {
-    return res.status(400).json({ success: false, error: "Новый пароль должен содержать минимум 3 символа" });
+  const pwd = newPassword.trim();
+  const hasMinLength = pwd.length >= 6;
+  const hasUpper = /[A-ZА-ЯЁ]/.test(pwd);
+  const hasLower = /[a-zа-яё]/.test(pwd);
+  const hasDigitOrSymbol = /[0-9!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~`№]/.test(pwd);
+
+  if (!hasMinLength || !hasUpper || !hasLower || !hasDigitOrSymbol) {
+    return res.status(400).json({ 
+      success: false, 
+      error: "Пароль должен состоять как минимум из 6 символов и состоять из обязательной заглавной буквы, строчной буквы и цифры или символа" 
+    });
   }
 
   const cleanEmail = email.trim().toLowerCase();
@@ -1095,7 +1118,8 @@ app.post("/api/auth/login", (req, res) => {
   }
 
   if (user.accountStatus === "pending") {
-    return res.status(403).json({ success: false, error: "Ваша регистрация ожидает подтверждения Капитаном команды." });
+    user.accountStatus = "active";
+    user.joined = true;
   }
 
   if (user.accountStatus === "rejected") {
@@ -1680,7 +1704,7 @@ app.post("/api/chat/nudge", async (req, res) => {
       senderNickname: "treasurer",
       senderPsychotype: "Казначей",
       text: nudgeText,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      timestamp: formatChatTimestamp(),
       isBot: false
     };
 
@@ -1694,17 +1718,17 @@ app.post("/api/chat/nudge", async (req, res) => {
 
 // Participant internal chat message (Supports Bot Maximka responses)
 app.post("/api/chat/send", async (req, res) => {
-  const { senderName, senderNickname, senderPsychotype, text, imageUrl, attachments } = req.body;
+  const { id, senderName, senderNickname, senderPsychotype, text, timestamp, imageUrl, attachments } = req.body;
   if (!text && !imageUrl) {
     return res.status(400).json({ error: "Message cannot be empty" });
   }
   const newMsg = {
-    id: "msg_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6),
+    id: id || ("msg_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6)),
     senderName: senderName || "Участник",
     senderNickname: senderNickname || "member",
     senderPsychotype: senderPsychotype || "Участник",
     text: text || "",
-    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    timestamp: formatChatTimestamp(timestamp),
     isBot: false,
     imageUrl: imageUrl || undefined,
     attachments: attachments || undefined
@@ -1785,7 +1809,7 @@ app.post("/api/chat/send", async (req, res) => {
         senderNickname: "negodyai_bot",
         senderPsychotype: "Главный Негодяй",
         text: botPayload.text || "Ахуенно!",
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        timestamp: formatChatTimestamp(),
         isBot: true,
         detectedPsychotypeExplanation: botPayload.detectedPsychotypeExplanation || "Фирменный ответ Негодяя",
         adapterStyleUsed: botPayload.adapterStyleUsed || "Боевой клич",

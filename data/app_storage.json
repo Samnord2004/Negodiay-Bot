@@ -9,13 +9,12 @@
       "paidAmount": 0,
       "totalCost": 15000,
       "debtAmount": 15000,
-      "joined": false,
+      "joined": true,
       "joinedYear": 2026,
       "skippedYears": [],
       "gender": "male",
       "role": "member",
       "phone": "+79134818346",
-      "password": "123",
       "accountStatus": "active",
       "biometricEnabled": true
     },
@@ -36,7 +35,6 @@
       "role": "admin",
       "email": "ASamoilov81@gmail.com",
       "phone": "+7 916 555-43-21",
-      "password": "123",
       "accountStatus": "active",
       "biometricEnabled": true
     }
@@ -51,7 +49,7 @@
       "costPerPerson": 3500,
       "costBoys": 3500,
       "costGirls": 2500,
-      "isActive": true
+      "isActive": false
     },
     {
       "id": "e3",
@@ -154,13 +152,6 @@
   ],
   "groceryItems": [
     {
-      "id": "g1",
-      "name": "Тушёнка свиная ГОСТ (высший сорт, жесть)",
-      "quantity": "24 банки",
-      "category": "Еда",
-      "isBought": true
-    },
-    {
       "id": "g2",
       "name": "Гречка Ядрица (мешки по 2кг)",
       "quantity": "3 пачки",
@@ -208,15 +199,16 @@
       "quantity": "5 упаковок",
       "category": "Расходники",
       "isBought": true
+    },
+    {
+      "id": "g1",
+      "name": "Тушёнка свиная ГОСТ (высший сорт, жесть)",
+      "quantity": "24 банки",
+      "category": "Еда",
+      "isBought": true
     }
   ],
   "inventoryItems": [
-    {
-      "id": "inv2",
-      "name": "Бензогенератор барахлящий (требует свечу)",
-      "condition": "пришло в негодность",
-      "responsibleName": "Андрей Самойлов (Ковбой)"
-    },
     {
       "id": "inv3",
       "name": "Укупорный тент защитный 4x6м",
@@ -251,6 +243,12 @@
       "id": "inv1",
       "name": "Казан чугунный походный (20 литров)",
       "condition": "нормальное",
+      "responsibleName": "Андрей Самойлов (Ковбой)"
+    },
+    {
+      "id": "inv2",
+      "name": "Бензогенератор барахлящий (требует свечу)",
+      "condition": "пришло в негодность",
       "responsibleName": "Андрей Самойлов (Ковбой)"
     }
   ],
@@ -358,7 +356,7 @@
       "senderName": "Тестовый Негодяй",
       "senderNickname": "tester",
       "text": "Проверка сохранения истории чата",
-      "timestamp": "04:22 PM",
+      "timestamp": "16:22",
       "isBot": false
     },
     {
@@ -366,7 +364,7 @@
       "senderName": "Андрей Самойлов",
       "senderNickname": "Ковбой",
       "text": "Как гуляет Негодяй?",
-      "timestamp": "04:24 PM",
+      "timestamp": "16:24",
       "isBot": false
     },
     {
@@ -374,17 +372,9 @@
       "senderName": "Бот Максимка",
       "senderNickname": "negodyai_bot",
       "text": "🔥 Как гуляет негодяй?! — АХУЕННО!",
-      "timestamp": "04:24 PM",
+      "timestamp": "16:24",
       "isBot": true,
       "adapterStyleUsed": "Фирменный Негодяйский Клич"
-    },
-    {
-      "id": "msg_1789403045045_xm9",
-      "senderName": "Андрей Самойлов",
-      "senderNickname": "Ковбой",
-      "text": "Как гуляет Негодяй?",
-      "timestamp": "23:24",
-      "isBot": false
     },
     {
       "id": "remind_1789432064590",
@@ -395,12 +385,113 @@
       "isBot": false
     },
     {
-      "id": "msg_1789432064702_wf83",
-      "senderName": "тест",
-      "senderNickname": "тест",
-      "text": "@тест, напоминаем о необходимости внести взнос по слёту в походную кассу!",
-      "timestamp": "12:27 AM",
+      "id": "msg_test_1",
+      "senderName": "Андрей Самойлов",
+      "senderNickname": "Ковбой",
+      "senderPsychotype": "Участник",
+      "text": "Тестовое сообщение без дублей",
+      "timestamp": "18:00",
       "isBot": false
+    },
+    {
+      "id": "msg_1789665459408_r49m",
+      "senderName": "Андрей Самойлов",
+      "senderNickname": "Ковбой",
+      "senderPsychotype": "Участник",
+      "text": "Кто с Негодяем дрался?",
+      "timestamp": "00:17",
+      "isBot": false
+    },
+    {
+      "id": "bot_1789665459551_5exd",
+      "senderName": "Бот Максимка",
+      "senderNickname": "negodyai_bot",
+      "senderPsychotype": "Главный Негодяй",
+      "text": "🌲👊 Кто с Негодяем дрался, тот и поломался! С нашей командой шутки плохи, победа за Негодяями!",
+      "timestamp": "17:17",
+      "isBot": true,
+      "detectedPsychotypeExplanation": "Фирменная Негодяйская боевая поговорка!",
+      "adapterStyleUsed": "Боевой клич Негодяев"
+    },
+    {
+      "id": "msg_1789665468742_31l8",
+      "senderName": "Андрей Самойлов",
+      "senderNickname": "Ковбой",
+      "senderPsychotype": "Участник",
+      "text": "Запись дубля",
+      "timestamp": "00:17",
+      "isBot": false
+    },
+    {
+      "id": "bot_1789665468932_o8y7",
+      "senderName": "Бот Максимка",
+      "senderNickname": "negodyai_bot",
+      "senderPsychotype": "Главный Негодяй",
+      "text": "🎬 Запись дубля! — ЗА ПИЗДУ БЛЯ! 🥂🍻 Фирменный негодяйский тост! Наливай полнее, осушаем до дна!",
+      "timestamp": "17:17",
+      "isBot": true,
+      "detectedPsychotypeExplanation": "Произнес культовый негодяйский тост 'Запись дубля' (За пизду бля)!",
+      "adapterStyleUsed": "Фирменный костровой тост"
+    },
+    {
+      "id": "msg_1789665507441_rbco",
+      "senderName": "Андрей Самойлов",
+      "senderNickname": "Ковбой",
+      "senderPsychotype": "Участник",
+      "text": "Максимка, кто должен по деньгам и взносам?",
+      "timestamp": "00:18",
+      "isBot": false
+    },
+    {
+      "id": "bot_1789665507773_fthl",
+      "senderName": "Бот Максимка",
+      "senderNickname": "negodyai_bot",
+      "senderPsychotype": "Главный Негодяй",
+      "text": "Глубокомысленно глядишь, бля! Андрей Самойлов, вселенная — это одна большая палатка, а мы в ней почетные гости у костра вечности. Накатим походного за космос!",
+      "timestamp": "17:18",
+      "isBot": true,
+      "detectedPsychotypeExplanation": "Общается в своей классической манере \"Участник\".",
+      "adapterStyleUsed": "Дзенский угар"
+    },
+    {
+      "id": "msg_1789403045045_xm9",
+      "senderName": "Андрей Самойлов",
+      "senderNickname": "Ковбой",
+      "text": "Как гуляет Негодяй?",
+      "timestamp": "17:09",
+      "isBot": false,
+      "senderPsychotype": "Участник"
+    },
+    {
+      "id": "msg_1789665510058_i6jk",
+      "senderName": "Андрей Самойлов",
+      "senderNickname": "Ковбой",
+      "senderPsychotype": "Участник",
+      "text": "/status",
+      "timestamp": "00:18",
+      "isBot": false
+    },
+    {
+      "id": "bot_1789665510363_3jbo",
+      "senderName": "Бот Максимка",
+      "senderNickname": "negodyai_bot",
+      "senderPsychotype": "Главный Негодяй",
+      "text": "📊 Сводка готовности Негодяев к слёту:\n\n🏕️ Ближайший слёт: «Ежегодный Туристический Слёт 'Негодяи 2026'» (2026-06-12)\n👥 Личный состав: 2 негодяев\n💰 Должников по смете: 1 чел. (пинаем!)\n📋 Невыполненных задач: 6 шт.\n🍲 Меню: 4 блюд, продуктов к закупке: 8\n📦 Инвентарь на учете: 7 позиций\n\nВывод Максимки: Рюкзаки ещё не собраны, подтягиваем хвосты, бля! 🏕️",
+      "timestamp": "17:18",
+      "isBot": true,
+      "detectedPsychotypeExplanation": "Снял полную аналитическую сводку боеготовности лагеря.",
+      "adapterStyleUsed": "Сводка готовности"
+    },
+    {
+      "id": "bot_1789665554909_5q5g",
+      "senderName": "Бот Максимка",
+      "senderNickname": "negodyai_bot",
+      "senderPsychotype": "Главный Негодяй",
+      "text": "🔥 Как гуляет негодяй?! — АХУЕННО!",
+      "timestamp": "17:19",
+      "isBot": true,
+      "detectedPsychotypeExplanation": "Главный фирменный девиз Негодяев — емко и без лишней болтовни!",
+      "adapterStyleUsed": "Фирменный Негодяйский Клич"
     }
   ],
   "photos": [
@@ -603,18 +694,6 @@
   ],
   "fundRecords": [
     {
-      "id": "fund_cowboy_1",
-      "participantId": "cowboy_1",
-      "participantName": "Андрей Самойлов",
-      "participantNickname": "Ковбой",
-      "year": 2026,
-      "month": 1,
-      "amount": 500,
-      "isPaid": true,
-      "paidAt": "2026-01-05",
-      "note": "Членский взнос"
-    },
-    {
       "id": "fund_user_1789431236481_2026_1",
       "participantId": "user_1789431236481",
       "participantName": "тест",
@@ -625,6 +704,18 @@
       "isPaid": true,
       "paidAt": "2026-09-15",
       "note": ""
+    },
+    {
+      "id": "fund_cowboy_1",
+      "participantId": "cowboy_1",
+      "participantName": "Андрей Самойлов",
+      "participantNickname": "Ковбой",
+      "year": 2026,
+      "month": 1,
+      "amount": 500,
+      "isPaid": true,
+      "paidAt": "2026-01-05",
+      "note": "Членский взнос"
     },
     {
       "id": "fund_user_1788617263191_2026_1",
@@ -639,15 +730,15 @@
       "note": ""
     },
     {
-      "id": "fund_user_1788617263191_2026_2",
-      "participantId": "user_1788617263191",
-      "participantName": "Андрей Самойлов",
-      "participantNickname": "Ковбой",
+      "id": "fund_user_1789431236481_2026_2",
+      "participantId": "user_1789431236481",
+      "participantName": "тест",
+      "participantNickname": "тест",
       "year": 2026,
       "month": 2,
       "amount": 500,
       "isPaid": true,
-      "paidAt": "2026-09-08",
+      "paidAt": "2026-09-15",
       "note": ""
     },
     {
@@ -663,12 +754,24 @@
       "note": "Членский взнос"
     },
     {
-      "id": "fund_user_1789431236481_2026_2",
+      "id": "fund_user_1788617263191_2026_2",
+      "participantId": "user_1788617263191",
+      "participantName": "Андрей Самойлов",
+      "participantNickname": "Ковбой",
+      "year": 2026,
+      "month": 2,
+      "amount": 500,
+      "isPaid": true,
+      "paidAt": "2026-09-08",
+      "note": ""
+    },
+    {
+      "id": "fund_user_1789431236481_2026_3",
       "participantId": "user_1789431236481",
       "participantName": "тест",
       "participantNickname": "тест",
       "year": 2026,
-      "month": 2,
+      "month": 3,
       "amount": 500,
       "isPaid": true,
       "paidAt": "2026-09-15",
@@ -699,12 +802,12 @@
       "note": "Членский взнос"
     },
     {
-      "id": "fund_user_1789431236481_2026_3",
+      "id": "fund_user_1789431236481_2026_4",
       "participantId": "user_1789431236481",
       "participantName": "тест",
       "participantNickname": "тест",
       "year": 2026,
-      "month": 3,
+      "month": 4,
       "amount": 500,
       "isPaid": true,
       "paidAt": "2026-09-15",
@@ -720,18 +823,6 @@
       "amount": 500,
       "isPaid": true,
       "paidAt": "2026-09-08",
-      "note": ""
-    },
-    {
-      "id": "fund_user_1789431236481_2026_4",
-      "participantId": "user_1789431236481",
-      "participantName": "тест",
-      "participantNickname": "тест",
-      "year": 2026,
-      "month": 4,
-      "amount": 500,
-      "isPaid": true,
-      "paidAt": "2026-09-15",
       "note": ""
     },
     {
@@ -1084,6 +1175,68 @@
       "createdAt": "2026-06-15"
     }
   ],
+  "rallyCoins": [
+    {
+      "id": "coin_1",
+      "participantId": "cowboy_1",
+      "participantName": "Андрей Самойлов",
+      "participantNickname": "Ковбой",
+      "taskTitle": "Строительство и обустройство лагеря",
+      "category": "task",
+      "comment": "Обустройство штабного шатра, возведение флагштока Негодяев и расчистка поляны",
+      "awardedAt": "2026-06-12T14:30:00.000Z",
+      "awardedBy": "Капитан Андрей Самойлов",
+      "year": 2026
+    },
+    {
+      "id": "coin_2",
+      "participantId": "cowboy_1",
+      "participantName": "Андрей Самойлов",
+      "participantNickname": "Ковбой",
+      "taskTitle": "Идея года / креативный вклад",
+      "category": "merit",
+      "comment": "Внедрение мотивационной системы со скидкой на слёт для команды",
+      "awardedAt": "2026-06-25T18:00:00.000Z",
+      "awardedBy": "Капитан Андрей Самойлов",
+      "year": 2026
+    },
+    {
+      "id": "coin_3",
+      "participantId": "cowboy_1",
+      "participantName": "Андрей Самойлов",
+      "participantNickname": "Ковбой",
+      "taskTitle": "Удача Негодяя (Колесо Фортуны)",
+      "category": "fortune",
+      "comment": "Счастливый сектор на праздничном открытии Колеса Фортуны!",
+      "awardedAt": "2026-07-04T12:00:00.000Z",
+      "awardedBy": "Колесо Фортуны",
+      "year": 2026
+    },
+    {
+      "id": "coin_4",
+      "participantId": "user_1789431236481",
+      "participantName": "тест",
+      "participantNickname": "тест",
+      "taskTitle": "Закупка продуктов и провианта",
+      "category": "task",
+      "comment": "Доставка стратегического запаса тушенки и круп на базу лагеря",
+      "awardedAt": "2026-07-15T11:20:00.000Z",
+      "awardedBy": "Капитан Андрей Самойлов",
+      "year": 2026
+    },
+    {
+      "id": "coin_5",
+      "participantId": "user_1789431236481",
+      "participantName": "тест",
+      "participantNickname": "тест",
+      "taskTitle": "Удача Негодяя (Колесо Фортуны)",
+      "category": "fortune",
+      "comment": "Удача улыбнулась в ежедневном вращении Колеса Фортуны!",
+      "awardedAt": "2026-08-10T16:45:00.000Z",
+      "awardedBy": "Колесо Фортуны",
+      "year": 2026
+    }
+  ],
   "adminPassword": "admin",
-  "savedAt": "2026-09-15T16:55:33.421Z"
+  "savedAt": "2026-09-17T17:19:14.909Z"
 }

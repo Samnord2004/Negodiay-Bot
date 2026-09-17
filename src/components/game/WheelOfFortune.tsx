@@ -52,7 +52,16 @@ export default function WheelOfFortune({
   const [showWinnerModal, setShowWinnerModal] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
 
-  // Daily spin restriction for regular members
+  // Check if currentUser is Captain / Admin
+  const isCaptain = Boolean(
+    isAdmin || 
+    currentUser?.role === 'admin' || 
+    currentUser?.id === 'cowboy_1' || 
+    currentUser?.nickname?.toLowerCase() === 'ковбой' || 
+    currentUser?.email?.toLowerCase() === 'asamoilov81@gmail.com'
+  );
+
+  // Monthly spin restriction for regular members (Captain can spin at any time)
   const [lastSpinTime, setLastSpinTime] = useState<number>(() => {
     try {
       const saved = localStorage.getItem(`negodyai_last_spin_${currentUser?.id || 'guest'}`);
@@ -62,7 +71,8 @@ export default function WheelOfFortune({
     }
   });
 
-  const activeParticipants = participants.filter(p => p.joined !== false && p.accountStatus !== 'rejected');
+  // All registered participants (not rejected) participate in the wheel
+  const activeParticipants = participants.filter(p => p.accountStatus !== 'rejected');
 
   // Count coins for each participant
   const coinsByParticipant = new Map<string, number>();
@@ -81,14 +91,16 @@ export default function WheelOfFortune({
 
   const totalWeight = weightedParticipants.reduce((sum, item) => sum + item.weight, 0);
 
-  // Time remaining until next free spin
+  // Time remaining until next free spin (once per month for members, unlimited for captain)
   const now = Date.now();
-  const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
+  const ONE_MONTH_MS = 30 * 24 * 60 * 60 * 1000;
   const timeSinceLastSpin = now - lastSpinTime;
-  const canRegularSpin = timeSinceLastSpin >= TWENTY_FOUR_HOURS;
-  const canSpin = isAdmin || canRegularSpin;
+  const canRegularSpin = timeSinceLastSpin >= ONE_MONTH_MS;
+  const canSpin = isCaptain || canRegularSpin;
 
-  const hoursRemaining = Math.max(0, Math.ceil((TWENTY_FOUR_HOURS - timeSinceLastSpin) / (1000 * 60 * 60)));
+  const msRemaining = Math.max(0, ONE_MONTH_MS - timeSinceLastSpin);
+  const daysRemaining = Math.max(1, Math.ceil(msRemaining / (1000 * 60 * 60 * 24)));
+  const hoursRemaining = Math.max(1, Math.ceil(msRemaining / (1000 * 60 * 60)));
 
   // Draw the wheel onto the canvas
   useEffect(() => {
@@ -262,12 +274,14 @@ export default function WheelOfFortune({
         setTimeout(playCoinSound, 600);
       }
 
-      // Record last spin time for non-admins
-      const nowTime = Date.now();
-      setLastSpinTime(nowTime);
-      try {
-        localStorage.setItem(`negodyai_last_spin_${currentUser?.id || 'guest'}`, nowTime.toString());
-      } catch (e) {}
+      // Record last spin time for non-captains
+      if (!isCaptain) {
+        const nowTime = Date.now();
+        setLastSpinTime(nowTime);
+        try {
+          localStorage.setItem(`negodyai_last_spin_${currentUser?.id || 'guest'}`, nowTime.toString());
+        } catch (e) {}
+      }
 
       // Automatically award coin to winner
       try {
@@ -277,7 +291,7 @@ export default function WheelOfFortune({
           participantNickname: chosen.nickname || chosen.name,
           taskTitle: "Удача Негодяя (Колесо Фортуны)",
           category: 'fortune',
-          comment: "Счастливый сектор в ежедневном Колесе Фортуны команды!",
+          comment: "Счастливый сектор в ежемесячном Колесе Фортуны команды!",
           awardedBy: "Колесо Фортуны"
         });
       } catch (e) {
@@ -378,24 +392,26 @@ export default function WheelOfFortune({
               <span>
                 {isSpinning 
                   ? 'Фортуна вращается...' 
-                  : isAdmin 
+                  : isCaptain 
                     ? 'Крутить колесо (Капитан)' 
                     : canRegularSpin 
                       ? 'Крутить колесо удачи!' 
-                      : `Следующий спин через ${hoursRemaining} ч.`}
+                      : daysRemaining > 1
+                        ? `Следующий спин через ${daysRemaining} дн.`
+                        : `Следующий спин через ${hoursRemaining} ч.`}
               </span>
             </button>
 
-            {!isAdmin && !canRegularSpin && (
+            {!isCaptain && !canRegularSpin && (
               <div className="text-xs text-stone-500 flex items-center gap-1.5 font-medium">
                 <Clock size={13} />
-                <span>Доступно 1 раз в 24 часа для поддержания баланса игры</span>
+                <span>Доступно 1 раз в месяц для участников команды</span>
               </div>
             )}
 
-            {isAdmin && (
+            {isCaptain && (
               <div className="text-[11px] text-amber-700 font-bold bg-amber-50 px-3 py-1 rounded-full border border-amber-200">
-                👑 Капитанский режим: свободное вращение без ограничения таймера
+                👑 Режим Капитана: свободное вращение в любое время без ограничений
               </div>
             )}
           </div>

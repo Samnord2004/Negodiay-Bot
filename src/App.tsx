@@ -29,6 +29,7 @@ import ProfileEditModal from './components/ProfileEditModal';
 import SiteSearch from './components/SiteSearch';
 import { compressImage } from './utils/imageCompressor';
 import { getBirthdayRemainingDays } from './utils/dateUtils';
+import { formatChatTimestamp, deduplicateChatMessages } from './utils/chatUtils';
 
 import { 
   Participant, Excursion, ChatMessage, BotConfig, 
@@ -64,10 +65,7 @@ export default function App() {
 
   const isCaptainUser = (user: Participant | null | undefined): boolean => {
     if (!user) return false;
-    const nick = (user.nickname || '').toLowerCase().replace(/^@/, '');
-    const email = (user.email || '').toLowerCase();
-    const name = (user.name || '').toLowerCase();
-    return user.role === 'admin' || nick === 'ковбой' || nick === 'cowboy' || email === 'asamoilov81@gmail.com' || name.includes('самойлов') || user.id === 'cowboy_1';
+    return user.role === 'admin';
   };
 
   // Authentication State
@@ -75,12 +73,7 @@ export default function App() {
     try {
       const saved = localStorage.getItem('negodyai_active_user');
       if (saved) {
-        const u = JSON.parse(saved);
-        if (isCaptainUser(u)) {
-          u.role = 'admin';
-          u.accountStatus = 'active';
-        }
-        return u;
+        return JSON.parse(saved);
       }
       return null;
     } catch {
@@ -105,13 +98,13 @@ export default function App() {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          return deduplicateChatMessages(parsed);
         }
       }
     } catch {
       // fallback to initial
     }
-    return initialMessages;
+    return deduplicateChatMessages(initialMessages);
   });
   const [photos, setPhotos] = useState<GalleryPhoto[]>(initialPhotos);
   const [documents, setDocuments] = useState<TeamDocument[]>(initialDocuments);
@@ -251,10 +244,7 @@ export default function App() {
         if (data.contests) setContests(data.contests);
         if (data.messages && Array.isArray(data.messages) && data.messages.length > 0) {
           setMessages(prev => {
-            const map = new Map<string, ChatMessage>();
-            prev.forEach(m => map.set(m.id, m));
-            data.messages.forEach((m: ChatMessage) => map.set(m.id, m));
-            const merged = Array.from(map.values());
+            const merged = deduplicateChatMessages([...prev, ...data.messages]);
             try {
               localStorage.setItem('negodyai_chat_messages_v2', JSON.stringify(merged));
             } catch {}
@@ -556,27 +546,31 @@ export default function App() {
   // Chat message sending with Bot auto-response handling
   const handleSendMessage = async (text: string, imageUrl?: string) => {
     if (!currentUser) return;
+    const msgId = "msg_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6);
+    const msgTimestamp = formatChatTimestamp();
     const newMsg: ChatMessage = {
-      id: "msg_" + Date.now() + "_" + Math.random().toString(36).substring(2, 5),
+      id: msgId,
       senderId: currentUser.id,
       senderName: currentUser.name,
       senderNickname: currentUser.nickname,
       text,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      timestamp: msgTimestamp,
       isBot: false,
       imageUrl
     };
 
-    setMessages(prev => [...prev, newMsg]);
+    setMessages(prev => deduplicateChatMessages([...prev, newMsg]));
 
     try {
       const res = await fetch("/api/chat/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          id: msgId,
           senderName: currentUser.name,
           senderNickname: currentUser.nickname,
           text,
+          timestamp: msgTimestamp,
           imageUrl
         })
       });
@@ -584,13 +578,16 @@ export default function App() {
         const data = await res.json();
         setMessages(prev => {
           let updated = [...prev];
-          if (data.message && !updated.some(m => m.id === data.message.id)) {
+          const existingIdx = updated.findIndex(m => m.id === msgId || (data.message && m.id === data.message.id));
+          if (existingIdx >= 0 && data.message) {
+            updated[existingIdx] = { ...updated[existingIdx], ...data.message };
+          } else if (data.message && !updated.some(m => m.id === data.message.id)) {
             updated.push(data.message);
           }
-          if (data.botMessage && !updated.some(m => m.id === data.botMessage.id)) {
+          if (data.botMessage && !updated.some(m => m.id === data.botMessage.id || (m.isBot && m.text === data.botMessage.text))) {
             updated.push(data.botMessage);
           }
-          return updated;
+          return deduplicateChatMessages(updated);
         });
       }
     } catch (err) {
@@ -603,16 +600,18 @@ export default function App() {
     const cleanNick = debtor.nickname ? debtor.nickname.replace(/^@/, '') : '';
     const mention = cleanNick ? `@${cleanNick}` : (debtor.name || 'Участник');
     const phrase = `${mention}, напоминаем о необходимости внести взнос по слёту в походную кассу!`;
+    const nudgeId = "remind_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6);
+    const nudgeTimestamp = formatChatTimestamp();
     
     const remindMsg: ChatMessage = {
-      id: "remind_" + Date.now(),
+      id: nudgeId,
       senderName: currentUser ? currentUser.name : "Казначей команды",
       senderNickname: currentUser ? currentUser.nickname : "treasurer",
       text: phrase,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      timestamp: nudgeTimestamp,
       isBot: false
     };
-    setMessages(prev => [...prev, remindMsg]);
+    setMessages(prev => deduplicateChatMessages([...prev, remindMsg]));
     showToast(`Напоминание для ${debtor.name} отправлено в чат команды`, 'info');
 
     try {
@@ -620,9 +619,11 @@ export default function App() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          id: nudgeId,
           senderName: remindMsg.senderName,
           senderNickname: remindMsg.senderNickname,
-          text: phrase
+          text: phrase,
+          timestamp: nudgeTimestamp
         })
       });
     } catch (err) {
@@ -838,34 +839,35 @@ export default function App() {
             </div>
           </div>
 
-          {/* SITE SEARCH BAR, CHAT BUTTON & TOP MENU */}
-          <div className="w-full md:w-auto flex-1 flex items-center gap-2 max-w-3xl mx-0 md:mx-4">
-            <div className="flex-1 min-w-0">
-              <SiteSearch
-                participants={participants}
-                tasks={tasks}
-                contests={contests}
-                documents={documents}
-                inventoryItems={inventoryItems}
-                menuItems={menuItems}
-                groceryItems={groceryItems}
-                creativityIdeas={creativityIdeas}
-                fundRecords={fundRecords}
-                stories={stories}
-                currentUser={currentUser}
-                onNavigateTab={handleNavigate}
-                onOpenBirthdays={() => handleNavigate('birthdays')}
-                onOpenProfileEdit={() => setIsProfileEditOpen(true)}
-                onDeleteUser={handleDeleteUser}
-              />
-            </div>
+          {/* ROW 2 (Mobile) / Center (Desktop): SITE SEARCH BAR */}
+          <div className="w-full md:flex-1 md:max-w-xl md:mx-3">
+            <SiteSearch
+              participants={participants}
+              tasks={tasks}
+              contests={contests}
+              documents={documents}
+              inventoryItems={inventoryItems}
+              menuItems={menuItems}
+              groceryItems={groceryItems}
+              creativityIdeas={creativityIdeas}
+              fundRecords={fundRecords}
+              stories={stories}
+              currentUser={currentUser}
+              onNavigateTab={handleNavigate}
+              onOpenBirthdays={() => handleNavigate('birthdays')}
+              onOpenProfileEdit={() => setIsProfileEditOpen(true)}
+              onDeleteUser={handleDeleteUser}
+            />
+          </div>
 
-            {/* TEAM CHAT BUTTON PINNED IN TOP HEADER STRICTLY BETWEEN SEARCH AND TOP MENU */}
+          {/* ROW 3 (Mobile) / Right (Desktop): CHAT BUTTON, TOP MENU & AUTH */}
+          <div className="w-full md:w-auto flex items-center justify-between sm:justify-end gap-2 shrink-0">
+            {/* TEAM CHAT BUTTON PINNED IN TOP HEADER */}
             <button
               type="button"
               onClick={() => setIsChatOpen(prev => !prev)}
               aria-label={isChatOpen ? 'Свернуть чат команды' : 'Открыть чат команды «Негодяи»'}
-              className={`px-3 sm:px-3.5 py-2 rounded-2xl border-2 font-black text-xs uppercase flex items-center gap-1.5 sm:gap-2 transition-all shadow-md active:scale-95 cursor-pointer shrink-0 ${
+              className={`flex-1 sm:flex-initial px-3 sm:px-3.5 py-2 rounded-2xl border-2 font-black text-xs uppercase flex items-center justify-center gap-1.5 sm:gap-2 transition-all shadow-md active:scale-95 cursor-pointer shrink-0 ${
                 isChatOpen
                   ? 'bg-red-700 text-yellow-300 border-yellow-300 shadow-lg ring-2 ring-yellow-400'
                   : 'bg-gradient-to-r from-red-600 to-amber-600 hover:from-red-500 hover:to-amber-500 text-yellow-300 border-amber-950 hover:border-yellow-300'
@@ -880,29 +882,30 @@ export default function App() {
                   </span>
                 )}
               </div>
-              <span className="tracking-tight hidden sm:inline">Чат команды</span>
-              <span className="tracking-tight sm:hidden">Чат</span>
+              <span className="tracking-tight">Чат команды</span>
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
             </button>
 
             {/* Top Dropdown Menu */}
-            <TopSiteMenu
-              currentUser={currentUser}
-              activeTab={activeTab}
-              isCaptain={isCaptain}
-              onNavigateTab={handleNavigate}
-              onOpenProfileEdit={() => setIsProfileEditOpen(true)}
-              onOpenSecurity={() => setIsSecurityModalOpen(true)}
-              onOpenBirthdays={() => handleNavigate('birthdays')}
-              onOpenAuth={() => setIsAuthModalOpen(true)}
-              onLogout={handleLogout}
-              pendingApprovalsCount={pendingApprovalsCount}
-              themeConfig={themeConfig}
-              onUpdateThemeConfig={handleUpdateThemeConfig}
-              customLogo={botConfig.customLogo}
-              onUploadLogo={handleUploadLogoFile}
-              onResetLogo={handleResetLogo}
-            />
+            <div className="flex-1 sm:flex-initial">
+              <TopSiteMenu
+                currentUser={currentUser}
+                activeTab={activeTab}
+                isCaptain={isCaptain}
+                onNavigateTab={handleNavigate}
+                onOpenProfileEdit={() => setIsProfileEditOpen(true)}
+                onOpenSecurity={() => setIsSecurityModalOpen(true)}
+                onOpenBirthdays={() => handleNavigate('birthdays')}
+                onOpenAuth={() => setIsAuthModalOpen(true)}
+                onLogout={handleLogout}
+                pendingApprovalsCount={pendingApprovalsCount}
+                themeConfig={themeConfig}
+                onUpdateThemeConfig={handleUpdateThemeConfig}
+                customLogo={botConfig.customLogo}
+                onUploadLogo={handleUploadLogoFile}
+                onResetLogo={handleResetLogo}
+              />
+            </div>
 
             {/* Login Button for Guests */}
             {!currentUser && (
@@ -1131,6 +1134,9 @@ export default function App() {
             onRejectUser={handleRejectUser}
             onDeleteUser={handleDeleteUser}
             onSetRole={handleSetRole}
+            coins={rallyCoins}
+            onAwardCoin={handleAwardCoin}
+            onDeleteCoin={handleDeleteCoin}
           />
         )}
 

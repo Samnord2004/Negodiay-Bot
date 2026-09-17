@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   PiggyBank, ShieldCheck, UserCheck, AlertCircle, 
   CheckCircle, Bell, DollarSign, Calendar, RefreshCw, Send, Award,
@@ -65,10 +65,34 @@ export default function FundTab({
   const [newPaymentParticipantId, setNewPaymentParticipantId] = useState('');
   const [newPaymentMonth, setNewPaymentMonth] = useState(currentMonth);
   const [newPaymentYear, setNewPaymentYear] = useState(currentYear);
+  const [isCustomNewPaymentYear, setIsCustomNewPaymentYear] = useState(false);
   const [newPaymentAmount, setNewPaymentAmount] = useState('500');
   const [newPaymentIsPaid, setNewPaymentIsPaid] = useState(true);
   const [newPaymentDate, setNewPaymentDate] = useState(new Date().toISOString().split('T')[0]);
   const [newPaymentNote, setNewPaymentNote] = useState('');
+
+  // Dynamic list of years available for the fund statement:
+  // Combines all years from records, 2018 up to currentYear + 4, and any custom selected year.
+  const availableYears = useMemo(() => {
+    const set = new Set<number>();
+    fundRecords.forEach(r => {
+      if (r.year && typeof r.year === 'number' && !isNaN(r.year)) {
+        set.add(r.year);
+      }
+    });
+    const minYear = 2018;
+    const maxYear = Math.max(currentYear + 4, selectedYear + 1);
+    for (let y = minYear; y <= maxYear; y++) {
+      set.add(y);
+    }
+    if (selectedYear && !isNaN(selectedYear)) {
+      set.add(selectedYear);
+    }
+    if (newPaymentYear && !isNaN(newPaymentYear)) {
+      set.add(newPaymentYear);
+    }
+    return Array.from(set).sort((a, b) => b - a);
+  }, [fundRecords, currentYear, selectedYear, newPaymentYear]);
 
   // Expenses from Fund (stored locally and in state)
   const [expenses, setExpenses] = useState<FundExpense[]>(() => {
@@ -143,10 +167,10 @@ export default function FundTab({
     return { isPaid: false, amount: monthlyRate };
   };
 
-  // Calculate debt for each participant (up to current month for the current year)
+  // Calculate debt for each participant (all 12 for past years, up to current month for current year, 0 for future years)
   const calculateParticipantFundDebt = (pId: string) => {
     let unpaidMonths = 0;
-    const maxMonth = selectedYear === currentYear ? currentMonth : 12;
+    const maxMonth = selectedYear < currentYear ? 12 : selectedYear === currentYear ? currentMonth : 0;
     for (let m = 1; m <= maxMonth; m++) {
       const rec = getRecord(pId, m);
       if (!rec.isPaid) unpaidMonths++;
@@ -455,7 +479,11 @@ export default function FundTab({
 
                 <button
                   type="button"
-                  onClick={() => setIsAddingPayment(true)}
+                  onClick={() => {
+                    setNewPaymentYear(selectedYear);
+                    setIsCustomNewPaymentYear(false);
+                    setIsAddingPayment(true);
+                  }}
                   className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
                 >
                   <Plus size={15} />
@@ -726,21 +754,56 @@ export default function FundTab({
             </h4>
           </div>
 
-          <div className="flex items-center gap-2 text-xs">
-            <span className="font-bold text-amber-800">Год ведомости:</span>
-            {[currentYear - 1, currentYear, currentYear + 1].map(yr => (
-              <button
-                key={yr}
-                onClick={() => setSelectedYear(yr)}
-                className={`px-3 py-1 rounded-lg font-black uppercase transition-all ${
-                  selectedYear === yr 
-                    ? 'bg-red-600 text-yellow-300 shadow-2xs' 
-                    : 'bg-white hover:bg-amber-50 text-amber-950 border border-amber-300'
-                }`}
-              >
-                {yr}
-              </button>
-            ))}
+          <div className="flex items-center gap-2 text-xs flex-wrap">
+            <label htmlFor="fund-visibility-year" className="font-bold text-amber-900 whitespace-nowrap">
+              Год видимости:
+            </label>
+            <select
+              id="fund-visibility-year"
+              value={selectedYear}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === 'custom') {
+                  const input = window.prompt('Введите год для ведомости фонда (например, 2024, 2028, 2030):', String(selectedYear));
+                  if (input) {
+                    const parsed = parseInt(input.trim(), 10);
+                    if (!isNaN(parsed) && parsed >= 1990 && parsed <= 2100) {
+                      setSelectedYear(parsed);
+                      setNotificationToast(`Открыта ведомость фонда за ${parsed} год`);
+                    }
+                  }
+                } else {
+                  setSelectedYear(Number(val));
+                }
+              }}
+              className="px-3 py-1 bg-white border-2 border-amber-400 hover:border-red-600 focus:border-red-600 rounded-xl font-black text-amber-950 text-xs shadow-2xs cursor-pointer focus:outline-none transition-colors"
+            >
+              {availableYears.map(yr => (
+                <option key={yr} value={yr}>
+                  {yr} год {yr === currentYear ? '★ (Текущий)' : ''}
+                </option>
+              ))}
+              <option value="custom">➕ Другой год...</option>
+            </select>
+
+            <button
+              type="button"
+              onClick={() => {
+                const input = window.prompt('Введите любой год для ведомости фонда (например, 2024, 2028, 2030):', String(selectedYear));
+                if (input) {
+                  const parsed = parseInt(input.trim(), 10);
+                  if (!isNaN(parsed) && parsed >= 1990 && parsed <= 2100) {
+                    setSelectedYear(parsed);
+                    setNotificationToast(`Открыта ведомость фонда за ${parsed} год`);
+                  }
+                }
+              }}
+              className="px-2.5 py-1 bg-amber-200 hover:bg-amber-300 text-amber-950 font-bold text-xs rounded-xl border border-amber-400 transition-colors shadow-2xs flex items-center gap-1 cursor-pointer"
+              title="Ввести произвольный год ведомости"
+            >
+              <Plus size={13} />
+              <span>Любой год</span>
+            </button>
           </div>
         </div>
 
@@ -1118,18 +1181,49 @@ export default function FundTab({
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold text-stone-700 block mb-1">
-                    Год:
-                  </label>
-                  <select
-                    value={newPaymentYear}
-                    onChange={(e) => setNewPaymentYear(Number(e.target.value))}
-                    className="w-full px-3 py-2 border-2 border-amber-300 rounded-xl text-xs font-bold text-amber-950 bg-white"
-                  >
-                    {[currentYear - 1, currentYear, currentYear + 1].map(yr => (
-                      <option key={yr} value={yr}>{yr}</option>
-                    ))}
-                  </select>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-bold text-stone-700 block">
+                      Год:
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setIsCustomNewPaymentYear(prev => !prev)}
+                      className="text-[10px] font-bold text-red-600 hover:underline cursor-pointer"
+                    >
+                      {isCustomNewPaymentYear ? 'Из списка' : 'Ввести вручную'}
+                    </button>
+                  </div>
+                  {isCustomNewPaymentYear ? (
+                    <input
+                      type="number"
+                      min={1990}
+                      max={2100}
+                      value={newPaymentYear}
+                      onChange={(e) => setNewPaymentYear(Number(e.target.value))}
+                      className="w-full px-3 py-2 border-2 border-amber-300 rounded-xl text-xs font-bold text-amber-950 bg-white focus:outline-none focus:border-red-600"
+                      placeholder="Например, 2024"
+                    />
+                  ) : (
+                    <select
+                      value={newPaymentYear}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === 'custom') {
+                          setIsCustomNewPaymentYear(true);
+                        } else {
+                          setNewPaymentYear(Number(val));
+                        }
+                      }}
+                      className="w-full px-3 py-2 border-2 border-amber-300 rounded-xl text-xs font-bold text-amber-950 bg-white focus:outline-none focus:border-red-600"
+                    >
+                      {availableYears.map(yr => (
+                        <option key={yr} value={yr}>
+                          {yr} год {yr === currentYear ? '(Текущий)' : ''}
+                        </option>
+                      ))}
+                      <option value="custom">➕ Другой год...</option>
+                    </select>
+                  )}
                 </div>
               </div>
 

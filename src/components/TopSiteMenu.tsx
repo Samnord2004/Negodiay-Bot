@@ -9,6 +9,7 @@ import {
 import { Participant, ROLE_DEFINITIONS, ThemeConfig } from '../types';
 import { getSafeAvatar, getParticipantAvatar } from '../utils/avatar';
 import AppearanceTab from './AppearanceTab';
+import SiteGuide from './SiteGuide';
 
 interface TopSiteMenuProps {
   currentUser: Participant | null;
@@ -46,7 +47,7 @@ export default function TopSiteMenu({
   onResetLogo
 }: TopSiteMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [menuTab, setMenuTab] = useState<'nav' | 'appearance'>('nav');
+  const [menuTab, setMenuTab] = useState<'nav' | 'guide' | 'appearance'>('nav');
   const menuRef = useRef<HTMLDivElement>(null);
 
   const isCaptainEffective = isCaptain !== undefined 
@@ -99,7 +100,7 @@ export default function TopSiteMenu({
         onClick={() => setIsOpen(!isOpen)}
         aria-expanded={isOpen}
         aria-label="Главное меню сайта"
-        className={`px-3.5 py-2 rounded-2xl border-2 font-black text-xs uppercase flex items-center gap-2 transition-all shadow-md active:scale-95 ${
+        className={`w-full sm:w-auto px-3.5 py-2 rounded-2xl border-2 font-black text-xs uppercase flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 ${
           isOpen
             ? 'bg-red-600 text-yellow-300 border-amber-950 shadow-lg'
             : 'bg-gradient-to-r from-yellow-300 to-amber-400 hover:from-yellow-200 hover:to-amber-300 text-amber-950 border-amber-500'
@@ -127,15 +128,17 @@ export default function TopSiteMenu({
             aria-modal="true"
             aria-label="Главное меню сайта и навигация"
             onClick={(e) => e.stopPropagation()}
-            className="w-full sm:w-[420px] max-w-[440px] max-h-[85vh] bg-amber-50 border-4 border-amber-600 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 flex flex-col pointer-events-auto"
+            className={`w-full ${menuTab === 'guide' ? 'sm:w-[580px] max-w-[620px]' : 'sm:w-[420px] max-w-[440px]'} max-h-[85vh] bg-amber-50 border-4 border-amber-600 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 flex flex-col pointer-events-auto transition-all`}
           >
           
           {/* Header Bar */}
           <div className="bg-gradient-to-r from-red-600 via-amber-600 to-red-700 p-3.5 flex items-center justify-between text-yellow-300 border-b-2 border-amber-400 shrink-0">
             <div className="flex items-center gap-2">
-              <span className="text-lg">🧭</span>
+              <span className="text-lg">
+                {menuTab === 'guide' ? '📖' : menuTab === 'appearance' ? '🎨' : '🧭'}
+              </span>
               <h3 className="font-black text-xs uppercase tracking-tight text-white leading-tight">
-                {menuTab === 'appearance' ? 'Оформление & Логотип' : 'Навигация & Профиль Негодяя'}
+                {menuTab === 'appearance' ? 'Оформление & Логотип' : menuTab === 'guide' ? 'Интерактивное руководство' : 'Навигация & Профиль Негодяя'}
               </h3>
             </div>
             <button
@@ -147,12 +150,12 @@ export default function TopSiteMenu({
             </button>
           </div>
 
-          {/* Top Level Menu Switcher: Sections vs Appearance */}
+          {/* Top Level Menu Switcher: Sections vs Guide vs Appearance */}
           <div className="flex border-b-2 border-amber-300 bg-amber-200/80 p-1.5 gap-1.5 shrink-0">
             <button
               type="button"
               onClick={() => setMenuTab('nav')}
-              className={`flex-1 py-1.5 px-3 rounded-xl text-xs font-black uppercase transition-all flex items-center justify-center gap-1.5 ${
+              className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-black uppercase transition-all flex items-center justify-center gap-1.5 ${
                 menuTab === 'nav'
                   ? 'bg-red-600 text-yellow-300 shadow-xs'
                   : 'text-amber-950 hover:bg-amber-100'
@@ -164,8 +167,21 @@ export default function TopSiteMenu({
 
             <button
               type="button"
+              onClick={() => setMenuTab('guide')}
+              className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-black uppercase transition-all flex items-center justify-center gap-1.5 ${
+                menuTab === 'guide'
+                  ? 'bg-red-600 text-yellow-300 shadow-xs ring-1 ring-yellow-400'
+                  : 'text-amber-950 hover:bg-amber-100'
+              }`}
+            >
+              <BookOpen size={14} className={menuTab === 'guide' ? 'text-yellow-300' : 'text-red-700'} />
+              <span>Инструкция</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => setMenuTab('appearance')}
-              className={`flex-1 py-1.5 px-3 rounded-xl text-xs font-black uppercase transition-all flex items-center justify-center gap-1.5 ${
+              className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-black uppercase transition-all flex items-center justify-center gap-1.5 ${
                 menuTab === 'appearance'
                   ? 'bg-red-600 text-yellow-300 shadow-xs'
                   : 'text-amber-950 hover:bg-amber-100'
@@ -176,7 +192,7 @@ export default function TopSiteMenu({
             </button>
           </div>
 
-          <div className="overflow-y-auto p-4 space-y-4 flex-1 scrollbar-thin">
+          <div className="overflow-y-auto p-3 sm:p-4 space-y-4 flex-1 scrollbar-thin">
             {menuTab === 'appearance' ? (
               <AppearanceTab
                 themeConfig={themeConfig}
@@ -184,6 +200,11 @@ export default function TopSiteMenu({
                 customLogo={customLogo}
                 onUploadLogo={onUploadLogo}
                 onResetLogo={onResetLogo}
+              />
+            ) : menuTab === 'guide' ? (
+              <SiteGuide
+                onNavigateTab={handleSelectNav}
+                onClose={() => setMenuTab('nav')}
               />
             ) : (
               <>
@@ -265,6 +286,28 @@ export default function TopSiteMenu({
                   </button>
                 </div>
               )}
+            </div>
+
+            {/* INTERACTIVE SITE GUIDE BANNER */}
+            <div 
+              onClick={() => setMenuTab('guide')}
+              className="bg-gradient-to-r from-red-600 via-amber-600 to-red-700 text-yellow-300 p-3 rounded-2xl border-2 border-amber-950 shadow-md flex items-center justify-between gap-3 cursor-pointer hover:from-red-500 hover:to-amber-500 transition-all group"
+            >
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-amber-950/40 border border-yellow-300 flex items-center justify-center text-base shrink-0 shadow-inner">
+                  📖
+                </div>
+                <div>
+                  <div className="font-black text-xs uppercase text-white leading-tight flex items-center gap-1">
+                    <span>Инструкция Негодяев</span>
+                    <Sparkles size={12} className="text-yellow-300 animate-pulse" />
+                  </div>
+                  <div className="text-[10px] text-yellow-100 font-medium">
+                    Интерактивное руководство, роли и возможности
+                  </div>
+                </div>
+              </div>
+              <ArrowRight size={15} className="text-yellow-300 group-hover:translate-x-1 transition-transform shrink-0" />
             </div>
 
             {/* 2. PRIMARY SITE NAVIGATION */}

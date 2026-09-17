@@ -5,6 +5,7 @@ import {
   Maximize2, ArrowDown, Bot, ChevronDown, ChevronUp, Sparkles
 } from 'lucide-react';
 import { ChatMessage, Participant, ROLE_DEFINITIONS } from '../types';
+import { formatChatTimestamp } from '../utils/chatUtils';
 
 interface FloatingChatProps {
   messages: ChatMessage[];
@@ -457,7 +458,7 @@ export default function FloatingChat({
                               </span>
                             )}
                             <span className="text-[10px] text-stone-400 leading-none">
-                              @{isBot ? 'negodyai_bot' : msg.senderNickname} • {msg.timestamp}
+                              @{isBot ? 'negodyai_bot' : msg.senderNickname} • {formatChatTimestamp(msg.timestamp)}
                             </span>
                           </div>
 

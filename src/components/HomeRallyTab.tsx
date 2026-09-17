@@ -122,7 +122,7 @@ export default function HomeRallyTab({
   const isCaptain = isAdmin || currentUser?.role === 'admin';
   const canManagePayments = isCaptain || currentUser?.role === 'treasurer';
 
-  const activeParticipants = participants.filter(p => p.accountStatus !== 'pending' && p.accountStatus !== 'rejected');
+  const activeParticipants = participants.filter(p => p.accountStatus !== 'rejected');
   const totalTargetFunds = activeParticipants.reduce((sum, p) => sum + (p.totalCost || 0), 0);
   const totalPaidFunds = activeParticipants.reduce((sum, p) => sum + (p.paidAmount || 0), 0);
   const totalDebt = Math.max(0, totalTargetFunds - totalPaidFunds);

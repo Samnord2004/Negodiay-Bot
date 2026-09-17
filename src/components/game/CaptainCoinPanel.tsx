@@ -56,7 +56,7 @@ export default function CaptainCoinPanel({
   const [mintSuccessMsg, setMintSuccessMsg] = useState<string | null>(null);
 
   // Filter active participants
-  const activeParticipants = participants.filter(p => p.joined !== false && p.accountStatus !== 'rejected');
+  const activeParticipants = participants.filter(p => p.accountStatus !== 'rejected');
   
   const filteredParticipants = activeParticipants.filter(p => {
     if (!searchQuery.trim()) return true;

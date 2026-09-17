@@ -40,6 +40,7 @@ import {
   AccountStatus,
   RallyCoin
 } from "./src/types";
+import { formatChatTimestamp, deduplicateChatMessages } from "./src/utils/chatUtils";
 
 const user = process.env.SQL_ADMIN_USER || process.env.SQL_USER || "postgres";
 const password = process.env.SQL_ADMIN_PASSWORD || process.env.SQL_PASSWORD || "";
@@ -49,10 +50,6 @@ const database = process.env.SQL_DB_NAME || "cloud_sql_development_database";
 export const isBannedBotParticipant = (p: { id?: string; nickname?: string; name?: string }): boolean => {
   const bannedIds = new Set(['p_alex', 'p_irina', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20']);
   if (p.id && (bannedIds.has(p.id) || p.id.startsWith('bot_'))) return true;
-  const nick = (p.nickname || '').toLowerCase();
-  const name = (p.name || '').toLowerCase();
-  if (nick.includes('навигатор') || nick.includes('булочк') || nick.includes('хорёк') || nick.includes('лесник') || nick.includes('запевал') || nick.includes('alex') || nick.includes('irina')) return true;
-  if (name.includes('смирнов') || name.includes('васильева')) return true;
   return false;
 };
 
@@ -134,7 +131,7 @@ export function loadLocalFileBackup(): boolean {
       if (Array.isArray(data.inventoryItems)) cacheInventoryItems = data.inventoryItems;
       if (data.botConfig) cacheBotConfig = data.botConfig;
       if (Array.isArray(data.contests)) cacheContests = data.contests;
-      if (Array.isArray(data.messages)) cacheMessages = data.messages;
+      if (Array.isArray(data.messages)) cacheMessages = deduplicateChatMessages(data.messages);
       if (Array.isArray(data.photos)) cachePhotos = data.photos;
       if (Array.isArray(data.documents)) cacheDocuments = data.documents;
       if (Array.isArray(data.fundRecords)) cacheFundRecords = data.fundRecords;
@@ -169,8 +166,11 @@ let cacheStories: TeamStory[] = [...INITIAL_STORIES];
 let cacheRallyCoins: RallyCoin[] = [...initialRallyCoins];
 let cacheAdminPassword = "admin";
 
+// Immediately restore persistent data from local file storage on module import
+loadLocalFileBackup();
+
 export async function initDb() {
-  // First, restore any persistent data from local file storage
+  // Restore persistent data on initDb as well
   loadLocalFileBackup();
 
   try {
@@ -361,24 +361,12 @@ export async function initDb() {
         created_at TEXT NOT NULL
       );
 
-      -- Clean up mock bots: strictly remove all fake bot participants (Лёха Навигатор, Иришка Булочка, etc.)
+      -- Clean up specific legacy test bot IDs only
       DELETE FROM participants 
       WHERE id IN ('p_alex', 'p_irina', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20') 
-        OR id LIKE 'bot_%' 
-        OR nickname ILIKE '%навигатор%' 
-        OR nickname ILIKE '%булочк%' 
-        OR nickname ILIKE '%хорёк%' 
-        OR nickname ILIKE '%лесник%' 
-        OR nickname ILIKE '%запевал%'
-        OR name ILIKE '%смирнов%' 
-        OR name ILIKE '%васильева%';
-      DELETE FROM messages WHERE sender_name IN ('Лёха Навигатор', 'Иришка Булочка', 'Андрюха Хорёк', 'Михалыч Лесник', 'Саня Запевала') 
-        OR sender_nickname IN ('navigator_alex', 'navigator', 'bulochka');
+        OR id LIKE 'bot_%';
       DELETE FROM fund_records WHERE participant_id IN ('p_alex', 'p_irina', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20');
-      UPDATE tasks SET assignee_id = 'cowboy_1', assignee_name = 'Андрей Самойлов (Ковбой)' WHERE assignee_id IN ('p_alex', 'p_irina', '1', '2', '3', '4', '5');
       UPDATE participants SET avatar = '' WHERE avatar LIKE '%dicebear.com/7.x/bottts%';
-      -- Ensure Cowboy Andrei Samoilov is active Captain/admin
-      UPDATE participants SET role = 'admin', account_status = 'active' WHERE id = 'cowboy_1' OR nickname = 'Ковбой';
 
       -- Migration for front/profile photos and avatar source
       ALTER TABLE participants ADD COLUMN IF NOT EXISTS photo_front TEXT;
@@ -395,21 +383,26 @@ export async function initDb() {
       ALTER TABLE gallery_photos ADD COLUMN IF NOT EXISTS cloud_url TEXT DEFAULT '';
       ALTER TABLE gallery_photos ADD COLUMN IF NOT EXISTS item_type TEXT DEFAULT 'photo';
       ALTER TABLE gallery_photos ALTER COLUMN image_url DROP NOT NULL;
+
+      -- Activate any pending or unjoined participants so self-registered users are active and shown
+      UPDATE participants SET joined = true WHERE joined = false;
+      UPDATE participants SET account_status = 'active' WHERE account_status = 'pending';
     `);
 
     // Load or seed Participants
     const resP = await pool.query("SELECT * FROM participants");
     if (resP.rows.length === 0) {
-      for (const p of initialParticipants) {
+      const participantsToSeed = (cacheParticipants && cacheParticipants.length > 0) ? cacheParticipants : initialParticipants;
+      for (const p of participantsToSeed) {
         await pool.query(
           `INSERT INTO participants (id, name, nickname, psychotype, avatar, photo_front, photo_profile, selected_avatar_source, paid_amount, total_cost, debt_amount, joined, birthday, joined_year, skipped_years, gender, role, email, phone, password, account_status, biometric_enabled)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22) ON CONFLICT (id) DO NOTHING`,
-          [p.id, p.name, p.nickname, (p as any).psychotype || 'Участник', p.avatar, p.photoFront || null, p.photoProfile || null, p.selectedAvatarSource || 'front', p.paidAmount, p.totalCost, p.debtAmount, p.joined, p.birthday || null, p.joinedYear, JSON.stringify(p.skippedYears), p.gender, p.role || 'admin', p.email || '', p.phone || '', p.password || 'admin', p.accountStatus || 'active', p.biometricEnabled || false]
+          [p.id, p.name, p.nickname, (p as any).psychotype || 'Участник', p.avatar || '', p.photoFront || null, p.photoProfile || null, p.selectedAvatarSource || 'front', p.paidAmount || 0, p.totalCost || 0, p.debtAmount || 0, true, p.birthday || null, p.joinedYear || 1993, JSON.stringify(p.skippedYears || []), p.gender || 'male', p.role || 'member', p.email || '', p.phone || '', p.password || '123', 'active', p.biometricEnabled || false]
         );
       }
-      cacheParticipants = [...initialParticipants];
+      cacheParticipants = participantsToSeed.map(p => ({ ...p, joined: true, accountStatus: p.accountStatus === 'rejected' ? 'rejected' : 'active' }));
     } else {
-      cacheParticipants = resP.rows.map(r => ({
+      const dbUsers = resP.rows.map(r => ({
         id: r.id,
         name: r.name,
         nickname: r.nickname,
@@ -420,7 +413,7 @@ export async function initDb() {
         paidAmount: Number(r.paid_amount),
         totalCost: Number(r.total_cost),
         debtAmount: Number(r.debt_amount),
-        joined: Boolean(r.joined),
+        joined: true,
         birthday: r.birthday || undefined,
         joinedYear: Number(r.joined_year) || 1993,
         skippedYears: (() => {
@@ -433,23 +426,29 @@ export async function initDb() {
         email: r.email || undefined,
         phone: r.phone || undefined,
         password: r.password || "123",
-        accountStatus: (r.account_status as AccountStatus) || "active",
+        accountStatus: (r.account_status === 'rejected' ? 'rejected' : 'active') as AccountStatus,
         biometricEnabled: Boolean(r.biometric_enabled)
       })).filter(p => !isBannedBotParticipant(p));
 
-      // Ensure Andrey Samoilov (Cowboy) is in participants
-      const hasCowboy = cacheParticipants.some(p => p.id === 'cowboy_1' || p.nickname?.toLowerCase() === 'ковбой' || p.name?.toLowerCase().includes('самойлов'));
-      if (!hasCowboy) {
-        const cowboy = initialParticipants.find(p => p.id === 'cowboy_1');
-        if (cowboy) {
-          await pool.query(
-            `INSERT INTO participants (id, name, nickname, psychotype, avatar, photo_front, photo_profile, selected_avatar_source, paid_amount, total_cost, debt_amount, joined, birthday, joined_year, skipped_years, gender, role, email, phone, password, account_status, biometric_enabled)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22) ON CONFLICT (id) DO NOTHING`,
-            [cowboy.id, cowboy.name, cowboy.nickname, (cowboy as any).psychotype || 'Участник', cowboy.avatar, cowboy.photoFront || null, cowboy.photoProfile || null, cowboy.selectedAvatarSource || 'front', cowboy.paidAmount, cowboy.totalCost, cowboy.debtAmount, cowboy.joined, cowboy.birthday || null, cowboy.joinedYear, JSON.stringify(cowboy.skippedYears), cowboy.gender, cowboy.role || 'admin', cowboy.email || '', cowboy.phone || '', cowboy.password || '123', cowboy.accountStatus || 'active', cowboy.biometricEnabled || false]
-          );
-          cacheParticipants.push(cowboy);
-        }
+      // Merge PostgreSQL rows with any cacheParticipants loaded from local file storage
+      const mergedMap = new Map<string, Participant>();
+      for (const p of cacheParticipants) {
+        mergedMap.set(p.id, {
+          ...p,
+          joined: true,
+          accountStatus: p.accountStatus === 'rejected' ? 'rejected' : 'active'
+        });
       }
+      for (const p of dbUsers) {
+        const cached = mergedMap.get(p.id);
+        mergedMap.set(p.id, {
+          ...p,
+          password: (p.password && p.password !== '123') ? p.password : (cached?.password || p.password || '123'),
+          joined: true,
+          accountStatus: p.accountStatus === 'rejected' ? 'rejected' : 'active'
+        });
+      }
+      cacheParticipants = Array.from(mergedMap.values());
 
       // Ensure single Captain and no role duplication
       await ensureNoRoleDuplication();
@@ -617,7 +616,7 @@ export async function initDb() {
     // Load or seed Messages
     const resMsg = await pool.query("SELECT * FROM messages ORDER BY ctid ASC");
     if (resMsg.rows.length === 0) {
-      const messagesToSeed = (cacheMessages && cacheMessages.length > 0) ? cacheMessages : initialMessages;
+      const messagesToSeed = deduplicateChatMessages((cacheMessages && cacheMessages.length > 0) ? cacheMessages : initialMessages);
       for (const m of messagesToSeed) {
         await pool.query(
           `INSERT INTO messages (id, sender_name, sender_nickname, sender_psychotype, text, timestamp, is_bot, detected_psychotype_explanation, adapter_style_used, image_url, attachments)
@@ -627,23 +626,32 @@ export async function initDb() {
       }
       cacheMessages = [...messagesToSeed];
     } else {
-      const map = new Map<string, ChatMessage>();
-      cacheMessages.forEach(m => map.set(m.id, m));
-      resMsg.rows.forEach(r => {
-        map.set(r.id, {
-          id: r.id,
-          senderName: r.sender_name,
-          senderNickname: r.sender_nickname,
-          text: r.text,
-          timestamp: r.timestamp,
-          isBot: Boolean(r.is_bot),
-          adapterStyleUsed: r.adapter_style_used || undefined,
-          imageUrl: r.image_url || undefined,
-          attachments: r.attachments ? (Array.isArray(r.attachments) ? r.attachments : JSON.parse(r.attachments)) : undefined
-        });
-      });
-      cacheMessages = Array.from(map.values());
+      const dbMsgs: ChatMessage[] = resMsg.rows.map(r => ({
+        id: r.id,
+        senderName: r.sender_name,
+        senderNickname: r.sender_nickname,
+        text: r.text,
+        timestamp: formatChatTimestamp(r.timestamp),
+        isBot: Boolean(r.is_bot),
+        adapterStyleUsed: r.adapter_style_used || undefined,
+        imageUrl: r.image_url || undefined,
+        attachments: r.attachments ? (Array.isArray(r.attachments) ? r.attachments : JSON.parse(r.attachments)) : undefined
+      }));
+      cacheMessages = deduplicateChatMessages([...cacheMessages, ...dbMsgs]);
       saveLocalFileBackup();
+
+      // Clean up duplicates from PostgreSQL messages table
+      try {
+        const keepIds = new Set(cacheMessages.map(m => m.id));
+        const allDbIds = resMsg.rows.map(r => r.id);
+        const toDelete = allDbIds.filter(id => !keepIds.has(id));
+        if (toDelete.length > 0) {
+          await pool.query("DELETE FROM messages WHERE id = ANY($1::text[])", [toDelete]);
+          console.log(`[DB] Cleaned up ${toDelete.length} duplicate messages from PostgreSQL`);
+        }
+      } catch (delErr) {
+        console.warn("[DB] Non-critical error cleaning duplicate messages in PostgreSQL:", delErr);
+      }
     }
 
     // Load or seed Admin Settings
@@ -809,24 +817,34 @@ const deletedParticipantIds = new Set<string>();
 export async function saveParticipants(participants: Participant[]) {
   const filtered = participants.filter(p => !isBannedBotParticipant(p) && !deletedParticipantIds.has(p.id));
   
-  // Safe merge: Never wipe out pending registration applications that exist on server!
+  // Safe merge: Never wipe out self-registered participants or passwords that exist on server!
   const map = new Map<string, Participant>();
   // 1. Preload with current cached participants
   for (const existing of cacheParticipants) {
-    map.set(existing.id, existing);
+    map.set(existing.id, {
+      ...existing,
+      joined: true,
+      accountStatus: existing.accountStatus === 'rejected' ? 'rejected' : 'active'
+    });
   }
   // 2. Apply incoming updates
   for (const incoming of filtered) {
     const existing = map.get(incoming.id);
     if (existing) {
-      // Server is authoritative for accountStatus and role
+      // PRESERVE existing password! The client never receives passwords and must never wipe them out!
       map.set(incoming.id, {
         ...incoming,
-        accountStatus: existing.accountStatus || incoming.accountStatus || 'active',
+        password: (existing.password && existing.password !== '123') ? existing.password : (incoming.password || existing.password || '123'),
+        accountStatus: incoming.accountStatus === 'rejected' ? 'rejected' : (existing.accountStatus === 'rejected' ? 'rejected' : 'active'),
+        joined: true,
         role: existing.role || incoming.role || 'member'
       });
     } else {
-      map.set(incoming.id, incoming);
+      map.set(incoming.id, {
+        ...incoming,
+        accountStatus: incoming.accountStatus === 'rejected' ? 'rejected' : 'active',
+        joined: true
+      });
     }
   }
 
@@ -842,11 +860,12 @@ export async function saveParticipants(participants: Participant[]) {
          name = EXCLUDED.name, nickname = EXCLUDED.nickname, psychotype = EXCLUDED.psychotype, avatar = EXCLUDED.avatar,
          photo_front = EXCLUDED.photo_front, photo_profile = EXCLUDED.photo_profile, selected_avatar_source = EXCLUDED.selected_avatar_source,
          paid_amount = EXCLUDED.paid_amount, total_cost = EXCLUDED.total_cost, debt_amount = EXCLUDED.debt_amount,
-         joined = EXCLUDED.joined, birthday = EXCLUDED.birthday, joined_year = EXCLUDED.joined_year,
+         joined = true, birthday = EXCLUDED.birthday, joined_year = EXCLUDED.joined_year,
          skipped_years = EXCLUDED.skipped_years, gender = EXCLUDED.gender,
-         role = EXCLUDED.role, email = EXCLUDED.email, phone = EXCLUDED.phone, password = EXCLUDED.password,
+         role = EXCLUDED.role, email = EXCLUDED.email, phone = EXCLUDED.phone,
+         password = CASE WHEN EXCLUDED.password IS NOT NULL AND EXCLUDED.password != '' AND EXCLUDED.password != '123' THEN EXCLUDED.password ELSE participants.password END,
          account_status = EXCLUDED.account_status, biometric_enabled = EXCLUDED.biometric_enabled`,
-        [p.id, p.name, p.nickname, (p as any).psychotype || 'Участник', p.avatar || '', p.photoFront || null, p.photoProfile || null, p.selectedAvatarSource || 'front', p.paidAmount || 0, p.totalCost || 0, p.debtAmount || 0, p.joined !== false, p.birthday || null, p.joinedYear || 2018, JSON.stringify(p.skippedYears || []), p.gender || 'boy', p.role || 'member', p.email || '', p.phone || '', p.password || '123', p.accountStatus || 'active', p.biometricEnabled || false]
+        [p.id, p.name, p.nickname, (p as any).psychotype || 'Участник', p.avatar || '', p.photoFront || null, p.photoProfile || null, p.selectedAvatarSource || 'front', p.paidAmount || 0, p.totalCost || 0, p.debtAmount || 0, true, p.birthday || null, p.joinedYear || 2018, JSON.stringify(p.skippedYears || []), p.gender || 'boy', p.role || 'member', p.email || '', p.phone || '', p.password || '123', p.accountStatus || 'active', p.biometricEnabled || false]
       );
     }
   } catch (e) {
@@ -1216,9 +1235,11 @@ export function getMessages(): ChatMessage[] {
 }
 
 export function addMessage(m: ChatMessage) {
-  const index = cacheMessages.findIndex(x => x.id === m.id);
-  if (index >= 0) cacheMessages[index] = m;
-  else cacheMessages.push(m);
+  const cleanM = {
+    ...m,
+    timestamp: formatChatTimestamp(m.timestamp)
+  };
+  cacheMessages = deduplicateChatMessages([...cacheMessages, cleanM]);
   saveLocalFileBackup();
   if (!isPgConnected) return;
 
@@ -1235,7 +1256,7 @@ export function addMessage(m: ChatMessage) {
          adapter_style_used = EXCLUDED.adapter_style_used,
          image_url = EXCLUDED.image_url,
          attachments = EXCLUDED.attachments`,
-        [m.id, m.senderName, m.senderNickname, (m as any).senderPsychotype || "Участник", m.text, m.timestamp, m.isBot, (m as any).detectedPsychotypeExplanation || "", m.adapterStyleUsed || "", m.imageUrl || null, JSON.stringify(m.attachments || null)]
+        [cleanM.id, cleanM.senderName, cleanM.senderNickname, (cleanM as any).senderPsychotype || "Участник", cleanM.text, cleanM.timestamp, cleanM.isBot, (cleanM as any).detectedPsychotypeExplanation || "", cleanM.adapterStyleUsed || "", cleanM.imageUrl || null, JSON.stringify(cleanM.attachments || null)]
       );
     } catch (e) {
       console.error("PSQL addMessage error:", e);
@@ -1245,15 +1266,11 @@ export function addMessage(m: ChatMessage) {
 
 export function saveMessages(messages: ChatMessage[]) {
   if (!Array.isArray(messages) || messages.length === 0) return;
-  // Merge messages: keep existing cacheMessages and add/update new incoming messages
-  const map = new Map<string, ChatMessage>();
-  for (const m of cacheMessages) {
-    map.set(m.id, m);
-  }
-  for (const m of messages) {
-    map.set(m.id, m);
-  }
-  cacheMessages = Array.from(map.values());
+  const normalizedIncoming = messages.map(m => ({
+    ...m,
+    timestamp: formatChatTimestamp(m.timestamp)
+  }));
+  cacheMessages = deduplicateChatMessages([...cacheMessages, ...normalizedIncoming]);
   saveLocalFileBackup();
   if (!isPgConnected) return;
 
@@ -1262,7 +1279,7 @@ export function saveMessages(messages: ChatMessage[]) {
     try {
       client = await pool.connect();
       await client.query("BEGIN");
-      for (const m of messages) {
+      for (const m of cacheMessages) {
         await client.query(
           `INSERT INTO messages (id, sender_name, sender_nickname, sender_psychotype, text, timestamp, is_bot, detected_psychotype_explanation, adapter_style_used, image_url, attachments)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
@@ -1376,15 +1393,7 @@ export async function ensureNoRoleDuplication() {
     if (holders.length > 1) {
       console.log(`[ROLES] Resolving duplicate holders for unique role "${role}":`, holders.map(h => `${h.name} (${h.id})`));
       
-      let primary = holders[0];
-      if (role === 'admin') {
-        const foundCowboy = holders.find(h => 
-          h.id === 'cowboy_1' || 
-          h.email?.toLowerCase() === 'asamoilov81@gmail.com' || 
-          h.nickname?.toLowerCase() === 'ковбой'
-        );
-        if (foundCowboy) primary = foundCowboy;
-      }
+      const primary = holders[0];
 
       // Demote all duplicate holders to 'member'
       for (const h of holders) {
@@ -1429,6 +1438,7 @@ export async function updateParticipantRole(id: string, role: UserRole) {
   }
 
   target.role = role;
+  saveLocalFileBackup();
   try {
     await pool.query("UPDATE participants SET role = $1 WHERE id = $2", [role, id]);
   } catch (e) {
@@ -1440,7 +1450,7 @@ export async function updateParticipantRole(id: string, role: UserRole) {
     target,
     replacedUser,
     message: replacedUser 
-      ? `Роль успешно передана участнику ${target.name}. Прежний ответственный (${replacedUser.name}) переведен в статус обычного участника команды.`
+      ? `Роль успешно передана участнику ${target.name}. Прежний ответственный (${replacedUser.name}) переведен в статус обычного участника команды без прав администратора.`
       : `Роль участника ${target.name} успешно изменена на ${role}`
   };
 }
@@ -1473,11 +1483,17 @@ export function updateParticipantBiometrics(id: string, enabled: boolean) {
 
 export async function registerNewParticipant(p: Participant) {
   deletedParticipantIds.delete(p.id);
-  const idx = cacheParticipants.findIndex(x => x.id === p.id);
+  const cleanParticipant: Participant = {
+    ...p,
+    accountStatus: 'active',
+    joined: true,
+    role: p.role || 'member',
+  };
+  const idx = cacheParticipants.findIndex(x => x.id === cleanParticipant.id);
   if (idx >= 0) {
-    cacheParticipants[idx] = p;
+    cacheParticipants[idx] = cleanParticipant;
   } else {
-    cacheParticipants.unshift(p);
+    cacheParticipants.unshift(cleanParticipant);
   }
   saveLocalFileBackup();
   if (!isPgConnected) return;
@@ -1492,9 +1508,10 @@ export async function registerNewParticipant(p: Participant) {
          email = EXCLUDED.email,
          phone = EXCLUDED.phone,
          password = EXCLUDED.password,
-         account_status = EXCLUDED.account_status,
+         account_status = 'active',
+         joined = true,
          biometric_enabled = EXCLUDED.biometric_enabled`,
-      [p.id, p.name, p.nickname, (p as any).psychotype || 'Участник', p.avatar, p.paidAmount, p.totalCost, p.debtAmount, p.joined, p.birthday || null, p.joinedYear, JSON.stringify(p.skippedYears), p.gender, p.role || 'member', p.email || '', p.phone || '', p.password || '123', p.accountStatus || 'pending', p.biometricEnabled || false]
+      [cleanParticipant.id, cleanParticipant.name, cleanParticipant.nickname, (cleanParticipant as any).psychotype || 'Участник', cleanParticipant.avatar || '', cleanParticipant.paidAmount || 0, cleanParticipant.totalCost || 0, cleanParticipant.debtAmount || 0, true, cleanParticipant.birthday || null, cleanParticipant.joinedYear || 1993, JSON.stringify(cleanParticipant.skippedYears || []), cleanParticipant.gender || 'male', cleanParticipant.role || 'member', cleanParticipant.email || '', cleanParticipant.phone || '', cleanParticipant.password || '123', 'active', cleanParticipant.biometricEnabled || false]
     );
   } catch (e) {
     console.error("PSQL registerNewParticipant error:", e);
