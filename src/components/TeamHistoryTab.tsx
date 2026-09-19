@@ -442,7 +442,7 @@ export default function TeamHistoryTab({
                   </label>
                   <input
                     type="number"
-                    min="2010"
+                    min="1993"
                     max={new Date().getFullYear()}
                     value={formYear}
                     onChange={(e) => setFormYear(Number(e.target.value))}

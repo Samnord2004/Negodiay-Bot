@@ -193,6 +193,21 @@ export interface FundExpense {
   category: string;
   spentBy: string;
   note?: string;
+  receiptUrl?: string;
+  status?: 'pending' | 'approved' | 'rejected';
+  submittedById?: string;
+  submittedByName?: string;
+  approvedBy?: string;
+  approvedAt?: string;
+}
+
+export type RallyParticipationStatus = 'going' | 'thinking' | 'not_going';
+
+export interface RallyParticipantEntry {
+  status: RallyParticipationStatus; // 'going' -> «Еду точно» (зеленый), 'thinking' -> «Думаю / Под вопросом» (желтый), 'not_going' -> «Не еду» (красный)
+  isPaid?: boolean; // Зеленая отметка «Оплачено»
+  paidAt?: string;
+  updatedAt?: string;
 }
 
 export type CreativityCategory = 
@@ -235,6 +250,7 @@ export interface Excursion {
   costBoys: number;
   costGirls: number;
   isActive: boolean;
+  participantStatuses?: Record<string, RallyParticipantEntry>;
 }
 
 export interface BotConfig {
@@ -360,7 +376,7 @@ export const DEFAULT_THEME_CONFIG: ThemeConfig = {
 // МОТИВАЦИОННАЯ ИГРА "СКИДКА НА СЛЁТ"
 // ==========================================
 
-export type CoinCategory = 'task' | 'fortune' | 'merit' | 'contest';
+export type CoinCategory = 'task' | 'fortune' | 'merit' | 'contest' | 'poker';
 
 export interface RallyCoin {
   id: string;

@@ -8,6 +8,7 @@ import ParticipantCoinCabinet from './ParticipantCoinCabinet';
 import WheelOfFortune from './WheelOfFortune';
 import CoinLeaderboard from './CoinLeaderboard';
 import GameRulesBlock from './GameRulesBlock';
+import PokerTable from './poker/PokerTable';
 
 interface RallyGameHubProps {
   participants: Participant[];
@@ -19,15 +20,16 @@ interface RallyGameHubProps {
     participantName: string;
     participantNickname: string;
     taskTitle: string;
-    category: 'task' | 'merit' | 'contest' | 'fortune';
+    category: 'task' | 'merit' | 'contest' | 'fortune' | 'poker';
     comment: string;
     awardedBy: string;
   }) => Promise<void> | void;
   onDeleteCoin: (coinId: string) => Promise<void> | void;
+  onUpdateCoins?: (coins: RallyCoin[]) => void;
   onOpenProfileEdit?: () => void;
 }
 
-export type GameSubTab = 'cabinet' | 'leaderboard' | 'wheel' | 'rules';
+export type GameSubTab = 'cabinet' | 'leaderboard' | 'wheel' | 'poker' | 'rules';
 
 export default function RallyGameHub({
   participants,
@@ -36,6 +38,7 @@ export default function RallyGameHub({
   isCaptain,
   onAwardCoin,
   onDeleteCoin,
+  onUpdateCoins,
   onOpenProfileEdit
 }: RallyGameHubProps) {
   const [activeTab, setActiveTab] = useState<GameSubTab>('cabinet');
@@ -110,6 +113,22 @@ export default function RallyGameHub({
 
           <button
             type="button"
+            onClick={() => setActiveTab('poker')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+              activeTab === 'poker'
+                ? 'bg-emerald-800 text-white shadow-xs ring-2 ring-emerald-500/50'
+                : 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
+            }`}
+          >
+            <span className="text-sm">♠️</span>
+            <span>Покерный турнир</span>
+            <span className="bg-amber-400 text-stone-950 font-black text-[9px] px-1.5 py-0.2 rounded-full uppercase">
+              Стол
+            </span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setActiveTab('rules')}
             className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
               activeTab === 'rules'
@@ -168,6 +187,18 @@ export default function RallyGameHub({
           currentUser={currentUser}
           isAdmin={isCaptain}
           onAwardCoin={onAwardCoin}
+        />
+      )}
+
+      {activeTab === 'poker' && (
+        <PokerTable
+          participants={participants}
+          coins={coins}
+          currentUser={currentUser}
+          isCaptain={isCaptain}
+          onAwardCoin={onAwardCoin}
+          onDeleteCoin={onDeleteCoin}
+          onUpdateCoins={onUpdateCoins}
         />
       )}
 

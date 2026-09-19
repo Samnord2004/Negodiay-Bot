@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { 
   Users, Calendar, MapPin, Coins, AlertCircle, 
   CheckCircle, Plus, Send, ChevronDown, ChevronUp, Sparkles, MessageSquare,
-  CheckSquare, Coffee, Tent, Trophy, Palette, Edit, Trash2
+  CheckSquare, Coffee, Tent, Trophy, Palette, Edit, Trash2,
+  Check, HelpCircle, X, CreditCard, ShieldCheck, UserCheck
 } from 'lucide-react';
 import { getSafeAvatar, getParticipantAvatar } from '../utils/avatar';
 import { formatBirthdayShort } from '../utils/dateUtils';
@@ -12,7 +13,10 @@ import ContestsTab from './ContestsTab';
 import CreativityTab from './CreativityTab';
 import DeleteParticipantModal from './DeleteParticipantModal';
 import RallyGameHub from './game/RallyGameHub';
-import { Participant, Excursion, TaskItem, MenuItem, GroceryItem, Contest, CreativityIdea, RallyCoin } from '../types';
+import { 
+  Participant, Excursion, TaskItem, MenuItem, GroceryItem, Contest, 
+  CreativityIdea, RallyCoin, RallyParticipationStatus, RallyParticipantEntry 
+} from '../types';
 
 export type HomeRallySubTab = 'overview' | 'game' | 'tasks' | 'menu' | 'contests' | 'creativity';
 
@@ -49,11 +53,12 @@ interface HomeRallyTabProps {
     participantName: string;
     participantNickname: string;
     taskTitle: string;
-    category: 'task' | 'merit' | 'contest' | 'fortune';
+    category: 'task' | 'merit' | 'contest' | 'fortune' | 'poker';
     comment: string;
     awardedBy: string;
   }) => Promise<void> | void;
   onDeleteCoin?: (coinId: string) => Promise<void> | void;
+  onUpdateCoins?: (coins: RallyCoin[]) => void;
   onOpenProfileEdit?: () => void;
 }
 
@@ -85,6 +90,7 @@ export default function HomeRallyTab({
   rallyCoins = [],
   onAwardCoin = async () => {},
   onDeleteCoin = async () => {},
+  onUpdateCoins = () => {},
   onOpenProfileEdit
 }: HomeRallyTabProps) {
   const [internalSubTab, setInternalSubTab] = useState<HomeRallySubTab>(activeSubTab);
@@ -104,6 +110,86 @@ export default function HomeRallyTab({
 
   // Debtor nudging feedback
   const [nudgingId, setNudgingId] = useState<string | null>(null);
+
+  // Participation status state for rallies
+  const [statusToast, setStatusToast] = useState<{ excursionId: string; message: string } | null>(null);
+  const [expandedRallyRosterId, setExpandedRallyRosterId] = useState<string | null>(null);
+  const [rallyRosterFilter, setRallyRosterFilter] = useState<'all' | 'going' | 'thinking' | 'not_going' | 'unanswered'>('all');
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState<string | null>(null);
+  const [selectedProxyUserId, setSelectedProxyUserId] = useState<string>('');
+
+  const handleUpdateParticipationStatus = async (
+    excursionId: string,
+    participantId: string,
+    newStatus: RallyParticipationStatus,
+    newIsPaid?: boolean
+  ) => {
+    const ex = excursions.find(e => e.id === excursionId);
+    if (!ex) return;
+
+    const opId = currentUser?.id || participantId;
+    setIsUpdatingStatus(`${excursionId}_${participantId}`);
+
+    // Optimistic local update
+    const currentStatuses = ex.participantStatuses ? { ...ex.participantStatuses } : {};
+    const prevEntry = currentStatuses[participantId] || { status: 'thinking' as const, isPaid: false };
+    const updatedEntry: RallyParticipantEntry = {
+      ...prevEntry,
+      status: newStatus,
+      isPaid: newIsPaid !== undefined ? newIsPaid : prevEntry.isPaid,
+      paidAt: newIsPaid === true ? (prevEntry.paidAt || new Date().toISOString()) : (newIsPaid === false ? undefined : prevEntry.paidAt),
+      updatedAt: new Date().toISOString()
+    };
+    const updatedStatuses = { ...currentStatuses, [participantId]: updatedEntry };
+    const updatedExcursion = { ...ex, participantStatuses: updatedStatuses };
+
+    if (onUpdateExcursions) {
+      onUpdateExcursions(excursions.map(item => item.id === excursionId ? updatedExcursion : item));
+    }
+
+    const statusLabels: Record<RallyParticipationStatus, string> = {
+      going: '«Еду точно» 🏕️',
+      thinking: '«Думаю / вопрос» 🤔',
+      not_going: '«Не еду» ❌'
+    };
+
+    try {
+      const res = await fetch(`/api/excursions/${excursionId}/participant-status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          participantId,
+          status: newStatus,
+          isPaid: newIsPaid,
+          operatorId: opId
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.excursions && onUpdateExcursions) {
+          onUpdateExcursions(data.excursions);
+        }
+      }
+      const participantName = participants.find(p => p.id === participantId)?.name || 'Участник';
+      const toastText = (currentUser && currentUser.id === participantId)
+        ? `Ваш статус сохранён: ${statusLabels[newStatus]}`
+        : `Статус для ${participantName}: ${statusLabels[newStatus]}`;
+      setStatusToast({ excursionId, message: toastText });
+      setTimeout(() => setStatusToast(null), 3500);
+    } catch (err) {
+      console.error("Failed to update rally status:", err);
+    } finally {
+      setIsUpdatingStatus(null);
+    }
+  };
+
+  const handleToggleExcursionPaid = async (excursionId: string, participantId: string, currentPaid: boolean) => {
+    if (!canManagePayments) return;
+    const ex = excursions.find(e => e.id === excursionId);
+    if (!ex) return;
+    const currentStatus = ex.participantStatuses?.[participantId]?.status || 'thinking';
+    await handleUpdateParticipationStatus(excursionId, participantId, currentStatus, !currentPaid);
+  };
 
   useEffect(() => {
     if (activeSubTab) {
@@ -374,63 +460,441 @@ export default function HomeRallyTab({
 
           {/* Active Hikes / Gathering Schedule */}
           <div className="bg-white border border-stone-200 rounded-3xl p-6 shadow-xs space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
                 <h3 className="text-lg font-black text-stone-900 uppercase flex items-center gap-2">
                   <Calendar size={20} className="text-red-600" />
                   Активные Сборы и Походы
                 </h3>
                 <p className="text-xs text-stone-500 mt-0.5">
-                  Текущие утвержденные выезды и расчет сумм взносов (редактирование доступно только капитану)
+                  Текущие утвержденные выезды, статусы присутствия команды и расчет сумм взносов
                 </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-bold text-stone-600 bg-amber-50 border border-amber-200 px-3 py-1 rounded-xl">
+                  🏕️ Отметьтесь: едете ли вы на слёт
+                </span>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {activeExcursions.map(ex => (
-                <div key={ex.id} className="bg-stone-50/60 border border-stone-200 rounded-2xl p-5 flex flex-col justify-between shadow-2xs hover:border-amber-400 transition-colors">
-                  <div>
-                    <div className="flex items-center justify-between gap-2">
-                      <h4 className="font-bold text-base uppercase text-stone-900">{ex.title}</h4>
-                      <span className="bg-emerald-600 text-white text-[10px] font-bold uppercase px-2 py-0.5 rounded-full">
-                        Активен
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-3 text-xs font-semibold text-stone-600 mt-1.5">
-                      <span className="flex items-center gap-1">📍 {ex.location}</span>
-                      <span className="flex items-center gap-1">📅 {ex.date}</span>
-                    </div>
-                    {ex.description && (
-                      <p className="text-xs text-stone-600 mt-2 font-normal leading-relaxed">
-                        {ex.description}
-                      </p>
-                    )}
-                  </div>
+            <div className="grid grid-cols-1 gap-6">
+              {activeExcursions.map(ex => {
+                const statuses = ex.participantStatuses || {};
+                
+                // Determine target participant for status controls
+                const targetParticipantId = currentUser?.id || selectedProxyUserId || activeParticipants[0]?.id;
+                const targetParticipant = activeParticipants.find(p => p.id === targetParticipantId) || currentUser || activeParticipants[0];
+                const currentEntry = targetParticipantId ? statuses[targetParticipantId] : undefined;
+                const currentStatus: RallyParticipationStatus | undefined = currentEntry?.status;
+                const isTargetPaid = Boolean(currentEntry?.isPaid);
 
-                  <div className="mt-4 pt-3 border-t border-stone-200 flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 text-xs font-bold">
-                      <span className="bg-blue-50 text-blue-700 px-2.5 py-1 rounded-lg border border-blue-200">
-                        🧑 Парни: {ex.costBoys || ex.costPerPerson} ₽
-                      </span>
-                      <span className="bg-pink-50 text-pink-700 px-2.5 py-1 rounded-lg border border-pink-200">
-                        👩 Девчули: {ex.costGirls || Math.round(ex.costPerPerson * 0.7)} ₽
-                      </span>
-                    </div>
+                // Stats calculation
+                const goingList = activeParticipants.filter(p => statuses[p.id]?.status === 'going');
+                const thinkingList = activeParticipants.filter(p => statuses[p.id]?.status === 'thinking');
+                const notGoingList = activeParticipants.filter(p => statuses[p.id]?.status === 'not_going');
+                const unansweredList = activeParticipants.filter(p => !statuses[p.id]?.status);
+                const paidList = activeParticipants.filter(p => statuses[p.id]?.isPaid);
 
-                    {isCaptain && (
-                      <button
-                        type="button"
-                        onClick={() => setEditingExcursion({ ...ex })}
-                        className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white font-bold text-xs uppercase rounded-xl flex items-center gap-1.5 shadow-xs transition-all"
-                        title="Редактировать слёт и взносы (доступно капитану)"
-                      >
-                        <Edit size={14} className="text-white" />
-                        <span>Редактировать слёт</span>
-                      </button>
-                    )}
+                const isRosterExpanded = expandedRallyRosterId === ex.id;
+
+                // Filtered roster for this rally
+                const filteredRoster = activeParticipants.filter(p => {
+                  const s = statuses[p.id]?.status;
+                  if (rallyRosterFilter === 'going') return s === 'going';
+                  if (rallyRosterFilter === 'thinking') return s === 'thinking';
+                  if (rallyRosterFilter === 'not_going') return s === 'not_going';
+                  if (rallyRosterFilter === 'unanswered') return !s;
+                  return true;
+                });
+
+                return (
+                  <div key={ex.id} className="bg-stone-50/70 border-2 border-stone-200 rounded-3xl p-5 sm:p-6 flex flex-col justify-between shadow-xs hover:border-amber-400/80 transition-all">
+                    <div>
+                      {/* Top title & badge */}
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xl">⛺</span>
+                          <h4 className="font-black text-lg sm:text-xl uppercase text-stone-900 tracking-tight">{ex.title}</h4>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="bg-emerald-600 text-white text-[11px] font-black uppercase px-2.5 py-0.5 rounded-full shadow-2xs">
+                            Актуальный слёт
+                          </span>
+                          {isCaptain && (
+                            <button
+                              type="button"
+                              onClick={() => setEditingExcursion({ ...ex })}
+                              className="px-2.5 py-1 bg-stone-200 hover:bg-stone-300 text-stone-800 font-bold text-xs uppercase rounded-xl flex items-center gap-1 shadow-2xs transition-all cursor-pointer"
+                              title="Редактировать слёт и взносы (доступно капитану)"
+                            >
+                              <Edit size={13} />
+                              <span>Редактировать</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Location, Date & Fees */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 mt-3 text-xs font-semibold text-stone-700">
+                        <div className="bg-white px-3 py-2 rounded-xl border border-stone-200 flex items-center gap-2">
+                          <span className="text-base">📍</span>
+                          <span className="truncate"><strong>Локация:</strong> {ex.location}</span>
+                        </div>
+                        <div className="bg-white px-3 py-2 rounded-xl border border-stone-200 flex items-center gap-2">
+                          <span className="text-base">📅</span>
+                          <span><strong>Даты:</strong> {ex.date}</span>
+                        </div>
+                        <div className="bg-white px-3 py-2 rounded-xl border border-stone-200 flex items-center gap-2 sm:col-span-2 md:col-span-1">
+                          <span className="text-base">💵</span>
+                          <span>Парни: <strong>{ex.costBoys || ex.costPerPerson} ₽</strong> | Девчули: <strong>{ex.costGirls || Math.round(ex.costPerPerson * 0.7)} ₽</strong></span>
+                        </div>
+                      </div>
+
+                      {ex.description && (
+                        <p className="text-xs sm:text-sm text-stone-600 mt-2.5 font-normal leading-relaxed bg-white/70 p-3 rounded-xl border border-stone-200/60">
+                          {ex.description}
+                        </p>
+                      )}
+
+                      {/* Toast notification */}
+                      {statusToast && statusToast.excursionId === ex.id && (
+                        <div className="mt-3 p-2.5 bg-emerald-100 border border-emerald-300 text-emerald-950 font-bold text-xs rounded-xl flex items-center gap-2 animate-fade-in shadow-xs">
+                          <CheckCircle size={16} className="text-emerald-700 shrink-0" />
+                          <span>{statusToast.message}</span>
+                        </div>
+                      )}
+
+                      {/* ========================================================================= */}
+                      {/* PARTICIPATION STATUS BUTTONS (PRIMARY REQUIREMENT) */}
+                      {/* ========================================================================= */}
+                      <div className="mt-4 p-4 sm:p-5 bg-white border-2 border-amber-300/80 rounded-2xl shadow-xs">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-stone-100">
+                          <div className="flex items-center gap-2.5">
+                            {targetParticipant && (
+                              <img
+                                src={getParticipantAvatar(targetParticipant)}
+                                alt={targetParticipant.name}
+                                className="w-8 h-8 rounded-full border border-stone-200 object-cover"
+                              />
+                            )}
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-black uppercase text-stone-900">
+                                  {currentUser ? 'Ваш статус на этот сбор:' : 'Проставить статус за:'}
+                                </span>
+                                {targetParticipant && (
+                                  <span className="text-xs font-bold text-red-600">
+                                    {targetParticipant.name}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[11px] text-stone-500">
+                                Нажмите кнопку ниже, чтобы зафиксировать своё участие в слёте
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Proxy Selector if not logged in or Captain wants to choose someone */}
+                          {(!currentUser || isCaptain) && activeParticipants.length > 0 && (
+                            <div className="flex items-center gap-1.5 text-xs">
+                              <span className="text-stone-400 font-bold text-[10px] uppercase">Выбрать соратника:</span>
+                              <select
+                                value={targetParticipantId}
+                                onChange={(e) => setSelectedProxyUserId(e.target.value)}
+                                className="bg-stone-50 border border-stone-200 rounded-lg px-2 py-1 text-xs font-semibold text-stone-800"
+                              >
+                                {activeParticipants.map(p => (
+                                  <option key={p.id} value={p.id}>
+                                    {p.name} {p.id === currentUser?.id ? '(Вы)' : ''}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Current Status Pill & Payment Note */}
+                        <div className="flex flex-wrap items-center justify-between gap-2 my-3">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-stone-600">Текущий выбор:</span>
+                            {currentStatus === 'going' && (
+                              <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-900 border border-emerald-300 font-black text-xs uppercase px-2.5 py-0.5 rounded-lg shadow-2xs">
+                                <CheckCircle size={13} className="text-emerald-700" />
+                                Еду точно! 🏕️
+                              </span>
+                            )}
+                            {currentStatus === 'thinking' && (
+                              <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-950 border border-amber-300 font-black text-xs uppercase px-2.5 py-0.5 rounded-lg shadow-2xs">
+                                <HelpCircle size={13} className="text-amber-700" />
+                                Думаю / под вопросом 🤔
+                              </span>
+                            )}
+                            {currentStatus === 'not_going' && (
+                              <span className="inline-flex items-center gap-1 bg-rose-100 text-rose-950 border border-rose-300 font-black text-xs uppercase px-2.5 py-0.5 rounded-lg shadow-2xs">
+                                <X size={13} className="text-rose-700" />
+                                Не смогу поехать ❌
+                              </span>
+                            )}
+                            {!currentStatus && (
+                              <span className="inline-flex items-center gap-1 bg-stone-100 text-stone-600 font-bold text-xs uppercase px-2.5 py-0.5 rounded-lg">
+                                ⚪ Статус ещё не выбран
+                              </span>
+                            )}
+                          </div>
+
+                          {isTargetPaid && (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-black uppercase text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg">
+                              <ShieldCheck size={13} className="text-emerald-600" />
+                              Оргвзнос оплачен
+                            </span>
+                          )}
+                        </div>
+
+                        {/* THE 3 STATUS BUTTONS */}
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => targetParticipantId && handleUpdateParticipationStatus(ex.id, targetParticipantId, 'going')}
+                            disabled={!targetParticipantId || isUpdatingStatus === `${ex.id}_${targetParticipantId}`}
+                            className={`py-3 px-3 rounded-xl font-black text-xs sm:text-sm uppercase flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs active:scale-98 ${
+                              currentStatus === 'going'
+                                ? 'bg-emerald-600 hover:bg-emerald-700 text-white ring-2 ring-emerald-500 ring-offset-2 scale-[1.02]'
+                                : 'bg-emerald-50/50 hover:bg-emerald-100/80 text-emerald-900 border-2 border-emerald-300 hover:border-emerald-400'
+                            }`}
+                            title="Отметиться: Еду точно на слёт"
+                          >
+                            <span className="text-base">🟢</span>
+                            <span>Еду точно</span>
+                            {currentStatus === 'going' && <Check size={16} className="ml-1" />}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => targetParticipantId && handleUpdateParticipationStatus(ex.id, targetParticipantId, 'thinking')}
+                            disabled={!targetParticipantId || isUpdatingStatus === `${ex.id}_${targetParticipantId}`}
+                            className={`py-3 px-3 rounded-xl font-black text-xs sm:text-sm uppercase flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs active:scale-98 ${
+                              currentStatus === 'thinking'
+                                ? 'bg-amber-500 hover:bg-amber-600 text-stone-950 ring-2 ring-amber-400 ring-offset-2 scale-[1.02]'
+                                : 'bg-amber-50/50 hover:bg-amber-100/80 text-amber-950 border-2 border-amber-300 hover:border-amber-400'
+                            }`}
+                            title="Отметиться: Пока думаю / под вопросом"
+                          >
+                            <span className="text-base">🟡</span>
+                            <span>Думаю</span>
+                            {currentStatus === 'thinking' && <Check size={16} className="ml-1" />}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => targetParticipantId && handleUpdateParticipationStatus(ex.id, targetParticipantId, 'not_going')}
+                            disabled={!targetParticipantId || isUpdatingStatus === `${ex.id}_${targetParticipantId}`}
+                            className={`py-3 px-3 rounded-xl font-black text-xs sm:text-sm uppercase flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs active:scale-98 ${
+                              currentStatus === 'not_going'
+                                ? 'bg-rose-600 hover:bg-rose-700 text-white ring-2 ring-rose-500 ring-offset-2 scale-[1.02]'
+                                : 'bg-rose-50/50 hover:bg-rose-100/80 text-rose-950 border-2 border-rose-300 hover:border-rose-400'
+                            }`}
+                            title="Отметиться: Не смогу поехать"
+                          >
+                            <span className="text-base">🔴</span>
+                            <span>Не еду</span>
+                            {currentStatus === 'not_going' && <Check size={16} className="ml-1" />}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* ========================================================================= */}
+                      {/* STATS CHIPS & ROSTER TOGGLE */}
+                      {/* ========================================================================= */}
+                      <div className="mt-4 flex flex-wrap items-center justify-between gap-2.5 bg-stone-100/70 p-3 rounded-2xl border border-stone-200">
+                        <div className="flex flex-wrap items-center gap-2 text-xs font-bold">
+                          <span className="text-stone-500 uppercase text-[10px] mr-1">Статистика сбора:</span>
+                          <span className="bg-emerald-100 text-emerald-900 px-2.5 py-1 rounded-lg border border-emerald-300 flex items-center gap-1 shadow-2xs">
+                            <span>🟢 Едут:</span>
+                            <span className="font-black">{goingList.length}</span>
+                          </span>
+                          <span className="bg-amber-100 text-amber-950 px-2.5 py-1 rounded-lg border border-amber-300 flex items-center gap-1 shadow-2xs">
+                            <span>🟡 Думают:</span>
+                            <span className="font-black">{thinkingList.length}</span>
+                          </span>
+                          <span className="bg-rose-100 text-rose-950 px-2.5 py-1 rounded-lg border border-rose-300 flex items-center gap-1 shadow-2xs">
+                            <span>🔴 Не едут:</span>
+                            <span className="font-black">{notGoingList.length}</span>
+                          </span>
+                          <span className="bg-stone-200 text-stone-700 px-2.5 py-1 rounded-lg border border-stone-300 flex items-center gap-1 shadow-2xs">
+                            <span>⚪ Не ответили:</span>
+                            <span className="font-black">{unansweredList.length}</span>
+                          </span>
+                          <span className="bg-blue-100 text-blue-900 px-2.5 py-1 rounded-lg border border-blue-300 flex items-center gap-1 shadow-2xs">
+                            <span>💳 Оплачено:</span>
+                            <span className="font-black">{paidList.length}</span>
+                          </span>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => setExpandedRallyRosterId(isRosterExpanded ? null : ex.id)}
+                          className="px-3 py-1.5 bg-white hover:bg-stone-50 text-stone-800 font-bold text-xs uppercase rounded-xl border border-stone-300 flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
+                        >
+                          <Users size={14} className="text-red-600" />
+                          <span>{isRosterExpanded ? 'Скрыть состав' : 'Состав участников слёта'}</span>
+                          {isRosterExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                        </button>
+                      </div>
+
+                      {/* EXPANDABLE PARTICIPANTS ROSTER WITH STATUSES */}
+                      {isRosterExpanded && (
+                        <div className="mt-3 p-4 bg-white border border-stone-200 rounded-2xl shadow-xs space-y-3 animate-fade-in">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-stone-100">
+                            <span className="font-black text-xs uppercase text-stone-800 flex items-center gap-1.5">
+                              <span>📋 Список соратников и статусы участия ({activeParticipants.length})</span>
+                            </span>
+
+                            {/* Filters */}
+                            <div className="flex flex-wrap items-center gap-1 text-[11px] font-bold">
+                              <button
+                                type="button"
+                                onClick={() => setRallyRosterFilter('all')}
+                                className={`px-2 py-0.5 rounded-md cursor-pointer ${rallyRosterFilter === 'all' ? 'bg-stone-900 text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'}`}
+                              >
+                                Все ({activeParticipants.length})
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setRallyRosterFilter('going')}
+                                className={`px-2 py-0.5 rounded-md cursor-pointer ${rallyRosterFilter === 'going' ? 'bg-emerald-700 text-white' : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100'}`}
+                              >
+                                Едут ({goingList.length})
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setRallyRosterFilter('thinking')}
+                                className={`px-2 py-0.5 rounded-md cursor-pointer ${rallyRosterFilter === 'thinking' ? 'bg-amber-600 text-white' : 'bg-amber-50 text-amber-900 hover:bg-amber-100'}`}
+                              >
+                                Думают ({thinkingList.length})
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setRallyRosterFilter('not_going')}
+                                className={`px-2 py-0.5 rounded-md cursor-pointer ${rallyRosterFilter === 'not_going' ? 'bg-rose-700 text-white' : 'bg-rose-50 text-rose-900 hover:bg-rose-100'}`}
+                              >
+                                Не едут ({notGoingList.length})
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setRallyRosterFilter('unanswered')}
+                                className={`px-2 py-0.5 rounded-md cursor-pointer ${rallyRosterFilter === 'unanswered' ? 'bg-stone-600 text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'}`}
+                              >
+                                Без ответа ({unansweredList.length})
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-96 overflow-y-auto pr-1">
+                            {filteredRoster.map(p => {
+                              const pEntry = statuses[p.id];
+                              const pStatus = pEntry?.status;
+                              const isPaid = Boolean(pEntry?.isPaid);
+
+                              return (
+                                <div key={p.id} className="p-2.5 rounded-xl border border-stone-200 bg-stone-50/70 hover:bg-white transition-colors flex items-center justify-between gap-2">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <img
+                                      src={getParticipantAvatar(p)}
+                                      alt={p.name}
+                                      className="w-8 h-8 rounded-full border border-stone-200 object-cover shrink-0"
+                                    />
+                                    <div className="min-w-0">
+                                      <p className="font-bold text-xs text-stone-900 truncate">{p.name}</p>
+                                      <span className="text-[10px] font-semibold text-stone-500">@{p.nickname}</span>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    {/* Status Badge */}
+                                    {pStatus === 'going' && (
+                                      <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-900 border border-emerald-200">
+                                        🟢 Едет
+                                      </span>
+                                    )}
+                                    {pStatus === 'thinking' && (
+                                      <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-amber-100 text-amber-950 border border-amber-200">
+                                        🟡 Думает
+                                      </span>
+                                    )}
+                                    {pStatus === 'not_going' && (
+                                      <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-rose-100 text-rose-950 border border-rose-200">
+                                        🔴 Не едет
+                                      </span>
+                                    )}
+                                    {!pStatus && (
+                                      <span className="text-[10px] font-semibold text-stone-400 px-1.5 py-0.5 rounded bg-stone-100">
+                                        ⚪ Без ответа
+                                      </span>
+                                    )}
+
+                                    {/* Captain Quick Status Buttons */}
+                                    {isCaptain && (
+                                      <div className="flex items-center gap-0.5 bg-white border border-stone-200 rounded-lg p-0.5 shadow-2xs">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleUpdateParticipationStatus(ex.id, p.id, 'going')}
+                                          className={`w-6 h-6 rounded flex items-center justify-center text-xs transition-colors cursor-pointer ${pStatus === 'going' ? 'bg-emerald-600 text-white' : 'hover:bg-emerald-50 text-emerald-800'}`}
+                                          title="Капитан: переключить на «Едет»"
+                                        >
+                                          🟢
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleUpdateParticipationStatus(ex.id, p.id, 'thinking')}
+                                          className={`w-6 h-6 rounded flex items-center justify-center text-xs transition-colors cursor-pointer ${pStatus === 'thinking' ? 'bg-amber-500 text-stone-950' : 'hover:bg-amber-50 text-amber-800'}`}
+                                          title="Капитан: переключить на «Думает»"
+                                        >
+                                          🟡
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleUpdateParticipationStatus(ex.id, p.id, 'not_going')}
+                                          className={`w-6 h-6 rounded flex items-center justify-center text-xs transition-colors cursor-pointer ${pStatus === 'not_going' ? 'bg-rose-600 text-white' : 'hover:bg-rose-50 text-rose-800'}`}
+                                          title="Капитан: переключить на «Не едет»"
+                                        >
+                                          🔴
+                                        </button>
+                                      </div>
+                                    )}
+
+                                    {/* Payment Toggle / Status */}
+                                    {canManagePayments ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleToggleExcursionPaid(ex.id, p.id, isPaid)}
+                                        className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase flex items-center gap-1 transition-all cursor-pointer ${
+                                          isPaid
+                                            ? 'bg-emerald-600 text-white shadow-2xs'
+                                            : 'bg-stone-200 text-stone-700 hover:bg-stone-300'
+                                        }`}
+                                        title="Казначей/Капитан: кликните для отметки оплаты взноса"
+                                      >
+                                        <CreditCard size={11} />
+                                        <span>{isPaid ? 'Оплачено' : 'Не сдал'}</span>
+                                      </button>
+                                    ) : (
+                                      isPaid && (
+                                        <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded" title="Взнос оплачен">
+                                          ✓ Оплачено
+                                        </span>
+                                      )
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
@@ -497,6 +961,7 @@ export default function HomeRallyTab({
                     <th className="p-3 text-center">🪙 Монетки</th>
                     <th className="p-3">Стаж</th>
                     <th className="p-3">🎂 Днюха (ДД.ММ.ГГ)</th>
+                    <th className="p-3">Статус на слёт</th>
                     <th className="p-3">Сдано / Всего</th>
                     <th className="p-3">Задолженность</th>
                     <th className="p-3 text-right">Действия</th>
@@ -625,6 +1090,81 @@ export default function HomeRallyTab({
                           {p.birthday ? formatBirthdayShort(p.birthday) : '—'}
                         </td>
 
+                        {/* Rally Participation Status */}
+                        <td className="p-3">
+                          {(() => {
+                            const primaryEx = activeExcursions[0];
+                            if (!primaryEx) {
+                              return <span className="text-stone-400 text-[11px]">—</span>;
+                            }
+                            const pEntry = primaryEx.participantStatuses?.[p.id];
+                            const s = pEntry?.status;
+                            const isPaid = Boolean(pEntry?.isPaid);
+
+                            return (
+                              <div className="flex flex-col gap-1 items-start">
+                                <div className="flex items-center gap-1">
+                                  {s === 'going' && (
+                                    <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-900 border border-emerald-300 font-black text-[10px] uppercase px-2 py-0.5 rounded-md shadow-2xs">
+                                      🟢 Едет
+                                    </span>
+                                  )}
+                                  {s === 'thinking' && (
+                                    <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-950 border border-amber-300 font-black text-[10px] uppercase px-2 py-0.5 rounded-md shadow-2xs">
+                                      🟡 Думает
+                                    </span>
+                                  )}
+                                  {s === 'not_going' && (
+                                    <span className="inline-flex items-center gap-1 bg-rose-100 text-rose-950 border border-rose-300 font-black text-[10px] uppercase px-2 py-0.5 rounded-md shadow-2xs">
+                                      🔴 Не едет
+                                    </span>
+                                  )}
+                                  {!s && (
+                                    <span className="text-stone-400 font-semibold text-[10px] px-1.5 py-0.5 rounded bg-stone-100">
+                                      ⚪ Не выбран
+                                    </span>
+                                  )}
+
+                                  {isPaid && (
+                                    <span className="text-[10px] font-black text-emerald-800 bg-emerald-50 border border-emerald-200 px-1 py-0.5 rounded" title="Взнос на слёт сдан">
+                                      💳
+                                    </span>
+                                  )}
+                                </div>
+
+                                {isCaptain && (
+                                  <div className="flex items-center gap-0.5 bg-stone-100 rounded p-0.5 border border-stone-200 mt-0.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUpdateParticipationStatus(primaryEx.id, p.id, 'going')}
+                                      className={`w-5 h-5 rounded text-[10px] flex items-center justify-center cursor-pointer transition-colors ${s === 'going' ? 'bg-emerald-600 text-white' : 'hover:bg-emerald-100'}`}
+                                      title="Капитан: Едет"
+                                    >
+                                      🟢
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUpdateParticipationStatus(primaryEx.id, p.id, 'thinking')}
+                                      className={`w-5 h-5 rounded text-[10px] flex items-center justify-center cursor-pointer transition-colors ${s === 'thinking' ? 'bg-amber-500 text-stone-950' : 'hover:bg-amber-100'}`}
+                                      title="Капитан: Думает"
+                                    >
+                                      🟡
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUpdateParticipationStatus(primaryEx.id, p.id, 'not_going')}
+                                      className={`w-5 h-5 rounded text-[10px] flex items-center justify-center cursor-pointer transition-colors ${s === 'not_going' ? 'bg-rose-600 text-white' : 'hover:bg-rose-100'}`}
+                                      title="Капитан: Не едет"
+                                    >
+                                      🔴
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </td>
+
                         {/* Paid vs Total */}
                         <td className="p-3">
                           <div className="font-bold text-stone-900">
@@ -736,6 +1276,7 @@ export default function HomeRallyTab({
             isCaptain={isCaptain}
             onAwardCoin={onAwardCoin}
             onDeleteCoin={onDeleteCoin}
+            onUpdateCoins={onUpdateCoins}
             onOpenProfileEdit={onOpenProfileEdit}
           />
         </div>

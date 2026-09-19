@@ -11,6 +11,7 @@ import {
   GalleryPhoto,
   TeamDocument,
   FundRecord,
+  FundExpense,
   CreativityIdea,
   RallyCoin
 } from './types';
@@ -878,6 +879,29 @@ export const initialRallyCoins: RallyCoin[] = [
     awardedAt: "2026-08-10T16:45:00.000Z",
     awardedBy: "Колесо Фортуны",
     year: 2026
+  }
+];
+
+export const initialFundExpenses: FundExpense[] = [
+  {
+    id: 'exp_1',
+    title: 'Командный тент 4х6м с люверсами',
+    amount: 4500,
+    date: '2025-05-12',
+    category: 'Лагерное снаряжение',
+    spentBy: 'Казначей',
+    note: 'Для обустройства общей костровой зоны',
+    status: 'approved'
+  },
+  {
+    id: 'exp_2',
+    title: 'Походная аптечка и перевязочные средства',
+    amount: 2300,
+    date: '2025-06-01',
+    category: 'Безопасность',
+    spentBy: 'Казначей',
+    note: 'Жгуты, бинты, антисептики, спазмолитики',
+    status: 'approved'
   }
 ];
 

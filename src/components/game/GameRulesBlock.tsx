@@ -30,7 +30,7 @@ export default function GameRulesBlock() {
       </div>
 
       {/* CORE MECHANICS GRID */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         
         {/* CARD 1: ПРИЗ */}
         <div className="bg-white border border-stone-200 rounded-3xl p-6 shadow-xs space-y-3">
@@ -67,7 +67,20 @@ export default function GameRulesBlock() {
             Колесо Фортуны с весами
           </h3>
           <p className="text-xs text-stone-600 leading-relaxed">
-            Шанс есть у каждого! В Колесе Фортуны действует честный балансировочный алгоритм: <strong>чем меньше у соратника монеток, тем выше вероятность его победы</strong> в ежедневном розыгрыше.
+            Шанс есть у каждого! В Колесе Фортуны действует честный балансировочный алгоритм: <strong>чем меньше у соратника монеток, тем выше вероятность его победы</strong> в розыгрыше.
+          </p>
+        </div>
+
+        {/* CARD 4: ПОКЕРНЫЙ СТОЛ НЕГОДЯЕВ */}
+        <div className="bg-white border border-stone-200 rounded-3xl p-6 shadow-xs space-y-3">
+          <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-800 flex items-center justify-center text-xl font-bold">
+            ♠️
+          </div>
+          <h3 className="font-black text-stone-900 text-base">
+            Покерный турнир Негодяев
+          </h3>
+          <p className="text-xs text-stone-600 leading-relaxed">
+            Классический Texas Hold'em за зеленым сукном: занимайте свободное место, делайте ставки на свои монеты, блефуйте и забирайте турнирный банк с лучшей комбинацией!
           </p>
         </div>
 

@@ -504,7 +504,7 @@ export default function App() {
     participantName: string;
     participantNickname: string;
     taskTitle: string;
-    category: 'task' | 'merit' | 'contest' | 'fortune';
+    category: 'task' | 'merit' | 'contest' | 'fortune' | 'poker';
     comment: string;
     awardedBy: string;
   }) => {
@@ -1025,6 +1025,7 @@ export default function App() {
             rallyCoins={rallyCoins}
             onAwardCoin={handleAwardCoin}
             onDeleteCoin={handleDeleteCoin}
+            onUpdateCoins={setRallyCoins}
             onOpenProfileEdit={() => setIsProfileEditOpen(true)}
             activeSubTab={
               activeTab === 'tasks' ? 'tasks' : 

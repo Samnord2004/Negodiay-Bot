@@ -156,7 +156,7 @@ export default function AuthModal({
         if (data.participants && onRegistered) {
           onRegistered(data.participants);
         }
-        if (data.user && onLoginSuccess) {
+        if (data.user && data.user.accountStatus === 'active' && onLoginSuccess) {
           onLoginSuccess(data.user);
           onClose();
         } else {

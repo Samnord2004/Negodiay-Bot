@@ -48,6 +48,9 @@ import {
   saveFundRecords,
   updateFundRecord,
   upsertFundRecord,
+  getFundExpenses,
+  addOrUpdateFundExpense,
+  deleteFundExpense,
   getCreativityIdeas,
   addCreativityIdea,
   updateCreativityIdea,
@@ -64,7 +67,7 @@ import {
   deleteRallyCoin
 } from "./db";
 import { ORIENTEERING_SIGNS_SVG, KNOTS_DIAGRAM_SVG, CONTEST_SCHEDULE_SVG } from "./src/mockData";
-import { Participant, UserRole, RallyCoin } from "./src/types";
+import { Participant, UserRole, RallyCoin, FundExpense, RallyParticipantEntry } from "./src/types";
 import { sanitizeParticipant, sanitizeParticipants, hashPassword, verifyPassword } from "./src/utils/security";
 import { formatChatTimestamp } from "./src/utils/chatUtils";
 
@@ -631,6 +634,7 @@ app.get("/api/sync", (req, res) => {
     photos: getPhotos(),
     documents: getTeamDocuments(),
     fundRecords: getFundRecords(),
+    fundExpenses: getFundExpenses(),
     creativityIdeas: getCreativityIdeas(),
     stories: getStories(),
     rallyCoins: getRallyCoins()
@@ -692,6 +696,73 @@ app.delete("/api/coins/:id", (req, res) => {
   } catch (err: any) {
     console.error("Error deleting coin:", err);
     res.status(500).json({ error: "Failed to delete coin" });
+  }
+});
+
+// Transfer coins won in poker tournament between team members
+app.post("/api/coins/poker-settle", (req, res) => {
+  try {
+    const { 
+      settlements, 
+      winnerId, 
+      winnerName, 
+      winnerNickname, 
+      handDescription = 'Победа в раздаче' 
+    } = req.body;
+
+    if (!winnerId || !Array.isArray(settlements)) {
+      return res.status(400).json({ error: "Missing winnerId or settlements" });
+    }
+
+    let allCoins = [...getRallyCoins()];
+
+    for (const s of settlements) {
+      const { loserId, loserName, amount } = s;
+      if (!loserId || amount <= 0) continue;
+
+      let transferredCount = 0;
+      for (let i = 0; i < allCoins.length && transferredCount < amount; i++) {
+        if (allCoins[i].participantId === loserId) {
+          allCoins[i] = {
+            ...allCoins[i],
+            participantId: winnerId,
+            participantName: winnerName || "Победитель",
+            participantNickname: winnerNickname || winnerName || "Негодяй",
+            taskTitle: `Выигрыш в покер у ${loserName}`,
+            category: 'poker',
+            comment: `Выиграно за покерным столом Негодяев (${handDescription})`,
+            awardedAt: new Date().toISOString(),
+            awardedBy: 'Покерный стол Негодяев'
+          };
+          transferredCount++;
+        }
+      }
+
+      // If loser had fewer coins in record than wagered, award remaining difference to winner
+      if (transferredCount < amount) {
+        const remainingToAward = amount - transferredCount;
+        for (let k = 0; k < remainingToAward; k++) {
+          allCoins.unshift({
+            id: "coin_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6),
+            participantId: winnerId,
+            participantName: winnerName || "Победитель",
+            participantNickname: winnerNickname || winnerName || "Негодяй",
+            taskTitle: `Выигрыш в покер у ${loserName}`,
+            category: 'poker',
+            comment: `Выиграно за покерным столом Негодяев (${handDescription})`,
+            awardedAt: new Date().toISOString(),
+            awardedBy: 'Покерный стол Негодяев',
+            year: 2026
+          });
+        }
+      }
+    }
+
+    saveRallyCoins(allCoins);
+    res.json({ success: true, coins: allCoins });
+  } catch (err: any) {
+    console.error("Error settling poker coins:", err);
+    res.status(500).json({ error: "Failed to settle poker coins" });
   }
 });
 
@@ -817,7 +888,7 @@ app.post("/api/auth/register", async (req, res) => {
     paidAmount: 0,
     totalCost: 15000,
     debtAmount: 15000,
-    joined: true,
+    joined: false,
     birthday: birthday ? String(birthday).trim() : "",
     joinedYear: new Date().getFullYear(),
     skippedYears: [],
@@ -826,14 +897,14 @@ app.post("/api/auth/register", async (req, res) => {
     email: email ? email.trim() : "",
     phone: phone ? phone.trim() : "",
     password: hashPassword(pwd),
-    accountStatus: "active" as const,
+    accountStatus: "pending" as const,
     biometricEnabled: Boolean(biometricEnabled)
   };
 
   await registerNewParticipant(newParticipant);
   res.json({
     success: true,
-    message: "Регистрация успешно завершена! Добро пожаловать в команду.",
+    message: "Заявка на регистрацию успешно отправлена! Доступ к сайту откроется после обязательного подтверждения Капитаном команды.",
     user: sanitizeParticipant(newParticipant),
     participants: sanitizeParticipants(getParticipants())
   });
@@ -1047,7 +1118,8 @@ app.put("/api/excursions/:id", async (req, res) => {
       costPerPerson: costBoys !== undefined ? Number(costBoys) : (costPerPerson !== undefined ? Number(costPerPerson) : current.costPerPerson),
       costBoys: costBoys !== undefined ? Number(costBoys) : current.costBoys,
       costGirls: costGirls !== undefined ? Number(costGirls) : current.costGirls,
-      isActive: isActive !== undefined ? Boolean(isActive) : current.isActive
+      isActive: isActive !== undefined ? Boolean(isActive) : current.isActive,
+      participantStatuses: req.body.participantStatuses !== undefined ? req.body.participantStatuses : current.participantStatuses
     };
     await addOrUpdateExcursion(updated);
     res.json({ success: true, message: "Слёт успешно обновлён", excursion: updated, excursions: getExcursions() });
@@ -1118,8 +1190,10 @@ app.post("/api/auth/login", (req, res) => {
   }
 
   if (user.accountStatus === "pending") {
-    user.accountStatus = "active";
-    user.joined = true;
+    return res.status(403).json({ 
+      success: false, 
+      error: "Ваша регистрация ожидает подтверждения Капитаном команды. Доступ откроется сразу после одобрения заявки." 
+    });
   }
 
   if (user.accountStatus === "rejected") {
@@ -1378,12 +1452,30 @@ app.delete("/api/participants/:id", async (req, res) => {
   });
 });
 
+function isCaptainUser(p: Participant | undefined | null): boolean {
+  if (!p) return false;
+  return p.role === "admin" || 
+    p.id === "cowboy_1" || 
+    (p.nickname || "").toLowerCase().replace(/^@/, '') === "ковбой" || 
+    (p.email || "").toLowerCase() === "asamoilov81@gmail.com" ||
+    (p.name || "").toLowerCase().includes("самойлов");
+}
+
 app.post("/api/admin/set-role", async (req, res) => {
-  const { userId, role } = req.body;
+  const { userId, role, operatorId } = req.body;
   const validRoles = ["admin", "treasurer", "foreman", "designer", "assistant_captain", "keeper", "chef", "member"];
   if (!validRoles.includes(role)) {
     return res.status(400).json({ success: false, error: "Недопустимая роль" });
   }
+
+  // RESTRICTION: Only Captain can appoint or change Treasurer and roles
+  if (operatorId) {
+    const operator = getParticipants().find(p => p.id === operatorId);
+    if (!isCaptainUser(operator)) {
+      return res.status(403).json({ success: false, error: "Только Капитан команды имеет право назначать или менять Казначея и роли" });
+    }
+  }
+
   const result = await updateParticipantRole(userId, role);
   if (!result.success) {
     return res.status(404).json(result);
@@ -1579,6 +1671,186 @@ app.post("/api/fund/update", (req, res) => {
   } catch (err: any) {
     console.error("Fund update error:", err);
     res.status(500).json({ success: false, error: "Ошибка при обновлении взноса" });
+  }
+});
+
+// Fund Expenses Endpoints
+app.get("/api/fund/expenses", (req, res) => {
+  res.json(getFundExpenses());
+});
+
+app.post("/api/fund/expenses", (req, res) => {
+  try {
+    const { title, amount, date, category, receiptUrl, operatorId, operatorName } = req.body;
+    if (!title || !amount) {
+      return res.status(400).json({ success: false, error: "Название и сумма расхода обязательны" });
+    }
+
+    const operator = getParticipants().find(p => p.id === operatorId);
+    const canManage = canManageFund(operatorId);
+
+    const newExpense: FundExpense = {
+      id: `exp_${Date.now()}`,
+      title: String(title).trim(),
+      amount: Number(amount),
+      date: date || new Date().toISOString().slice(0, 10),
+      category: category || "Инвентарь и лагерь",
+      spentBy: operatorName || operator?.name || "Команда",
+      receiptUrl: receiptUrl ? String(receiptUrl).trim() : undefined,
+      status: canManage ? 'approved' : 'pending',
+      submittedById: operatorId || undefined,
+      submittedByName: operatorName || operator?.name || "Участник команды",
+      approvedBy: canManage ? (operatorName || operator?.name || "Казначей") : undefined,
+      approvedAt: canManage ? new Date().toISOString() : undefined
+    };
+
+    addOrUpdateFundExpense(newExpense);
+    res.json({
+      success: true,
+      message: canManage ? "Расход успешно зафиксирован в кассе фонда" : "Заявка на расход отправлена на согласование Казначею",
+      expense: newExpense,
+      fundExpenses: getFundExpenses()
+    });
+  } catch (err: any) {
+    console.error("Error creating fund expense:", err);
+    res.status(500).json({ success: false, error: "Ошибка при создании расхода" });
+  }
+});
+
+app.post("/api/fund/expenses/:id/approve", (req, res) => {
+  try {
+    const { id } = req.params;
+    const { operatorId, operatorName } = req.body;
+    if (!canManageFund(operatorId)) {
+      return res.status(403).json({ success: false, error: "Только Казначей и Капитан имеют право утверждать расходы фонда" });
+    }
+
+    const allExpenses = getFundExpenses();
+    const exp = allExpenses.find(e => e.id === id);
+    if (!exp) {
+      return res.status(404).json({ success: false, error: "Статья расхода не найдена" });
+    }
+
+    const operator = getParticipants().find(p => p.id === operatorId);
+    exp.status = 'approved';
+    exp.approvedBy = operatorName || operator?.name || (isCaptainUser(operator) ? "Капитан" : "Казначей");
+    exp.approvedAt = new Date().toISOString();
+    addOrUpdateFundExpense(exp);
+
+    res.json({
+      success: true,
+      message: `Расход «${exp.title}» (${exp.amount} ₽) успешно одобрен!`,
+      expense: exp,
+      fundExpenses: getFundExpenses()
+    });
+  } catch (err: any) {
+    console.error("Error approving fund expense:", err);
+    res.status(500).json({ success: false, error: "Ошибка сервера при одобрении расхода" });
+  }
+});
+
+app.post("/api/fund/expenses/:id/reject", (req, res) => {
+  try {
+    const { id } = req.params;
+    const { operatorId } = req.body;
+    if (!canManageFund(operatorId)) {
+      return res.status(403).json({ success: false, error: "Только Казначей и Капитан имеют право отклонять расходы фонда" });
+    }
+
+    const allExpenses = getFundExpenses();
+    const exp = allExpenses.find(e => e.id === id);
+    if (!exp) {
+      return res.status(404).json({ success: false, error: "Статья расхода не найдена" });
+    }
+
+    exp.status = 'rejected';
+    addOrUpdateFundExpense(exp);
+
+    res.json({
+      success: true,
+      message: `Расход «${exp.title}» отклонен`,
+      expense: exp,
+      fundExpenses: getFundExpenses()
+    });
+  } catch (err: any) {
+    console.error("Error rejecting fund expense:", err);
+    res.status(500).json({ success: false, error: "Ошибка сервера при отклонении расхода" });
+  }
+});
+
+app.delete("/api/fund/expenses/:id", (req, res) => {
+  try {
+    const { id } = req.params;
+    const operatorId = (req.body?.operatorId || req.query?.operatorId) as string;
+    if (!canManageFund(operatorId)) {
+      return res.status(403).json({ success: false, error: "Только Казначей и Капитан имеют право удалять статьи расхода" });
+    }
+
+    deleteFundExpense(id);
+    res.json({
+      success: true,
+      message: "Статья расхода удалена",
+      deletedId: id,
+      fundExpenses: getFundExpenses()
+    });
+  } catch (err: any) {
+    console.error("Error deleting fund expense:", err);
+    res.status(500).json({ success: false, error: "Ошибка при удалении расхода" });
+  }
+});
+
+// Excursion Participant Status Endpoint
+app.post("/api/excursions/:id/participant-status", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { participantId, status, isPaid, operatorId } = req.body;
+    if (!id || !participantId) {
+      return res.status(400).json({ success: false, error: "id слёта и participantId обязательны" });
+    }
+
+    const allExcursions = getExcursions();
+    const ex = allExcursions.find(e => e.id === id);
+    if (!ex) {
+      return res.status(404).json({ success: false, error: "Слёт не найден" });
+    }
+
+    const effectiveOperatorId = operatorId || participantId;
+    const operator = getParticipants().find(p => p.id === effectiveOperatorId);
+    const isCaptain = isCaptainUser(operator);
+    const canManagePayments = canManageFund(effectiveOperatorId);
+
+    // Check payment authorization: only Captain or Treasurer can set isPaid
+    if (isPaid !== undefined && !canManagePayments) {
+      return res.status(403).json({ success: false, error: "Только Казначей и Капитан команды имеют право отмечать оплату взноса" });
+    }
+
+    // Check attendance status authorization (only self or Captain)
+    if (status !== undefined && effectiveOperatorId !== participantId && !isCaptain) {
+      return res.status(403).json({ success: false, error: "Вы можете менять статус участия только за себя (или Капитан команды)" });
+    }
+
+    const statuses = ex.participantStatuses ? { ...ex.participantStatuses } : {};
+    const currentEntry = statuses[participantId] || { status: 'thinking' as const, isPaid: false };
+    const updatedEntry: RallyParticipantEntry = {
+      ...currentEntry,
+      status: status !== undefined ? status : currentEntry.status,
+      isPaid: isPaid !== undefined ? isPaid : currentEntry.isPaid,
+      paidAt: isPaid === true ? (currentEntry.paidAt || new Date().toISOString()) : (isPaid === false ? undefined : currentEntry.paidAt),
+      updatedAt: new Date().toISOString()
+    };
+    statuses[participantId] = updatedEntry;
+    ex.participantStatuses = statuses;
+
+    await addOrUpdateExcursion(ex);
+    res.json({
+      success: true,
+      message: "Статус участия успешно сохранен",
+      excursion: ex,
+      excursions: getExcursions()
+    });
+  } catch (err: any) {
+    console.error("Error updating excursion participant status:", err);
+    res.status(500).json({ success: false, error: "Ошибка сервера при обновлении статуса слёта" });
   }
 });
 

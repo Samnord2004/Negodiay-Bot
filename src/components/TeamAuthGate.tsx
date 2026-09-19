@@ -213,7 +213,7 @@ export default function TeamAuthGate({
       if (!response.ok || !data.success) {
         setRegError(data.error || 'Ошибка при регистрации');
       } else {
-        setRegSuccessMessage('Регистрация успешно завершена! Добро пожаловать в команду.');
+        setRegSuccessMessage(data.message || 'Заявка на регистрацию принята! Ожидайте подтверждения Капитаном команды.');
         onRegisterSuccess(data.user, data.participants);
       }
     } catch (err) {

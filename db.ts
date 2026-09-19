@@ -19,7 +19,8 @@ import {
   initialFundRecords,
   initialCreativityIdeas,
   INITIAL_STORIES,
-  initialRallyCoins
+  initialRallyCoins,
+  initialFundExpenses
 } from "./src/mockData";
 import { 
   Participant, 
@@ -34,6 +35,7 @@ import {
   GalleryPhoto, 
   TeamDocument, 
   FundRecord, 
+  FundExpense,
   CreativityIdea, 
   TeamStory, 
   UserRole, 
@@ -104,6 +106,7 @@ export function saveLocalFileBackup() {
       photos: cachePhotos,
       documents: cacheDocuments,
       fundRecords: cacheFundRecords,
+      fundExpenses: cacheFundExpenses,
       creativityIdeas: cacheCreativityIdeas,
       stories: cacheStories,
       rallyCoins: cacheRallyCoins,
@@ -135,6 +138,7 @@ export function loadLocalFileBackup(): boolean {
       if (Array.isArray(data.photos)) cachePhotos = data.photos;
       if (Array.isArray(data.documents)) cacheDocuments = data.documents;
       if (Array.isArray(data.fundRecords)) cacheFundRecords = data.fundRecords;
+      if (Array.isArray(data.fundExpenses)) cacheFundExpenses = data.fundExpenses;
       if (Array.isArray(data.creativityIdeas)) cacheCreativityIdeas = data.creativityIdeas;
       if (Array.isArray(data.stories)) cacheStories = data.stories;
       if (Array.isArray(data.rallyCoins)) cacheRallyCoins = data.rallyCoins;
@@ -161,6 +165,7 @@ let cacheMessages: ChatMessage[] = [...initialMessages];
 let cachePhotos: GalleryPhoto[] = [...initialPhotos];
 let cacheDocuments: TeamDocument[] = [...initialDocuments];
 let cacheFundRecords: FundRecord[] = [...initialFundRecords];
+let cacheFundExpenses: FundExpense[] = [...initialFundExpenses];
 let cacheCreativityIdeas: CreativityIdea[] = [...initialCreativityIdeas];
 let cacheStories: TeamStory[] = [...INITIAL_STORIES];
 let cacheRallyCoins: RallyCoin[] = [...initialRallyCoins];
@@ -384,9 +389,23 @@ export async function initDb() {
       ALTER TABLE gallery_photos ADD COLUMN IF NOT EXISTS item_type TEXT DEFAULT 'photo';
       ALTER TABLE gallery_photos ALTER COLUMN image_url DROP NOT NULL;
 
-      -- Activate any pending or unjoined participants so self-registered users are active and shown
-      UPDATE participants SET joined = true WHERE joined = false;
-      UPDATE participants SET account_status = 'active' WHERE account_status = 'pending';
+      -- Fund expenses and excursion statuses migrations
+      CREATE TABLE IF NOT EXISTS fund_expenses (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        amount INT NOT NULL DEFAULT 0,
+        date TEXT NOT NULL,
+        category TEXT NOT NULL,
+        spent_by TEXT NOT NULL,
+        note TEXT,
+        receipt_url TEXT,
+        status TEXT NOT NULL DEFAULT 'approved',
+        submitted_by_id TEXT,
+        submitted_by_name TEXT,
+        approved_by TEXT,
+        approved_at TEXT
+      );
+      ALTER TABLE excursions ADD COLUMN IF NOT EXISTS participant_statuses JSONB DEFAULT '{}'::jsonb;
     `);
 
     // Load or seed Participants
@@ -400,7 +419,7 @@ export async function initDb() {
           [p.id, p.name, p.nickname, (p as any).psychotype || 'Участник', p.avatar || '', p.photoFront || null, p.photoProfile || null, p.selectedAvatarSource || 'front', p.paidAmount || 0, p.totalCost || 0, p.debtAmount || 0, true, p.birthday || null, p.joinedYear || 1993, JSON.stringify(p.skippedYears || []), p.gender || 'male', p.role || 'member', p.email || '', p.phone || '', p.password || '123', 'active', p.biometricEnabled || false]
         );
       }
-      cacheParticipants = participantsToSeed.map(p => ({ ...p, joined: true, accountStatus: p.accountStatus === 'rejected' ? 'rejected' : 'active' }));
+      cacheParticipants = participantsToSeed.map(p => ({ ...p, joined: true, accountStatus: (p.accountStatus as AccountStatus) || 'pending' }));
     } else {
       const dbUsers = resP.rows.map(r => ({
         id: r.id,
@@ -426,7 +445,7 @@ export async function initDb() {
         email: r.email || undefined,
         phone: r.phone || undefined,
         password: r.password || "123",
-        accountStatus: (r.account_status === 'rejected' ? 'rejected' : 'active') as AccountStatus,
+        accountStatus: ((r.account_status as AccountStatus) || 'pending'),
         biometricEnabled: Boolean(r.biometric_enabled)
       })).filter(p => !isBannedBotParticipant(p));
 
@@ -436,7 +455,7 @@ export async function initDb() {
         mergedMap.set(p.id, {
           ...p,
           joined: true,
-          accountStatus: p.accountStatus === 'rejected' ? 'rejected' : 'active'
+          accountStatus: p.accountStatus || 'pending'
         });
       }
       for (const p of dbUsers) {
@@ -445,7 +464,7 @@ export async function initDb() {
           ...p,
           password: (p.password && p.password !== '123') ? p.password : (cached?.password || p.password || '123'),
           joined: true,
-          accountStatus: p.accountStatus === 'rejected' ? 'rejected' : 'active'
+          accountStatus: p.accountStatus || cached?.accountStatus || 'pending'
         });
       }
       cacheParticipants = Array.from(mergedMap.values());
@@ -824,7 +843,7 @@ export async function saveParticipants(participants: Participant[]) {
     map.set(existing.id, {
       ...existing,
       joined: true,
-      accountStatus: existing.accountStatus === 'rejected' ? 'rejected' : 'active'
+      accountStatus: existing.accountStatus || 'pending'
     });
   }
   // 2. Apply incoming updates
@@ -835,14 +854,14 @@ export async function saveParticipants(participants: Participant[]) {
       map.set(incoming.id, {
         ...incoming,
         password: (existing.password && existing.password !== '123') ? existing.password : (incoming.password || existing.password || '123'),
-        accountStatus: incoming.accountStatus === 'rejected' ? 'rejected' : (existing.accountStatus === 'rejected' ? 'rejected' : 'active'),
+        accountStatus: incoming.accountStatus || existing.accountStatus || 'pending',
         joined: true,
         role: existing.role || incoming.role || 'member'
       });
     } else {
       map.set(incoming.id, {
         ...incoming,
-        accountStatus: incoming.accountStatus === 'rejected' ? 'rejected' : 'active',
+        accountStatus: incoming.accountStatus || 'pending',
         joined: true
       });
     }
@@ -945,13 +964,14 @@ export async function saveExcursions(excursions: Excursion[]) {
     }
     for (const e of unique) {
       await client.query(
-        `INSERT INTO excursions (id, title, date, location, description, cost_per_person, cost_boys, cost_girls, is_active)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        `INSERT INTO excursions (id, title, date, location, description, cost_per_person, cost_boys, cost_girls, is_active, participant_statuses)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
          ON CONFLICT (id) DO UPDATE SET
          title = EXCLUDED.title, date = EXCLUDED.date, location = EXCLUDED.location,
          description = EXCLUDED.description, cost_per_person = EXCLUDED.cost_per_person,
-         cost_boys = EXCLUDED.cost_boys, cost_girls = EXCLUDED.cost_girls, is_active = EXCLUDED.is_active`,
-        [e.id, e.title, e.date, e.location, e.description, e.costPerPerson, e.costBoys, e.costGirls, e.isActive]
+         cost_boys = EXCLUDED.cost_boys, cost_girls = EXCLUDED.cost_girls, is_active = EXCLUDED.is_active,
+         participant_statuses = EXCLUDED.participant_statuses`,
+        [e.id, e.title, e.date, e.location, e.description, e.costPerPerson, e.costBoys, e.costGirls, e.isActive, JSON.stringify(e.participantStatuses || {})]
       );
     }
     await client.query("COMMIT");
@@ -972,16 +992,29 @@ export async function addOrUpdateExcursion(e: Excursion) {
 
   try {
     await pool.query(
-      `INSERT INTO excursions (id, title, date, location, description, cost_per_person, cost_boys, cost_girls, is_active)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      `INSERT INTO excursions (id, title, date, location, description, cost_per_person, cost_boys, cost_girls, is_active, participant_statuses)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        ON CONFLICT (id) DO UPDATE SET
        title = EXCLUDED.title, date = EXCLUDED.date, location = EXCLUDED.location,
        description = EXCLUDED.description, cost_per_person = EXCLUDED.cost_per_person,
-       cost_boys = EXCLUDED.cost_boys, cost_girls = EXCLUDED.cost_girls, is_active = EXCLUDED.is_active`,
-      [e.id, e.title, e.date, e.location, e.description, e.costPerPerson, e.costBoys, e.costGirls, e.isActive]
+       cost_boys = EXCLUDED.cost_boys, cost_girls = EXCLUDED.cost_girls, is_active = EXCLUDED.is_active,
+       participant_statuses = EXCLUDED.participant_statuses`,
+      [e.id, e.title, e.date, e.location, e.description, e.costPerPerson, e.costBoys, e.costGirls, e.isActive, JSON.stringify(e.participantStatuses || {})]
     );
   } catch (err) {
-    console.error("PSQL addOrUpdateExcursion error:", err);
+    try {
+      await pool.query(
+        `INSERT INTO excursions (id, title, date, location, description, cost_per_person, cost_boys, cost_girls, is_active)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         ON CONFLICT (id) DO UPDATE SET
+         title = EXCLUDED.title, date = EXCLUDED.date, location = EXCLUDED.location,
+         description = EXCLUDED.description, cost_per_person = EXCLUDED.cost_per_person,
+         cost_boys = EXCLUDED.cost_boys, cost_girls = EXCLUDED.cost_girls, is_active = EXCLUDED.is_active`,
+        [e.id, e.title, e.date, e.location, e.description, e.costPerPerson, e.costBoys, e.costGirls, e.isActive]
+      );
+    } catch (fallbackErr) {
+      console.error("PSQL addOrUpdateExcursion error:", fallbackErr);
+    }
   }
 }
 
@@ -1485,8 +1518,8 @@ export async function registerNewParticipant(p: Participant) {
   deletedParticipantIds.delete(p.id);
   const cleanParticipant: Participant = {
     ...p,
-    accountStatus: 'active',
-    joined: true,
+    accountStatus: p.accountStatus || 'pending',
+    joined: p.joined ?? false,
     role: p.role || 'member',
   };
   const idx = cacheParticipants.findIndex(x => x.id === cleanParticipant.id);
@@ -1508,10 +1541,10 @@ export async function registerNewParticipant(p: Participant) {
          email = EXCLUDED.email,
          phone = EXCLUDED.phone,
          password = EXCLUDED.password,
-         account_status = 'active',
-         joined = true,
+         account_status = EXCLUDED.account_status,
+         joined = EXCLUDED.joined,
          biometric_enabled = EXCLUDED.biometric_enabled`,
-      [cleanParticipant.id, cleanParticipant.name, cleanParticipant.nickname, (cleanParticipant as any).psychotype || 'Участник', cleanParticipant.avatar || '', cleanParticipant.paidAmount || 0, cleanParticipant.totalCost || 0, cleanParticipant.debtAmount || 0, true, cleanParticipant.birthday || null, cleanParticipant.joinedYear || 1993, JSON.stringify(cleanParticipant.skippedYears || []), cleanParticipant.gender || 'male', cleanParticipant.role || 'member', cleanParticipant.email || '', cleanParticipant.phone || '', cleanParticipant.password || '123', 'active', cleanParticipant.biometricEnabled || false]
+      [cleanParticipant.id, cleanParticipant.name, cleanParticipant.nickname, (cleanParticipant as any).psychotype || 'Участник', cleanParticipant.avatar || '', cleanParticipant.paidAmount || 0, cleanParticipant.totalCost || 0, cleanParticipant.debtAmount || 0, cleanParticipant.joined, cleanParticipant.birthday || null, cleanParticipant.joinedYear || 1993, JSON.stringify(cleanParticipant.skippedYears || []), cleanParticipant.gender || 'male', cleanParticipant.role || 'member', cleanParticipant.email || '', cleanParticipant.phone || '', cleanParticipant.password || '123', cleanParticipant.accountStatus, cleanParticipant.biometricEnabled || false]
     );
   } catch (e) {
     console.error("PSQL registerNewParticipant error:", e);
@@ -1742,6 +1775,52 @@ export function updateFundRecord(id: string, updates: Partial<FundRecord>) {
       }
     })();
   }
+}
+
+// Negodyai Fund Expenses
+export function getFundExpenses(): FundExpense[] {
+  return cacheFundExpenses;
+}
+
+export function addOrUpdateFundExpense(exp: FundExpense): FundExpense {
+  const idx = cacheFundExpenses.findIndex(e => e.id === exp.id);
+  if (idx >= 0) {
+    cacheFundExpenses[idx] = exp;
+  } else {
+    cacheFundExpenses.unshift(exp);
+  }
+  saveLocalFileBackup();
+  if (!isPgConnected) return exp;
+  (async () => {
+    try {
+      await pool.query(
+        `INSERT INTO fund_expenses (id, title, amount, date, category, spent_by, note, receipt_url, status, submitted_by_id, submitted_by_name, approved_by, approved_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+         ON CONFLICT (id) DO UPDATE SET
+         title = EXCLUDED.title, amount = EXCLUDED.amount, date = EXCLUDED.date, category = EXCLUDED.category,
+         spent_by = EXCLUDED.spent_by, note = EXCLUDED.note, receipt_url = EXCLUDED.receipt_url,
+         status = EXCLUDED.status, submitted_by_id = EXCLUDED.submitted_by_id, submitted_by_name = EXCLUDED.submitted_by_name,
+         approved_by = EXCLUDED.approved_by, approved_at = EXCLUDED.approved_at`,
+        [exp.id, exp.title, exp.amount, exp.date, exp.category, exp.spentBy, exp.note || "", exp.receiptUrl || "", exp.status || 'approved', exp.submittedById || "", exp.submittedByName || "", exp.approvedBy || "", exp.approvedAt || ""]
+      );
+    } catch (e) {
+      console.error("PSQL addOrUpdateFundExpense error:", e);
+    }
+  })();
+  return exp;
+}
+
+export function deleteFundExpense(id: string) {
+  cacheFundExpenses = cacheFundExpenses.filter(e => e.id !== id);
+  saveLocalFileBackup();
+  if (!isPgConnected) return;
+  (async () => {
+    try {
+      await pool.query("DELETE FROM fund_expenses WHERE id = $1", [id]);
+    } catch (e) {
+      console.error("PSQL deleteFundExpense error:", e);
+    }
+  })();
 }
 
 // Creativity & Ideas
