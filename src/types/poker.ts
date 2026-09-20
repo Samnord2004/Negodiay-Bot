@@ -65,3 +65,19 @@ export interface HandHistoryRecord {
 }
 
 export type PokerGameMode = 'coins' | 'chips'; // На реальные монеты Негодяев или на тренировочные фишки
+export type PokerPlayMode = 'multiplayer' | 'training';
+
+export interface PokerRoomPublicState {
+  gameStage: GameStage;
+  pot: number;
+  currentBetToCall: number;
+  activeTurnSeat: number;
+  dealerSeat: number;
+  handCount: number;
+  communityCards: Card[];
+  seats: (PokerPlayer | null)[];
+  handWinners: { player: PokerPlayer; evaluation: HandEvaluation; wonAmount: number }[];
+  handHistory: HandHistoryRecord[];
+  statusMessage: string;
+  onlineCount: number;
+}

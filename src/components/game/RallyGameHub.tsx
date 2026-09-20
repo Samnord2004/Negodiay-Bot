@@ -9,6 +9,7 @@ import WheelOfFortune from './WheelOfFortune';
 import CoinLeaderboard from './CoinLeaderboard';
 import GameRulesBlock from './GameRulesBlock';
 import PokerTable from './poker/PokerTable';
+import MKTournamentHub from './mk/MKTournamentHub';
 
 interface RallyGameHubProps {
   participants: Participant[];
@@ -20,7 +21,7 @@ interface RallyGameHubProps {
     participantName: string;
     participantNickname: string;
     taskTitle: string;
-    category: 'task' | 'merit' | 'contest' | 'fortune' | 'poker';
+    category: 'task' | 'merit' | 'contest' | 'fortune' | 'poker' | 'mortal_kombat';
     comment: string;
     awardedBy: string;
   }) => Promise<void> | void;
@@ -29,7 +30,7 @@ interface RallyGameHubProps {
   onOpenProfileEdit?: () => void;
 }
 
-export type GameSubTab = 'cabinet' | 'leaderboard' | 'wheel' | 'poker' | 'rules';
+export type GameSubTab = 'cabinet' | 'leaderboard' | 'wheel' | 'poker' | 'mk' | 'rules';
 
 export default function RallyGameHub({
   participants,
@@ -129,6 +130,22 @@ export default function RallyGameHub({
 
           <button
             type="button"
+            onClick={() => setActiveTab('mk')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+              activeTab === 'mk'
+                ? 'bg-gradient-to-r from-red-800 via-stone-900 to-amber-800 text-white shadow-xs ring-2 ring-red-500/60'
+                : 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
+            }`}
+          >
+            <span className="text-sm">🐉</span>
+            <span>Mortal Kombat</span>
+            <span className="bg-red-600 text-white font-black text-[9px] px-1.5 py-0.2 rounded-full uppercase tracking-wider">
+              Турнир
+            </span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setActiveTab('rules')}
             className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
               activeTab === 'rules'
@@ -199,6 +216,16 @@ export default function RallyGameHub({
           onAwardCoin={onAwardCoin}
           onDeleteCoin={onDeleteCoin}
           onUpdateCoins={onUpdateCoins}
+        />
+      )}
+
+      {activeTab === 'mk' && (
+        <MKTournamentHub
+          participants={participants}
+          coins={coins}
+          currentUser={currentUser}
+          isCaptain={isCaptain}
+          onAwardCoin={onAwardCoin}
         />
       )}
 

@@ -34,18 +34,18 @@ export default function PokerSeat({
   // Free Seat state
   if (!player) {
     return (
-      <div className="flex flex-col items-center justify-center p-2">
+      <div className="flex flex-col items-center justify-center p-0.5 sm:p-2">
         <button
           type="button"
           onClick={() => onSitDown(seatIndex)}
-          className="w-14 h-14 sm:w-16 sm:h-16 rounded-full border-2 border-dashed border-amber-400/80 bg-emerald-950/60 hover:bg-emerald-900/90 text-amber-300 hover:scale-105 shadow-md group flex flex-col items-center justify-center transition-all cursor-pointer"
+          className="w-10 h-10 sm:w-14 sm:h-14 rounded-full border border-dashed border-amber-400/80 bg-emerald-950/60 hover:bg-emerald-900/90 text-amber-300 hover:scale-105 shadow-md group flex flex-col items-center justify-center transition-all cursor-pointer"
           title={`Посадить соратника на место №${seatIndex + 1}`}
         >
-          <UserPlus size={18} className="transition-transform group-hover:scale-110 text-amber-400" />
-          <span className="text-[9px] font-black uppercase mt-0.5 tracking-tight">Место {seatIndex + 1}</span>
+          <UserPlus size={14} className="transition-transform group-hover:scale-110 text-amber-400 sm:w-4 sm:h-4" />
+          <span className="text-[8px] sm:text-[9px] font-black uppercase mt-0.5 tracking-tight">#{seatIndex + 1}</span>
         </button>
-        <span className="text-[9px] font-bold text-amber-300/80 uppercase mt-1 flex items-center gap-0.5">
-          <span>+ Посадить</span>
+        <span className="text-[8px] sm:text-[9px] font-bold text-amber-300/80 uppercase mt-0.5">
+          + Сесть
         </span>
       </div>
     );
@@ -56,20 +56,20 @@ export default function PokerSeat({
   const canStandUp = (gameStage === 'waiting' || gameStage === 'showdown') && !!onStandUp;
 
   return (
-    <div className="relative flex flex-col items-center select-none group">
+    <div className="relative flex flex-col items-center select-none group max-w-[100px] sm:max-w-[130px]">
       
       {/* Speech Bubble (Bluff / Banter / Reaction) */}
       {player.speechBubble && (
-        <div className="absolute -top-10 z-30 animate-bounce bg-white text-stone-900 px-3 py-1 rounded-2xl shadow-xl border-2 border-amber-400 text-xs font-black whitespace-nowrap max-w-[180px] truncate">
+        <div className="absolute -top-9 sm:-top-10 z-30 animate-bounce bg-white text-stone-900 px-2 sm:px-3 py-0.5 sm:py-1 rounded-2xl shadow-xl border-2 border-amber-400 text-[10px] sm:text-xs font-black whitespace-nowrap max-w-[150px] sm:max-w-[180px] truncate">
           <span>{player.speechBubble}</span>
-          <div className="absolute left-1/2 -bottom-1.5 -translate-x-1/2 w-3 h-3 bg-white border-b-2 border-r-2 border-amber-400 rotate-45" />
+          <div className="absolute left-1/2 -bottom-1.5 -translate-x-1/2 w-2.5 h-2.5 bg-white border-b-2 border-r-2 border-amber-400 rotate-45" />
         </div>
       )}
 
       {/* Dealer Button */}
       {isDealer && (
         <div
-          className="absolute -top-2 -left-2 z-20 w-6 h-6 rounded-full bg-white border-2 border-stone-800 text-stone-950 font-black text-xs flex items-center justify-center shadow-lg ring-1 ring-yellow-400"
+          className="absolute -top-1.5 -left-1.5 z-20 w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-white border-2 border-stone-800 text-stone-950 font-black text-[10px] sm:text-xs flex items-center justify-center shadow-lg ring-1 ring-yellow-400"
           title="Кнопка дилера (Button)"
         >
           D
@@ -78,14 +78,14 @@ export default function PokerSeat({
 
       {/* Player Avatar & Info Capsule */}
       <div
-        className={`relative flex items-center gap-2 p-1.5 sm:p-2 rounded-2xl border transition-all duration-300 ${
+        className={`relative flex items-center gap-1 sm:gap-1.5 p-1 sm:p-1.5 rounded-xl sm:rounded-2xl border transition-all duration-300 ${
           isCurrentTurn
-            ? 'bg-amber-400/95 border-yellow-200 text-stone-950 ring-4 ring-yellow-400/80 shadow-2xl scale-105 z-20'
+            ? 'bg-amber-400/95 border-yellow-200 text-stone-950 ring-2 sm:ring-4 ring-yellow-400/80 shadow-xl scale-105 z-20'
             : player.folded
-            ? 'bg-stone-900/60 border-stone-700/60 text-stone-400 opacity-60'
+            ? 'bg-stone-900/60 border-stone-700/60 text-stone-400 opacity-50'
             : isCurrentUser
-            ? 'bg-emerald-950/90 border-emerald-400 text-white shadow-lg'
-            : 'bg-stone-900/85 border-stone-600/80 text-stone-200 shadow-md'
+            ? 'bg-emerald-950/90 border-emerald-400 text-white shadow-md'
+            : 'bg-stone-900/85 border-stone-600/80 text-stone-200 shadow-sm'
         }`}
       >
         {/* Avatar */}
@@ -93,32 +93,32 @@ export default function PokerSeat({
           <img
             src={player.avatar}
             alt={player.name}
-            className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full object-cover border-2 ${
+            className={`w-7 h-7 sm:w-10 sm:h-10 rounded-full object-cover border ${
               isCurrentTurn
-                ? 'border-stone-950 ring-2 ring-yellow-300'
+                ? 'border-stone-950 ring-1 ring-yellow-300'
                 : isCurrentUser
                 ? 'border-emerald-400'
                 : 'border-stone-400'
             }`}
           />
           {isCurrentUser && (
-            <span className="absolute -bottom-1 -right-1 bg-emerald-600 text-white text-[8px] font-black uppercase px-1 rounded-full border border-white">
+            <span className="absolute -bottom-1 -right-1 bg-emerald-600 text-white text-[7px] sm:text-[8px] font-black uppercase px-0.5 rounded-full border border-white">
               ВЫ
             </span>
           )}
         </div>
 
         {/* Player Name & Coins */}
-        <div className="min-w-0 pr-1">
-          <div className="flex items-center gap-1">
-            <span className="text-xs font-black truncate max-w-[75px] sm:max-w-[95px]">
+        <div className="min-w-0 pr-0.5">
+          <div className="flex items-center gap-0.5">
+            <span className="text-[10px] sm:text-xs font-black truncate max-w-[55px] sm:max-w-[85px]">
               {player.nickname || player.name.split(' ')[0]}
             </span>
           </div>
 
           {/* Real Coins count */}
-          <div className="flex items-center gap-1 mt-0.5">
-            <span className={`text-xs font-black flex items-center gap-0.5 ${
+          <div className="flex items-center gap-0.5">
+            <span className={`text-[10px] sm:text-xs font-black flex items-center gap-0.5 ${
               isCurrentTurn ? 'text-stone-950' : 'text-amber-300'
             }`}>
               <span>🪙</span>
@@ -132,7 +132,7 @@ export default function PokerSeat({
           <button
             type="button"
             onClick={() => onStandUp && onStandUp(seatIndex)}
-            className="opacity-0 group-hover:opacity-100 transition-opacity ml-1 text-[10px] bg-stone-800/80 hover:bg-red-600 text-stone-300 hover:text-white font-black px-1.5 py-0.5 rounded cursor-pointer"
+            className="opacity-60 hover:opacity-100 transition-opacity ml-0.5 text-[9px] bg-stone-800/80 hover:bg-red-600 text-stone-300 hover:text-white font-black px-1 rounded cursor-pointer"
             title="Встать из-за стола"
           >
             ✕

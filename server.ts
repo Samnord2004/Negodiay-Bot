@@ -1,8 +1,11 @@
 import express from "express";
+import http from "http";
 import path from "path";
 import dotenv from "dotenv";
 import { GoogleGenAI, Type } from "@google/genai";
 import { createServer as createViteServer } from "vite";
+import { pokerRoomServer } from "./server/pokerRoomServer";
+import { mkNetplayManager } from "./server/mkNetplayRooms";
 import { 
   initDb,
   getParticipants,
@@ -763,6 +766,16 @@ app.post("/api/coins/poker-settle", (req, res) => {
   } catch (err: any) {
     console.error("Error settling poker coins:", err);
     res.status(500).json({ error: "Failed to settle poker coins" });
+  }
+});
+
+// Real-time multiplayer poker initial state endpoint
+app.get("/api/poker/state", (req, res) => {
+  try {
+    const participantId = req.query.participantId as string | undefined;
+    res.json({ state: pokerRoomServer.getPublicState(participantId) });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to get poker state", details: err.message });
   }
 });
 
@@ -1961,6 +1974,58 @@ app.delete("/api/stories/:id", (req, res) => {
   res.json({ success: true, stories: getStories() });
 });
 
+// ==========================================
+// MORTAL KOMBAT P2P NETPLAY ROOMS API
+// ==========================================
+app.get("/api/mk/rooms", (req, res) => {
+  res.json({ rooms: mkNetplayManager.getActiveRooms() });
+});
+
+app.post("/api/mk/rooms", (req, res) => {
+  try {
+    const { code, title, core, romName, hostParticipantId, hostName, hostNickname, hostAvatar } = req.body;
+    if (!code || !hostParticipantId) {
+      return res.status(400).json({ error: "Missing required room code or host" });
+    }
+    const room = mkNetplayManager.createOrUpdateRoom({
+      code,
+      title,
+      core,
+      romName,
+      hostParticipantId,
+      hostName,
+      hostNickname,
+      hostAvatar
+    });
+    res.json({ success: true, room, rooms: mkNetplayManager.getActiveRooms() });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to create room" });
+  }
+});
+
+app.post("/api/mk/rooms/:code/join", (req, res) => {
+  try {
+    const { participantId, name, nickname, avatar } = req.body;
+    const room = mkNetplayManager.joinRoom(req.params.code, {
+      participantId,
+      name,
+      nickname,
+      avatar
+    });
+    if (!room) {
+      return res.status(404).json({ error: "Комната не найдена" });
+    }
+    res.json({ success: true, room, rooms: mkNetplayManager.getActiveRooms() });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to join room" });
+  }
+});
+
+app.delete("/api/mk/rooms/:code", (req, res) => {
+  mkNetplayManager.closeRoom(req.params.code);
+  res.json({ success: true, rooms: mkNetplayManager.getActiveRooms() });
+});
+
 // Bot Debt Nudge endpoint ("Пнуть" должника в общем чате)
 app.post("/api/chat/nudge", async (req, res) => {
   try {
@@ -2720,12 +2785,15 @@ async function startServer() {
     });
   }
 
+  const httpServer = http.createServer(app);
+  pokerRoomServer.init(httpServer);
+
   if (typeof PORT === "number") {
-    app.listen(PORT, "0.0.0.0", () => {
+    httpServer.listen(PORT, "0.0.0.0", () => {
       console.log(`[Negodyai MAX Server] Running on http://0.0.0.0:${PORT}`);
     });
   } else {
-    app.listen(PORT, () => {
+    httpServer.listen(PORT, () => {
       console.log(`[Negodyai MAX Server] Running on socket ${PORT}`);
     });
   }

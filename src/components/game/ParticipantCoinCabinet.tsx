@@ -346,6 +346,17 @@ export default function ParticipantCoinCabinet({
             >
               ♠️ Покер ({userCoins.filter(c => c.category === 'poker').length})
             </button>
+            <button
+              type="button"
+              onClick={() => setActiveCategory('mortal_kombat')}
+              className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
+                activeCategory === 'mortal_kombat'
+                  ? 'bg-red-700 text-white'
+                  : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+              }`}
+            >
+              🐉 MK ({userCoins.filter(c => c.category === 'mortal_kombat').length})
+            </button>
           </div>
         </div>
 
@@ -361,7 +372,7 @@ export default function ParticipantCoinCabinet({
                 : 'В этой категории пока нет монет'}
             </div>
             <p className="text-xs text-stone-500 max-w-md mx-auto">
-              Участвуйте в подготовке к слёту, закупках, строительстве лагеря, крутите «Колесо Фортуны» или выигрывайте в покерном турнире Негодяев!
+              Участвуйте в подготовке к слёту, закупках, строительстве лагеря, крутите «Колесо Фортуны», побеждайте в покерном турнире или в Mortal Kombat!
             </p>
           </div>
         ) : (
@@ -369,6 +380,7 @@ export default function ParticipantCoinCabinet({
             {filteredCoins.map((c) => {
               const isFortune = c.category === 'fortune';
               const isPoker = c.category === 'poker';
+              const isMK = c.category === 'mortal_kombat';
               const dateStr = new Date(c.awardedAt).toLocaleDateString('ru-RU', {
                 day: 'numeric',
                 month: 'long',
@@ -394,11 +406,13 @@ export default function ParticipantCoinCabinet({
                           ? 'bg-purple-100 text-purple-800 border-purple-200' 
                           : isPoker
                             ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
-                            : c.category === 'merit'
-                              ? 'bg-blue-100 text-blue-800 border-blue-200'
-                              : 'bg-amber-100 text-amber-800 border-amber-200'
+                            : isMK
+                              ? 'bg-red-100 text-red-800 border-red-300'
+                              : c.category === 'merit'
+                                ? 'bg-blue-100 text-blue-800 border-blue-200'
+                                : 'bg-amber-100 text-amber-800 border-amber-200'
                       }`}>
-                        {isFortune ? 'Фортуна' : isPoker ? '♠️ Покер' : c.category === 'merit' ? 'Заслуга' : 'Задача'}
+                        {isFortune ? 'Фортуна' : isPoker ? '♠️ Покер' : isMK ? '🐉 MK Турнир' : c.category === 'merit' ? 'Заслуга' : 'Задача'}
                       </span>
                       <span className="text-[11px] text-stone-400 truncate">
                         {dateStr}

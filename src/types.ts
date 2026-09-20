@@ -376,7 +376,7 @@ export const DEFAULT_THEME_CONFIG: ThemeConfig = {
 // МОТИВАЦИОННАЯ ИГРА "СКИДКА НА СЛЁТ"
 // ==========================================
 
-export type CoinCategory = 'task' | 'fortune' | 'merit' | 'contest' | 'poker';
+export type CoinCategory = 'task' | 'fortune' | 'merit' | 'contest' | 'poker' | 'mortal_kombat';
 
 export interface RallyCoin {
   id: string;
