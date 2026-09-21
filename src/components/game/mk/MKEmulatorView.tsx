@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Upload, Play, Trash2, Maximize2, RefreshCw, 
+  Upload, Play, Trash2, Maximize2, Minimize2, RefreshCw, 
   Gamepad2, Volume2, VolumeX, Sparkles, Shield, 
   Flame, HelpCircle, Smartphone, Monitor, Info,
   Users, Globe, Copy, Check, ArrowRight, UserCheck,
-  AlertCircle, Radio, PlayCircle, LogOut
+  AlertCircle, Radio, PlayCircle, LogOut, RotateCcw
 } from 'lucide-react';
 import { Participant } from '../../../types';
 import { MKConsoleCore } from '../../../types/mkTournament';
@@ -76,7 +76,52 @@ export default function MKEmulatorView({
   const [isCreatingRoom, setIsCreatingRoom] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const gameContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Orientation tracking for mobile players
+  const [isPortrait, setIsPortrait] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerHeight > window.innerWidth;
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    const checkOrientation = () => {
+      setIsPortrait(window.innerHeight > window.innerWidth);
+    };
+    window.addEventListener('resize', checkOrientation);
+    window.addEventListener('orientationchange', checkOrientation);
+    return () => {
+      window.removeEventListener('resize', checkOrientation);
+      window.removeEventListener('orientationchange', checkOrientation);
+    };
+  }, []);
+
+  // Sync fullscreen state with browser events
+  useEffect(() => {
+    const onFsChange = () => {
+      const isDocFs = !!(
+        document.fullscreenElement ||
+        (document as any).webkitFullscreenElement ||
+        (document as any).mozFullScreenElement ||
+        (document as any).msFullscreenElement
+      );
+      if (!isDocFs && isFullscreen) {
+        document.body.style.overflow = '';
+        document.documentElement.style.overflow = '';
+      }
+    };
+    document.addEventListener('fullscreenchange', onFsChange);
+    document.addEventListener('webkitfullscreenchange', onFsChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', onFsChange);
+      document.removeEventListener('webkitfullscreenchange', onFsChange);
+      document.body.style.overflow = '';
+      document.documentElement.style.overflow = '';
+    };
+  }, [isFullscreen]);
 
   // Fetch active Netplay rooms
   const fetchActiveRooms = async () => {
@@ -263,20 +308,39 @@ export default function MKEmulatorView({
 <html>
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>MK Tournament P2P Netplay</title>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body, html { width: 100%; height: 100%; overflow: hidden; background: #050505; display: flex; align-items: center; justify-content: center; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    #game { width: 100%; height: 100%; }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      height: 100dvh;
+      overflow: hidden;
+      background: #000;
+      touch-action: none;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+      overscroll-behavior: none;
+      position: fixed;
+      inset: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    #game {
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+    }
     .overlay-netplay-bar {
-      position: absolute; top: 8px; left: 8px; right: 8px; z-index: 9999;
+      position: absolute; top: 6px; left: 6px; right: 6px; z-index: 9999;
       background: rgba(10, 10, 12, 0.88); border: 1px solid rgba(220, 38, 38, 0.4);
-      color: #fff; padding: 6px 12px; border-radius: 10px;
+      color: #fff; padding: 5px 10px; border-radius: 8px;
       display: flex; align-items: center; justify-content: space-between;
-      backdrop-filter: blur(8px); pointer-events: auto;
+      backdrop-filter: blur(8px); pointer-events: none;
       font-size: 11px;
     }
+    .overlay-netplay-bar > * { pointer-events: auto; }
     .badge {
       background: #dc2626; color: #fff; font-weight: 800; font-size: 10px;
       padding: 2px 6px; border-radius: 6px; text-transform: uppercase;
@@ -347,12 +411,29 @@ export default function MKEmulatorView({
 <html>
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>MK Emulator Single Player</title>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body, html { width: 100%; height: 100%; overflow: hidden; background: #000; display: flex; align-items: center; justify-content: center; }
-    #game { width: 100%; height: 100%; }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      height: 100dvh;
+      overflow: hidden;
+      background: #000;
+      touch-action: none;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+      overscroll-behavior: none;
+      position: fixed;
+      inset: 0;
+    }
+    #game {
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+    }
   </style>
 </head>
 <body>
@@ -381,15 +462,73 @@ export default function MKEmulatorView({
     playMKGongSound();
   };
 
-  const toggleFullscreen = () => {
-    if (!containerRef.current) return;
-    if (!document.fullscreenElement) {
-      containerRef.current.requestFullscreen().catch(console.error);
-      setIsFullscreen(true);
-    } else {
-      document.exitFullscreen().catch(console.error);
-      setIsFullscreen(false);
+  const requestNativeFullscreen = async (el: HTMLElement) => {
+    try {
+      if (el.requestFullscreen) {
+        await el.requestFullscreen({ navigationUI: 'hide' });
+      } else if ((el as any).webkitRequestFullscreen) {
+        await (el as any).webkitRequestFullscreen();
+      } else if ((el as any).mozRequestFullScreen) {
+        await (el as any).mozRequestFullScreen();
+      } else if ((el as any).msRequestFullscreen) {
+        await (el as any).msRequestFullscreen();
+      }
+    } catch (err) {
+      console.warn('Native fullscreen not available or permitted, fallback to CSS fullscreen:', err);
     }
+  };
+
+  const exitNativeFullscreen = async () => {
+    try {
+      if (document.exitFullscreen) {
+        await document.exitFullscreen();
+      } else if ((document as any).webkitExitFullscreen) {
+        await (document as any).webkitExitFullscreen();
+      } else if ((document as any).mozCancelFullScreen) {
+        await (document as any).mozCancelFullScreen();
+      } else if ((document as any).msExitFullscreen) {
+        await (document as any).msExitFullscreen();
+      }
+    } catch (err) {
+      console.warn('Native exit fullscreen note:', err);
+    }
+  };
+
+  const toggleFullscreen = async () => {
+    if (!isFullscreen) {
+      setIsFullscreen(true);
+      document.body.style.overflow = 'hidden';
+      document.documentElement.style.overflow = 'hidden';
+
+      const targetEl = gameContainerRef.current || containerRef.current || document.documentElement;
+      if (targetEl) {
+        await requestNativeFullscreen(targetEl);
+      }
+
+      // Attempt screen orientation lock to landscape on smartphones
+      try {
+        if ((window.screen as any)?.orientation?.lock) {
+          await (window.screen as any).orientation.lock('landscape');
+        }
+      } catch {
+        // Handled silently if not permitted
+      }
+    } else {
+      setIsFullscreen(false);
+      document.body.style.overflow = '';
+      document.documentElement.style.overflow = '';
+      await exitNativeFullscreen();
+      try {
+        (window.screen as any)?.orientation?.unlock?.();
+      } catch {}
+    }
+  };
+
+  const launchEmulatorAndFullscreen = () => {
+    launchEmulator();
+    setTimeout(() => {
+      toggleFullscreen();
+    }, 200);
   };
 
   const copyRoomCode = () => {
@@ -476,10 +615,15 @@ export default function MKEmulatorView({
           <button
             type="button"
             onClick={toggleFullscreen}
-            className="p-1.5 bg-stone-800 hover:bg-stone-700 text-stone-200 rounded-lg border border-stone-700 transition-colors cursor-pointer"
-            title="Во весь экран"
+            className={`px-2.5 py-1.5 rounded-lg border text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${
+              isFullscreen
+                ? 'bg-amber-500 text-stone-950 border-amber-400'
+                : 'bg-stone-800 hover:bg-stone-700 text-stone-200 border-stone-700'
+            }`}
+            title={isFullscreen ? "Свернуть" : "Во весь экран"}
           >
-            <Maximize2 size={14} />
+            {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+            <span className="hidden sm:inline">{isFullscreen ? "Свернуть" : "Экран"}</span>
           </button>
         </div>
       </div>
@@ -738,19 +882,31 @@ export default function MKEmulatorView({
                 </div>
               </div>
 
-              {/* Big Launch Button */}
-              <button
-                type="button"
-                onClick={launchEmulator}
-                className="w-full sm:w-auto px-6 py-3.5 bg-gradient-to-r from-red-600 to-amber-600 hover:from-red-500 hover:to-amber-500 text-white font-black text-sm uppercase tracking-wider rounded-xl shadow-lg hover:shadow-red-600/30 flex items-center justify-center gap-2 transition-all cursor-pointer transform hover:-translate-y-0.5 active:translate-y-0"
-              >
-                <PlayCircle size={18} />
-                <span>
-                  {playMode === 'netplay' 
-                    ? `Запустить Netplay (${playerRole === 1 ? 'Игрок 1' : 'Игрок 2'})` 
-                    : 'Запустить бой'}
-                </span>
-              </button>
+              {/* Big Launch Buttons */}
+              <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={launchEmulator}
+                  className="flex-1 sm:flex-initial px-5 py-3.5 bg-gradient-to-r from-red-600 to-amber-600 hover:from-red-500 hover:to-amber-500 text-white font-black text-xs sm:text-sm uppercase tracking-wider rounded-xl shadow-lg hover:shadow-red-600/30 flex items-center justify-center gap-2 transition-all cursor-pointer transform hover:-translate-y-0.5 active:translate-y-0"
+                >
+                  <PlayCircle size={18} />
+                  <span>
+                    {playMode === 'netplay' 
+                      ? `Старт (${playerRole === 1 ? 'Игрок 1' : 'Игрок 2'})` 
+                      : 'Запустить бой'}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={launchEmulatorAndFullscreen}
+                  className="flex-1 sm:flex-initial px-4 py-3.5 bg-stone-800 hover:bg-stone-700 text-amber-400 hover:text-amber-300 font-black text-xs sm:text-sm uppercase tracking-wider rounded-xl shadow-md border border-amber-500/40 flex items-center justify-center gap-2 transition-all cursor-pointer"
+                  title="Запустить сразу во весь экран (рекомендуется для смартфонов)"
+                >
+                  <Maximize2 size={16} />
+                  <span>📱 Во весь экран</span>
+                </button>
+              </div>
             </div>
           ) : (
             <div 
@@ -785,7 +941,7 @@ export default function MKEmulatorView({
               <div>
                 <div className="font-bold text-stone-300">На смартфонах</div>
                 <div className="text-[11px] text-stone-500 mt-0.5">
-                  Сенсорный экран: виртуальный джойстик и кнопки ударов появляются автоматически.
+                  Сенсорный экран: жмите <b>«Во весь экран»</b>, поверните телефон горизонтально — джойстик и кнопки ударов появятся под пальцами.
                 </div>
               </div>
             </div>
@@ -815,55 +971,90 @@ export default function MKEmulatorView({
 
       {/* ACTIVE EMULATOR DISPLAY */}
       {isEmulatorRunning && iframeBlobUrl && (
-        <div className="bg-black border-2 border-red-900/80 rounded-2xl overflow-hidden shadow-2xl relative">
-          
+        <div 
+          ref={gameContainerRef}
+          className={
+            isFullscreen
+              ? "fixed inset-0 z-[99999] w-screen h-screen w-[100dvw] h-[100dvh] bg-black flex flex-col overflow-hidden select-none touch-none"
+              : "bg-black border-2 border-red-900/80 rounded-2xl overflow-hidden shadow-2xl relative"
+          }
+        >
           {/* Top In-Game Bar */}
-          <div className="bg-stone-950 border-b border-stone-800 px-4 py-2.5 flex items-center justify-between text-xs text-white">
-            <div className="flex items-center gap-3">
-              <span className="w-2.5 h-2.5 rounded-full bg-green-500 animate-ping" />
-              <span className="font-bold text-amber-400 flex items-center gap-1.5">
-                <span>🐉 {romInfo?.name || 'Mortal Kombat'}</span>
+          <div className={`bg-stone-950 border-b border-stone-800 ${isFullscreen ? 'px-3 py-2' : 'px-4 py-2.5'} flex items-center justify-between text-xs text-white shrink-0 z-10`}>
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="w-2.5 h-2.5 rounded-full bg-green-500 animate-ping shrink-0" />
+              <span className="font-bold text-amber-400 truncate text-[11px] sm:text-xs">
+                🐉 {romInfo?.name || 'Mortal Kombat'}
               </span>
 
               {playMode === 'netplay' && (
-                <span className="bg-red-900/60 border border-red-700/60 text-white font-mono text-[11px] font-black px-2 py-0.5 rounded-md flex items-center gap-1.5">
+                <span className="bg-red-900/60 border border-red-700/60 text-white font-mono text-[10px] sm:text-[11px] font-black px-2 py-0.5 rounded-md shrink-0 flex items-center gap-1">
                   <span>Комната: {roomCode}</span>
-                  <span>•</span>
-                  <span className="text-amber-300">
-                    {playerRole === 1 ? 'Игрок 1 (Хост)' : 'Игрок 2 (Челленджер)'}
+                  <span className="text-amber-300 hidden sm:inline">
+                    • {playerRole === 1 ? 'Игрок 1' : 'Игрок 2'}
                   </span>
                 </span>
               )}
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0">
+              {/* Prominent Fullscreen Toggle (Dual Engine: Native + CSS Viewport) */}
               <button
                 type="button"
                 onClick={toggleFullscreen}
-                className="px-2.5 py-1 bg-stone-800 hover:bg-stone-700 text-stone-300 rounded-lg font-bold flex items-center gap-1 text-[11px] transition-colors cursor-pointer"
+                className={`px-3 py-1.5 rounded-xl font-black flex items-center gap-1.5 text-xs transition-all cursor-pointer shadow-md ${
+                  isFullscreen
+                    ? 'bg-amber-500 hover:bg-amber-400 text-stone-950'
+                    : 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950'
+                }`}
+                title={isFullscreen ? 'Свернуть экран' : 'Развернуть во весь экран (для смартфонов)'}
               >
-                <Maximize2 size={12} />
-                <span>Во весь экран</span>
+                {isFullscreen ? (
+                  <>
+                    <Minimize2 size={15} />
+                    <span>Свернуть</span>
+                  </>
+                ) : (
+                  <>
+                    <Maximize2 size={15} />
+                    <span>📱 Во весь экран</span>
+                  </>
+                )}
               </button>
 
               <button
                 type="button"
-                onClick={stopEmulator}
-                className="px-2.5 py-1 bg-red-900/80 hover:bg-red-700 text-white rounded-lg font-bold flex items-center gap-1 text-[11px] transition-colors cursor-pointer"
+                onClick={() => {
+                  if (isFullscreen) {
+                    toggleFullscreen();
+                  }
+                  stopEmulator();
+                }}
+                className="px-2.5 py-1.5 bg-red-900/90 hover:bg-red-700 text-white rounded-xl font-bold flex items-center gap-1 text-xs transition-colors cursor-pointer"
+                title="Завершить игру и выйти в меню"
               >
-                <LogOut size={12} />
-                <span>Выйти из боя</span>
+                <LogOut size={13} />
+                <span className="hidden sm:inline">Выйти из боя</span>
               </button>
             </div>
           </div>
 
+          {/* Orientation Recommendation Banner on Mobile */}
+          {isFullscreen && isPortrait && (
+            <div className="bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 text-stone-950 px-3 py-1.5 text-[11px] font-black text-center flex items-center justify-center gap-1.5 shrink-0 shadow-md">
+              <RotateCcw size={13} className="animate-spin text-stone-950 shrink-0" />
+              <span>Поверните смартфон горизонтально (альбомный режим) для широкой арены и сенсорного джойстика!</span>
+            </div>
+          )}
+
           {/* Iframe Viewport */}
-          <div className="w-full h-[540px] sm:h-[620px] bg-black">
+          <div className={`w-full bg-black ${isFullscreen ? 'flex-1 h-full min-h-0' : 'h-[480px] sm:h-[620px]'}`}>
             <iframe
               src={iframeBlobUrl}
               title="Mortal Kombat Emulator"
-              className="w-full h-full border-0"
-              allow="autoplay; gamepad; fullscreen; cross-origin-isolated"
+              className="w-full h-full border-0 touch-none"
+              allow="autoplay; gamepad; fullscreen; screen-wake-lock; cross-origin-isolated"
+              allowFullScreen={true}
             />
           </div>
         </div>
