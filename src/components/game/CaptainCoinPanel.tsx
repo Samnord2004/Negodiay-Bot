@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { 
   Crown, Award, Plus, Trash2, CheckCircle, Sparkles, 
-  Search, ShieldAlert, AlertCircle, RefreshCw, Send, Check
+  Search, ShieldAlert, AlertCircle, RefreshCw, Send, Check,
+  Calendar, Trophy, RotateCcw
 } from 'lucide-react';
 import { Participant, RallyCoin, DEFAULT_GAME_TASKS } from '../../types';
 import { getParticipantAvatar } from '../../utils/avatar';
@@ -55,8 +56,89 @@ export default function CaptainCoinPanel({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [mintSuccessMsg, setMintSuccessMsg] = useState<string | null>(null);
 
+  // Year & Season Management state
+  const currentRallyYear = coins[0]?.year || 2026;
+  const [targetYearInput, setTargetYearInput] = useState<number>(currentRallyYear);
+  const [isSavingYear, setIsSavingYear] = useState(false);
+  const [yearSuccessMsg, setYearSuccessMsg] = useState<string | null>(null);
+
+  // Season Reset & Winner formation state
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [nextSeasonYear, setNextSeasonYear] = useState<number>(currentRallyYear + 1);
+  const [isResettingSeason, setIsResettingSeason] = useState(false);
+
   // Filter active participants
   const activeParticipants = participants.filter(p => p.accountStatus !== 'rejected');
+  
+  // Calculate top coin leader
+  const coinsByParticipant = activeParticipants.map(p => {
+    const pCoins = coins.filter(c => c.participantId === p.id);
+    return {
+      participant: p,
+      count: pCoins.length
+    };
+  }).sort((a, b) => b.count - a.count);
+
+  const topLeader = coinsByParticipant[0];
+
+  const handleUpdateAllCoinsYear = async (newYear: number) => {
+    if (!newYear || isNaN(newYear) || newYear < 2000 || newYear > 2100) {
+      alert("Пожалуйста, укажите корректный год (например, 2026)");
+      return;
+    }
+    setIsSavingYear(true);
+    try {
+      const res = await fetch('/api/coins/update-year', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ year: newYear })
+      });
+      if (res.ok) {
+        setYearSuccessMsg(`Год на всех монетках успешно изменён на ${newYear}!`);
+        setTimeout(() => setYearSuccessMsg(null), 4500);
+      } else {
+        const err = await res.json();
+        alert("Ошибка: " + (err.error || "Не удалось обновить год"));
+      }
+    } catch (e: any) {
+      alert("Ошибка при смене года: " + e.message);
+    } finally {
+      setIsSavingYear(false);
+    }
+  };
+
+  const handleConfirmSeasonReset = async () => {
+    if (!topLeader || topLeader.count === 0) {
+      if (!confirm("В текущем сезоне ещё нет накопленных монет. Всё равно начать новый слёт?")) {
+        return;
+      }
+    }
+    setIsResettingSeason(true);
+    try {
+      const res = await fetch('/api/coins/reset-season', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          newYear: Number(nextSeasonYear),
+          winnerName: topLeader ? topLeader.participant.name : 'Соратники Негодяи',
+          winnerNickname: topLeader ? (topLeader.participant.nickname || topLeader.participant.name) : 'Команда',
+          totalCoins: topLeader ? topLeader.count : 0
+        })
+      });
+      if (res.ok) {
+        alert(`🏆 Итоги сезона подведены!\nПобедитель сезона: ${topLeader ? topLeader.participant.name : 'Команда'} (${topLeader ? topLeader.count : 0} монет)!\nВ командный чат отправлено торжественное оповещение от Штаба.\nМонеты обнулены для нового слёта ${nextSeasonYear}!`);
+        window.location.reload();
+      } else {
+        const err = await res.json();
+        alert("Ошибка: " + (err.error || "Не удалось обнулить сезон"));
+      }
+    } catch (e: any) {
+      alert("Ошибка при обнулении сезона: " + e.message);
+    } finally {
+      setIsResettingSeason(false);
+      setShowResetModal(false);
+    }
+  };
   
   const filteredParticipants = activeParticipants.filter(p => {
     if (!searchQuery.trim()) return true;
@@ -171,10 +253,216 @@ export default function CaptainCoinPanel({
           <button 
             type="button" 
             onClick={() => setMintSuccessMsg(null)}
-            className="text-xs text-emerald-700 font-bold px-2 py-1 hover:bg-emerald-100 rounded-lg"
+            className="text-xs text-emerald-700 font-bold px-2 py-1 hover:bg-emerald-100 rounded-lg cursor-pointer"
           >
             ✕
           </button>
+        </div>
+      )}
+
+      {/* YEAR NOTIFICATION */}
+      {yearSuccessMsg && (
+        <div className="bg-amber-50 border border-amber-300 text-amber-900 p-4 rounded-2xl flex items-center gap-3 shadow-xs animate-in fade-in zoom-in-95 duration-200">
+          <div className="w-8 h-8 rounded-full bg-amber-500 text-stone-950 flex items-center justify-center shrink-0 font-bold">
+            <Calendar size={18} />
+          </div>
+          <div className="text-sm font-bold flex-1">{yearSuccessMsg}</div>
+          <button 
+            type="button" 
+            onClick={() => setYearSuccessMsg(null)}
+            className="text-xs text-amber-700 font-bold px-2 py-1 hover:bg-amber-100 rounded-lg cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* CAPTAIN MANAGEMENT TOOLS: YEAR & SEASON RESET */}
+      <div className="bg-gradient-to-r from-stone-900 via-stone-850 to-stone-900 border-2 border-amber-500/40 rounded-3xl p-5 md:p-6 text-white shadow-xl space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-800 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-400/40 text-amber-400 flex items-center justify-center font-bold">
+              <Calendar size={18} />
+            </div>
+            <div>
+              <h3 className="font-black text-sm sm:text-base text-white uppercase tracking-wide flex items-center gap-2">
+                <span>Управление годом и сезонами слёта</span>
+                <span className="text-[11px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-full font-bold">
+                  Активный сезон: {currentRallyYear}
+                </span>
+              </h3>
+              <p className="text-xs text-stone-400">
+                Капитан может изменить год на реверсе монет или обнулить балансы для накопления на новый слёт
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          
+          {/* 1. CHANGE YEAR TOOL */}
+          <div className="bg-stone-950/70 border border-stone-800 rounded-2xl p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-black uppercase text-amber-400 flex items-center gap-1.5">
+                <Calendar size={14} />
+                <span>1. Смена года на монетках</span>
+              </span>
+              <span className="text-[11px] text-stone-400 font-mono">
+                Сейчас: {currentRallyYear}
+              </span>
+            </div>
+            
+            <p className="text-[11px] text-stone-400 leading-relaxed">
+              Изменит гравировку «СЛЁТ {currentRallyYear}» на реверсе всех выпущенных монет Негодяев.
+            </p>
+
+            <div className="flex items-center gap-2">
+              {[2026, 2027, 2028].map(yr => (
+                <button
+                  key={yr}
+                  type="button"
+                  onClick={() => setTargetYearInput(yr)}
+                  className={`px-2.5 py-1.5 rounded-xl font-bold text-xs border transition-colors cursor-pointer ${
+                    targetYearInput === yr
+                      ? 'bg-amber-500 text-stone-950 border-amber-400 shadow-xs'
+                      : 'bg-stone-900 text-stone-300 border-stone-700 hover:bg-stone-800'
+                  }`}
+                >
+                  {yr}
+                </button>
+              ))}
+              
+              <input
+                type="number"
+                min={2020}
+                max={2040}
+                value={targetYearInput}
+                onChange={(e) => setTargetYearInput(Number(e.target.value))}
+                className="w-20 bg-stone-900 border border-stone-700 rounded-xl px-2 py-1.5 text-xs text-center font-bold text-amber-300 focus:outline-hidden focus:border-amber-400"
+              />
+
+              <button
+                type="button"
+                onClick={() => handleUpdateAllCoinsYear(targetYearInput)}
+                disabled={isSavingYear || targetYearInput === currentRallyYear}
+                className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-stone-950 font-black text-xs uppercase rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-sm ml-auto"
+              >
+                {isSavingYear ? 'Сохранение...' : 'Применить'}
+              </button>
+            </div>
+          </div>
+
+          {/* 2. SEASON RESET & WINNER FORMATION TOOL */}
+          <div className="bg-stone-950/70 border border-red-900/50 rounded-2xl p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-black uppercase text-red-400 flex items-center gap-1.5">
+                <Trophy size={14} className="text-amber-400" />
+                <span>2. Итоги сезона & Новый слёт</span>
+              </span>
+              {topLeader && topLeader.count > 0 && (
+                <span className="text-[11px] text-amber-300 font-bold bg-amber-950/80 px-2 py-0.5 rounded-full border border-amber-700/60">
+                  Лидер: {topLeader.participant.nickname || topLeader.participant.name} ({topLeader.count} 🪙)
+                </span>
+              )}
+            </div>
+
+            <p className="text-[11px] text-stone-400 leading-relaxed">
+              Обнуляет монетки участников для старта нового слёта, объявляет триумфатора сезона в командный чат.
+            </p>
+
+            <button
+              type="button"
+              onClick={() => setShowResetModal(true)}
+              className="w-full py-2 bg-gradient-to-r from-red-600 to-amber-600 hover:from-red-500 hover:to-amber-500 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-md flex items-center justify-center gap-2 cursor-pointer transition-all"
+            >
+              <RotateCcw size={13} />
+              <span>Подвести итоги и обнулить для нового слёта</span>
+            </button>
+          </div>
+
+        </div>
+      </div>
+
+      {/* MODAL: CONFIRM SEASON RESET & ANNOUNCE WINNER */}
+      {showResetModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-950/80 backdrop-blur-xs animate-fade-in">
+          <div className="bg-stone-900 border-2 border-amber-400 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 text-white">
+            
+            <div className="flex items-center justify-between border-b border-stone-800 pb-3">
+              <div className="flex items-center gap-2 text-amber-400">
+                <Trophy size={20} />
+                <h3 className="font-black text-sm uppercase">Итоги слёта {currentRallyYear}</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowResetModal(false)}
+                className="text-stone-400 hover:text-white font-bold cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Winner Card */}
+            {topLeader && topLeader.count > 0 ? (
+              <div className="bg-gradient-to-r from-amber-950/60 to-stone-950 border border-amber-500/50 rounded-2xl p-4 flex items-center gap-3.5">
+                <img
+                  src={getParticipantAvatar(topLeader.participant)}
+                  alt=""
+                  className="w-12 h-12 rounded-full border-2 border-amber-400 object-cover shrink-0"
+                />
+                <div>
+                  <span className="text-[10px] uppercase font-black tracking-widest text-amber-400 block">
+                    👑 Победитель слёта (100% скидка)
+                  </span>
+                  <div className="font-black text-base text-white">
+                    {topLeader.participant.name}
+                  </div>
+                  <div className="text-xs text-amber-300 font-bold">
+                    «{topLeader.participant.nickname || topLeader.participant.name}» • Накоплено: {topLeader.count} монет
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-stone-950 p-3 rounded-xl border border-stone-800 text-xs text-stone-400 text-center">
+                В текущем сезоне монеты ещё не распределялись.
+              </div>
+            )}
+
+            {/* Next Season Year Input */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-stone-300 block">
+                Год нового слёта для накопления монет:
+              </label>
+              <input
+                type="number"
+                value={nextSeasonYear}
+                onChange={(e) => setNextSeasonYear(Number(e.target.value))}
+                className="w-full bg-stone-950 border border-stone-700 rounded-xl px-3 py-2 text-sm text-amber-400 font-black focus:outline-hidden focus:border-amber-400"
+              />
+              <span className="text-[10px] text-stone-500 block">
+                При сбросе текущие монеты будут заархивированы, а балансы обнулены для старта накопления на слёт {nextSeasonYear}.
+              </span>
+            </div>
+
+            <div className="pt-2 flex items-center justify-end gap-2 border-t border-stone-800">
+              <button
+                type="button"
+                onClick={() => setShowResetModal(false)}
+                className="px-3.5 py-2 bg-stone-800 hover:bg-stone-700 text-stone-300 font-bold text-xs rounded-xl cursor-pointer"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmSeasonReset}
+                disabled={isResettingSeason}
+                className="px-4 py-2 bg-gradient-to-r from-red-600 to-amber-600 hover:from-red-500 hover:to-amber-500 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-md cursor-pointer disabled:opacity-50"
+              >
+                {isResettingSeason ? 'Обнуление...' : 'Обнулить и объявить в чат'}
+              </button>
+            </div>
+
+          </div>
         </div>
       )}
 

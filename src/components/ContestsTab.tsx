@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Award, Plus, Trash, Trophy, Users, Calendar, FileText, CheckCircle2, ChevronDown, ChevronUp, Eye, X } from 'lucide-react';
+import { Award, Plus, Trash, Trophy, Users, Calendar, FileText, CheckCircle2, ChevronDown, ChevronUp, Eye, X, Edit2 } from 'lucide-react';
 import { Contest, Participant } from '../types';
 import { getSafeAvatar } from '../utils/avatar';
 
@@ -29,6 +29,9 @@ export default function ContestsTab({
   const [place, setPlace] = useState('');
   const [description, setDescription] = useState('');
   const [schedule, setSchedule] = useState('Суббота, 14:00');
+
+  // Edit contest state
+  const [editingContest, setEditingContest] = useState<Contest | null>(null);
 
   const handleCreateContest = (e: React.FormEvent) => {
     e.preventDefault();
@@ -255,14 +258,24 @@ export default function ContestsTab({
                   </select>
 
                   {isAdmin && (
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteContest(c.id)}
-                      className="p-2 text-stone-400 hover:text-red-600 rounded-xl transition-colors"
-                      title="Удалить конкурс"
-                    >
-                      <Trash size={16} />
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setEditingContest(c)}
+                        className="p-2 text-stone-500 hover:text-amber-600 rounded-xl transition-colors cursor-pointer"
+                        title="Редактировать конкурс"
+                      >
+                        <Edit2 size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteContest(c.id)}
+                        className="p-2 text-stone-400 hover:text-red-600 rounded-xl transition-colors cursor-pointer"
+                        title="Удалить конкурс"
+                      >
+                        <Trash size={16} />
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
@@ -392,7 +405,7 @@ export default function ContestsTab({
               <button
                 type="button"
                 onClick={() => setActiveAttachment(null)}
-                className="p-1 text-stone-400 hover:text-stone-900"
+                className="p-1 text-stone-400 hover:text-stone-900 cursor-pointer"
               >
                 <X size={20} />
               </button>
@@ -404,6 +417,156 @@ export default function ContestsTab({
                 className="w-full flex items-center justify-center"
               />
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT CONTEST MODAL */}
+      {editingContest && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-amber-100 rounded-3xl max-w-xl w-full p-6 shadow-2xl space-y-4 border-4 border-amber-400 max-h-[92vh] overflow-y-auto animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-amber-300 pb-3">
+              <h3 className="font-black text-lg uppercase text-red-700 flex items-center gap-2">
+                <Edit2 size={20} /> Редактирование конкурса
+              </h3>
+              <button
+                type="button"
+                onClick={() => setEditingContest(null)}
+                className="p-1.5 text-stone-500 hover:text-stone-900 rounded-xl hover:bg-amber-200 transition-colors cursor-pointer"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!editingContest.title.trim()) return;
+                const cap = participants.find(p => p.id === editingContest.captainId) || participants[0];
+                const updatedContest: Contest = {
+                  ...editingContest,
+                  title: editingContest.title.trim(),
+                  captainId: cap.id,
+                  captainName: cap.name,
+                  place: editingContest.place || undefined,
+                  description: editingContest.description?.trim() || undefined,
+                  schedule: editingContest.schedule?.trim() || undefined,
+                };
+                onUpdateContests(contests.map(c => c.id === updatedContest.id ? updatedContest : c));
+                setEditingContest(null);
+              }}
+              className="space-y-4 text-left"
+            >
+              <div>
+                <label className="block text-xs uppercase font-black mb-1 text-amber-950">Название конкурса:</label>
+                <input
+                  type="text"
+                  required
+                  value={editingContest.title}
+                  onChange={(e) => setEditingContest({ ...editingContest, title: e.target.value })}
+                  className="w-full bg-white border border-amber-400 rounded-xl p-2.5 text-sm font-bold text-amber-950 focus:outline-none focus:border-red-600"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs uppercase font-black mb-1 text-amber-950">Капитан команды:</label>
+                  <select
+                    value={editingContest.captainId}
+                    onChange={(e) => setEditingContest({ ...editingContest, captainId: e.target.value })}
+                    className="w-full bg-white border border-amber-400 rounded-xl p-2 text-xs font-bold text-amber-950"
+                  >
+                    {participants.map(p => (
+                      <option key={p.id} value={p.id}>{p.name} (@{p.nickname})</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs uppercase font-black mb-1 text-amber-950">Время / Расписание:</label>
+                  <input
+                    type="text"
+                    value={editingContest.schedule || ''}
+                    onChange={(e) => setEditingContest({ ...editingContest, schedule: e.target.value })}
+                    placeholder="Например, Суббота, 14:00"
+                    className="w-full bg-white border border-amber-400 rounded-xl p-2 text-xs font-bold text-amber-950"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs uppercase font-black mb-1 text-amber-950">Занятое место / Награда:</label>
+                <select
+                  value={editingContest.place || ''}
+                  onChange={(e) => setEditingContest({ ...editingContest, place: e.target.value })}
+                  className="w-full bg-white border border-amber-400 rounded-xl p-2 text-xs font-bold text-amber-950"
+                >
+                  <option value="">Без награды</option>
+                  <option value="🥇 1-е место">🥇 1-е место</option>
+                  <option value="🥈 2-е место">🥈 2-е место</option>
+                  <option value="🥉 3-е место">🥉 3-е место</option>
+                  <option value="Призёр">Призёр</option>
+                  <option value="Участие и угар">Участие и угар</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs uppercase font-black mb-1 text-amber-950">Состав участников команды:</label>
+                <div className="bg-white/80 p-3 rounded-xl border border-amber-300 max-h-40 overflow-y-auto space-y-1.5">
+                  {participants.map(p => {
+                    const isSelected = (editingContest.teamMemberIds || []).includes(p.id);
+                    return (
+                      <label
+                        key={p.id}
+                        className={`flex items-center gap-2 p-1.5 rounded-lg text-xs font-bold cursor-pointer transition-colors ${
+                          isSelected ? 'bg-amber-200 text-amber-950' : 'hover:bg-amber-100 text-stone-700'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => {
+                            const cur = editingContest.teamMemberIds || [];
+                            const updated = isSelected ? cur.filter(id => id !== p.id) : [...cur, p.id];
+                            setEditingContest({ ...editingContest, teamMemberIds: updated });
+                          }}
+                          className="rounded text-red-600 focus:ring-red-500"
+                        />
+                        <span>{p.name}</span>
+                        <span className="text-[10px] text-stone-500 font-normal">@{p.nickname}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs uppercase font-black mb-1 text-amber-950">Правила и описание:</label>
+                <textarea
+                  rows={3}
+                  value={editingContest.description || ''}
+                  onChange={(e) => setEditingContest({ ...editingContest, description: e.target.value })}
+                  placeholder="Условия этапа, экипировка, штрафные баллы..."
+                  className="w-full bg-white border border-amber-400 rounded-xl p-2.5 text-xs font-semibold text-stone-800"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-amber-300">
+                <button
+                  type="button"
+                  onClick={() => setEditingContest(null)}
+                  className="px-4 py-2 bg-stone-200 hover:bg-stone-300 text-stone-800 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                >
+                  Отмена
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2 bg-red-600 hover:bg-red-700 text-yellow-300 rounded-xl text-xs font-black uppercase shadow transition-colors cursor-pointer"
+                >
+                  Сохранить изменения
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -812,32 +812,32 @@ export default function PokerTable({
           </div>
 
           {/* ===================================================================== */}
-          {/* CENTER TABLE: STATUS, POT & COMMUNITY CARDS */}
+          {/* CENTER TABLE: STATUS, POT & COMMUNITY CARDS + ON-FELT ACTION HUD */}
           {/* ===================================================================== */}
-          <div className="relative z-10 my-auto flex flex-col items-center justify-center py-1 sm:py-2">
+          <div className="relative z-10 my-auto flex flex-col items-center justify-center py-1 sm:py-1.5 w-full max-w-xl mx-auto">
             
             {/* Status Announcement Banner */}
-            <div className="mb-1.5 px-3 py-1 rounded-full bg-stone-950/85 border border-amber-400/80 shadow-md text-center max-w-md">
-              <span className="text-[11px] sm:text-xs font-black text-amber-300 truncate block">
+            <div className="mb-1 px-3 py-0.5 rounded-full bg-stone-950/85 border border-amber-400/80 shadow-md text-center max-w-md">
+              <span className="text-[10px] sm:text-xs font-black text-amber-300 truncate block">
                 {statusMessage}
               </span>
             </div>
 
             {/* Pot Badge & Board Cards in One Tight Unit */}
-            <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-center">
+            <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-center mb-1">
               {/* Pot Chip Badge */}
-              <div className="flex items-center gap-1.5 bg-gradient-to-r from-stone-950 via-amber-950 to-stone-950 px-3 py-1.5 rounded-xl border border-amber-400 shadow-xl">
-                <span className="text-lg animate-bounce">🪙</span>
+              <div className="flex items-center gap-1.5 bg-gradient-to-r from-stone-950 via-amber-950 to-stone-950 px-2.5 py-1 rounded-xl border border-amber-400 shadow-xl">
+                <span className="text-base sm:text-lg animate-bounce">🪙</span>
                 <div>
-                  <div className="text-[8px] uppercase font-black text-amber-300/80 leading-none">БАНК</div>
-                  <div className="text-base sm:text-xl font-black text-white leading-tight">
-                    {pot} <span className="text-[10px] text-amber-400 font-bold">{mode === 'multiplayer' ? 'монет' : 'фишек'}</span>
+                  <div className="text-[7px] uppercase font-black text-amber-300/80 leading-none">БАНК</div>
+                  <div className="text-sm sm:text-lg font-black text-white leading-tight">
+                    {pot} <span className="text-[9px] text-amber-400 font-bold">{mode === 'multiplayer' ? 'монет' : 'фишек'}</span>
                   </div>
                 </div>
               </div>
 
               {/* Community Cards */}
-              <div className="flex items-center gap-1 sm:gap-1.5 min-h-[56px] sm:min-h-[64px]">
+              <div className="flex items-center gap-1 sm:gap-1.5 min-h-[50px] sm:min-h-[58px]">
                 {communityCards.length === 0 ? (
                   <div className="flex items-center gap-1.5 text-emerald-300/50 text-[10px] sm:text-xs font-black uppercase tracking-wider px-2 py-1 border border-dashed border-emerald-400/30 rounded-lg">
                     <span>Флоп</span> • <span>Тёрн</span> • <span>Ривер</span>
@@ -857,11 +857,182 @@ export default function PokerTable({
 
             {/* Active Combination Helper for Current User */}
             {activeTurnEval && gameStage !== 'waiting' && gameStage !== 'showdown' && (
-              <div className="mt-1 px-2.5 py-0.5 rounded-lg bg-emerald-950/90 border border-emerald-400/80 text-emerald-200 text-[10px] sm:text-xs font-black shadow-xs flex items-center gap-1 animate-fade-in">
+              <div className="mb-1 px-2.5 py-0.5 rounded-lg bg-emerald-950/90 border border-emerald-400/80 text-emerald-200 text-[10px] sm:text-xs font-black shadow-xs flex items-center gap-1 animate-fade-in">
                 <span>🎯 Ваша комбинация:</span>
                 <span className="text-amber-300">{activeTurnEval.description}</span>
               </div>
             )}
+
+            {/* ===================================================================== */}
+            {/* ON-FELT ACTION HUD (MOVED DIRECTLY ONTO THE PLAYING FIELD!) */}
+            {/* ===================================================================== */}
+            <div className="w-full px-1">
+              {isMyTurn && gameStage !== 'waiting' && gameStage !== 'showdown' ? (
+                <div className="bg-stone-950/95 border border-amber-400/80 rounded-xl p-1.5 sm:p-2 shadow-2xl backdrop-blur-md space-y-1 sm:space-y-1.5 animate-fade-in">
+                  
+                  {/* Row 1: Quick Sizing Pills + Bluff Button */}
+                  <div className="flex items-center justify-between gap-1 flex-wrap text-[9px] sm:text-[10px]">
+                    <div className="flex items-center gap-1">
+                      <span className="text-stone-400 font-bold hidden sm:inline">Рейз:</span>
+                      {[1, 2, 5].map(add => (
+                        <button
+                          key={add}
+                          type="button"
+                          onClick={() => setRaiseAmount(add)}
+                          className={`px-1.5 py-0.5 rounded font-black cursor-pointer ${
+                            raiseAmount === add
+                              ? 'bg-amber-500 text-stone-950'
+                              : 'bg-stone-800 text-stone-300 hover:bg-stone-700'
+                          }`}
+                        >
+                          +{add}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => setRaiseAmount(Math.max(2, Math.floor(pot / 2)))}
+                        className="px-1.5 py-0.5 rounded bg-stone-800 hover:bg-stone-700 text-stone-300 font-black cursor-pointer"
+                      >
+                        1/2 Банка
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRaiseAmount(Math.max(2, pot))}
+                        className="px-1.5 py-0.5 rounded bg-stone-800 hover:bg-stone-700 text-stone-300 font-black cursor-pointer"
+                      >
+                        Банк
+                      </button>
+                    </div>
+
+                    {/* Bluff Picker Toggle */}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setShowBluffPicker(!showBluffPicker)}
+                        className="px-2 py-0.5 bg-purple-900/80 hover:bg-purple-800 text-purple-200 border border-purple-400/50 rounded font-black flex items-center gap-1 cursor-pointer"
+                      >
+                        <Flame size={11} className="text-yellow-400" />
+                        <span>Реплика</span>
+                      </button>
+
+                      {/* Bluff popup menu */}
+                      {showBluffPicker && (
+                        <div className="absolute right-0 bottom-7 z-50 w-56 bg-stone-900 border-2 border-purple-400 rounded-xl shadow-2xl p-1.5 space-y-1">
+                          <p className="text-[10px] font-black uppercase text-purple-300 px-1">Сказать соратникам:</p>
+                          {BLUFF_REPLIES.map((reply, idx) => (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => handleSendBluff(reply)}
+                              className="w-full text-left px-2 py-1 rounded text-[11px] font-bold text-stone-200 hover:bg-purple-900/60 transition-colors cursor-pointer truncate"
+                            >
+                              {reply}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Row 2: Touch Action Buttons Grid directly on table */}
+                  <div className="grid grid-cols-4 gap-1 sm:gap-1.5">
+                    {/* 1. FOLD */}
+                    <button
+                      type="button"
+                      onClick={() => handleUserAction('fold')}
+                      className="py-1.5 sm:py-2 px-1 sm:px-2 bg-stone-800 hover:bg-rose-950/80 text-stone-300 hover:text-rose-200 border border-stone-700 hover:border-rose-500 font-black text-[11px] sm:text-xs uppercase rounded-lg transition-all cursor-pointer shadow-xs active:scale-95 text-center"
+                    >
+                      Пас
+                    </button>
+
+                    {/* 2. CHECK / CALL */}
+                    {canCheck ? (
+                      <button
+                        type="button"
+                        onClick={() => handleUserAction('check')}
+                        className="py-1.5 sm:py-2 px-1 sm:px-2 bg-blue-600 hover:bg-blue-500 text-white font-black text-[11px] sm:text-xs uppercase rounded-lg transition-all cursor-pointer shadow-md ring-1 ring-blue-300 active:scale-95 text-center"
+                      >
+                        Чек
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleUserAction('call')}
+                        disabled={activeTurnPlayer.chips <= 0}
+                        className="py-1.5 sm:py-2 px-1 sm:px-2 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[11px] sm:text-xs uppercase rounded-lg transition-all cursor-pointer shadow-md ring-1 ring-emerald-300 active:scale-95 text-center"
+                      >
+                        Колл ({callDiff})
+                      </button>
+                    )}
+
+                    {/* 3. RAISE */}
+                    <button
+                      type="button"
+                      onClick={() => handleUserAction('raise', currentBetToCall + raiseAmount)}
+                      disabled={activeTurnPlayer.chips <= callDiff}
+                      className="py-1.5 sm:py-2 px-1 sm:px-2 bg-amber-500 hover:bg-amber-400 text-stone-950 font-black text-[11px] sm:text-xs uppercase rounded-lg transition-all cursor-pointer shadow-md ring-1 ring-yellow-300 active:scale-95 disabled:opacity-40 text-center truncate"
+                    >
+                      Рейз (+{raiseAmount})
+                    </button>
+
+                    {/* 4. ALL-IN */}
+                    <button
+                      type="button"
+                      onClick={() => handleUserAction('all_in')}
+                      disabled={activeTurnPlayer.chips <= 0}
+                      className="py-1.5 sm:py-2 px-1 sm:px-2 bg-rose-600 hover:bg-rose-500 text-white font-black text-[11px] sm:text-xs uppercase rounded-lg transition-all cursor-pointer shadow-md ring-1 ring-rose-300 active:scale-95 disabled:opacity-40 text-center"
+                    >
+                      Ва-банк
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                /* On-Field Status / Deal Banner when not user turn */
+                <div className="flex items-center justify-between gap-1.5 px-2 py-1 rounded-xl bg-stone-950/75 border border-amber-400/40 text-[10px] sm:text-xs">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    {activeTurnPlayer ? (
+                      <>
+                        <div className="w-2 h-2 rounded-full bg-amber-400 animate-ping shrink-0" />
+                        <span className="font-black text-stone-200 truncate">
+                          Ход: <span className="text-amber-300">{activeTurnPlayer.name}</span>
+                        </span>
+                      </>
+                    ) : (
+                      <span className="font-bold text-stone-300 truncate">
+                        {gameStage === 'showdown' ? 'Раздача завершена' : 'Стол готов к раздаче'}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1 shrink-0">
+                    {userSeatIdx === -1 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const freeIdx = seats.findIndex(s => s === null);
+                          if (freeIdx !== -1) handleSitDown(freeIdx);
+                        }}
+                        className="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[10px] uppercase rounded-md shadow-sm flex items-center gap-1 cursor-pointer"
+                      >
+                        <UserPlus size={11} />
+                        <span>Сесть</span>
+                      </button>
+                    )}
+
+                    {(gameStage === 'waiting' || gameStage === 'showdown') && (
+                      <button
+                        type="button"
+                        onClick={handleStartHand}
+                        className="px-2.5 py-0.5 bg-amber-500 hover:bg-amber-400 text-stone-950 font-black text-[10px] uppercase rounded-md shadow-sm flex items-center gap-1 cursor-pointer"
+                      >
+                        <Play size={10} className="fill-stone-950" />
+                        <span>{gameStage === 'showdown' ? 'Дальше' : 'Раздать'}</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* ===================================================================== */}
@@ -886,181 +1057,6 @@ export default function PokerTable({
             ))}
           </div>
 
-        </div>
-
-        {/* ========================================================================= */}
-        {/* 3. DOCKED IN-TABLE ACTION HUD (DIRECTLY ON THE TABLE - NO SCROLLING!) */}
-        {/* ========================================================================= */}
-        <div className="relative z-20 mt-1.5 bg-stone-950/90 border border-amber-400/60 rounded-xl p-2 shadow-2xl backdrop-blur-md">
-          {/* CASE A: IT IS MY TURN TO PLAY! SHOW ACTION BUTTONS DIRECTLY HERE */}
-          {isMyTurn && gameStage !== 'waiting' && gameStage !== 'showdown' ? (
-            <div className="space-y-1.5 animate-fade-in">
-              
-              {/* Row 1: Quick Sizing Pills + Bluff Button */}
-              <div className="flex items-center justify-between gap-1 flex-wrap text-[10px]">
-                <div className="flex items-center gap-1">
-                  <span className="text-stone-400 font-bold hidden sm:inline">Рейз:</span>
-                  {[1, 2, 5].map(add => (
-                    <button
-                      key={add}
-                      type="button"
-                      onClick={() => setRaiseAmount(add)}
-                      className={`px-2 py-0.5 rounded font-black cursor-pointer ${
-                        raiseAmount === add
-                          ? 'bg-amber-500 text-stone-950'
-                          : 'bg-stone-800 text-stone-300 hover:bg-stone-700'
-                      }`}
-                    >
-                      +{add}
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => setRaiseAmount(Math.max(2, Math.floor(pot / 2)))}
-                    className="px-2 py-0.5 rounded bg-stone-800 hover:bg-stone-700 text-stone-300 font-black cursor-pointer"
-                  >
-                    1/2 Банка
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setRaiseAmount(Math.max(2, pot))}
-                    className="px-2 py-0.5 rounded bg-stone-800 hover:bg-stone-700 text-stone-300 font-black cursor-pointer"
-                  >
-                    Банк
-                  </button>
-                </div>
-
-                {/* Bluff Picker Toggle */}
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setShowBluffPicker(!showBluffPicker)}
-                    className="px-2 py-0.5 bg-purple-900/80 hover:bg-purple-800 text-purple-200 border border-purple-400/50 rounded font-black flex items-center gap-1 cursor-pointer"
-                  >
-                    <Flame size={11} className="text-yellow-400" />
-                    <span>Реплика</span>
-                  </button>
-
-                  {/* Bluff popup menu */}
-                  {showBluffPicker && (
-                    <div className="absolute right-0 bottom-7 z-50 w-56 bg-stone-900 border-2 border-purple-400 rounded-xl shadow-2xl p-1.5 space-y-1">
-                      <p className="text-[10px] font-black uppercase text-purple-300 px-1">Сказать соратникам:</p>
-                      {BLUFF_REPLIES.map((reply, idx) => (
-                        <button
-                          key={idx}
-                          type="button"
-                          onClick={() => handleSendBluff(reply)}
-                          className="w-full text-left px-2 py-1 rounded text-[11px] font-bold text-stone-200 hover:bg-purple-900/60 transition-colors cursor-pointer truncate"
-                        >
-                          {reply}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Row 2: Touch Action Buttons Grid */}
-              <div className="grid grid-cols-4 gap-1.5">
-                
-                {/* 1. FOLD */}
-                <button
-                  type="button"
-                  onClick={() => handleUserAction('fold')}
-                  className="py-2 sm:py-2.5 px-2 bg-stone-800 hover:bg-rose-950/80 text-stone-300 hover:text-rose-200 border border-stone-700 hover:border-rose-500 font-black text-xs sm:text-sm uppercase rounded-lg transition-all cursor-pointer shadow-xs active:scale-95"
-                >
-                  Пас
-                </button>
-
-                {/* 2. CHECK / CALL */}
-                {canCheck ? (
-                  <button
-                    type="button"
-                    onClick={() => handleUserAction('check')}
-                    className="py-2 sm:py-2.5 px-2 bg-blue-600 hover:bg-blue-500 text-white font-black text-xs sm:text-sm uppercase rounded-lg transition-all cursor-pointer shadow-md ring-1 ring-blue-300 active:scale-95"
-                  >
-                    Чек
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => handleUserAction('call')}
-                    disabled={activeTurnPlayer.chips <= 0}
-                    className="py-2 sm:py-2.5 px-2 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs sm:text-sm uppercase rounded-lg transition-all cursor-pointer shadow-md ring-1 ring-emerald-300 active:scale-95"
-                  >
-                    Колл ({callDiff})
-                  </button>
-                )}
-
-                {/* 3. RAISE */}
-                <button
-                  type="button"
-                  onClick={() => handleUserAction('raise', currentBetToCall + raiseAmount)}
-                  disabled={activeTurnPlayer.chips <= callDiff}
-                  className="py-2 sm:py-2.5 px-2 bg-amber-500 hover:bg-amber-400 text-stone-950 font-black text-xs sm:text-sm uppercase rounded-lg transition-all cursor-pointer shadow-md ring-1 ring-yellow-300 active:scale-95 disabled:opacity-40"
-                >
-                  Рейз (+{raiseAmount})
-                </button>
-
-                {/* 4. ALL-IN */}
-                <button
-                  type="button"
-                  onClick={() => handleUserAction('all_in')}
-                  disabled={activeTurnPlayer.chips <= 0}
-                  className="py-2 sm:py-2.5 px-2 bg-rose-600 hover:bg-rose-500 text-white font-black text-xs sm:text-sm uppercase rounded-lg transition-all cursor-pointer shadow-md ring-1 ring-rose-300 active:scale-95 disabled:opacity-40"
-                >
-                  Ва-банк ({activeTurnPlayer.chips})
-                </button>
-
-              </div>
-            </div>
-          ) : (
-            /* CASE B: NOT MY TURN OR WAITING BETWEEN HANDS */
-            <div className="flex items-center justify-between gap-2 px-1 py-0.5">
-              <div className="flex items-center gap-2">
-                {activeTurnPlayer ? (
-                  <>
-                    <div className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping" />
-                    <span className="text-xs font-black text-stone-200">
-                      Ход игрока: <span className="text-amber-300">{activeTurnPlayer.name}</span>
-                      {activeTurnPlayer.nickname ? ` (${activeTurnPlayer.nickname})` : ''}
-                    </span>
-                  </>
-                ) : (
-                  <span className="text-xs font-bold text-stone-400">
-                    {gameStage === 'showdown' ? 'Раздача завершена. Ожидание следующей...' : 'Стол готов к раздаче.'}
-                  </span>
-                )}
-              </div>
-
-              {/* Seating quick action if user not seated yet */}
-              {userSeatIdx === -1 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const freeIdx = seats.findIndex(s => s === null);
-                    if (freeIdx !== -1) handleSitDown(freeIdx);
-                  }}
-                  className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[11px] uppercase rounded-lg shadow-sm flex items-center gap-1 cursor-pointer"
-                >
-                  <UserPlus size={12} />
-                  <span>Сесть за стол</span>
-                </button>
-              )}
-
-              {/* Hand Start trigger if waiting or showdown */}
-              {(gameStage === 'waiting' || gameStage === 'showdown') && (
-                <button
-                  type="button"
-                  onClick={handleStartHand}
-                  className="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-stone-950 font-black text-[11px] uppercase rounded-lg shadow-sm flex items-center gap-1 cursor-pointer"
-                >
-                  <Play size={11} className="fill-stone-950" />
-                  <span>{gameStage === 'showdown' ? 'Следующая раздача' : 'Раздать карты'}</span>
-                </button>
-              )}
-            </div>
-          )}
         </div>
 
       </div>

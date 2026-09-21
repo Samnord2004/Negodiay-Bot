@@ -50,6 +50,7 @@ export default function MKEmulatorView({
   const [core, setCore] = useState<MKConsoleCore>('segaMD');
   const [romFile, setRomFile] = useState<File | null>(null);
   const [romInfo, setRomInfo] = useState<{ name: string; size: number } | null>(null);
+  const [isBuiltinRom, setIsBuiltinRom] = useState(false);
   const [isEmulatorRunning, setIsEmulatorRunning] = useState(false);
   const [isLoadingRom, setIsLoadingRom] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -109,8 +110,13 @@ export default function MKEmulatorView({
         (document as any).msFullscreenElement
       );
       if (!isDocFs && isFullscreen) {
-        document.body.style.overflow = '';
-        document.documentElement.style.overflow = '';
+        // Native fullscreen was exited via Esc/gesture; exit CSS mode as well
+        const hasNativeFs = !!(document.fullscreenEnabled || (document as any).webkitFullscreenEnabled);
+        if (hasNativeFs) {
+          setIsFullscreen(false);
+          document.body.style.overflow = '';
+          document.documentElement.style.overflow = '';
+        }
       }
     };
     document.addEventListener('fullscreenchange', onFsChange);
@@ -120,6 +126,21 @@ export default function MKEmulatorView({
       document.removeEventListener('webkitfullscreenchange', onFsChange);
       document.body.style.overflow = '';
       document.documentElement.style.overflow = '';
+    };
+  }, [isFullscreen]);
+
+  // Prevent background elastic bounce/scrolling on smartphones while in fullscreen
+  useEffect(() => {
+    if (!isFullscreen) return;
+    const preventBgTouch = (e: TouchEvent) => {
+      // Don't scroll parent window when interacting with emulator
+      if (e.target && (e.target as HTMLElement).tagName !== 'IFRAME') {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener('touchmove', preventBgTouch, { passive: false });
+    return () => {
+      window.removeEventListener('touchmove', preventBgTouch);
     };
   }, [isFullscreen]);
 
@@ -145,18 +166,50 @@ export default function MKEmulatorView({
     return () => clearInterval(interval);
   }, []);
 
-  // Load saved ROM on mount from IndexedDB
+  // Load built-in Mortal Kombat ROM from server
+  const loadBuiltinMortalKombatRom = async () => {
+    setIsLoadingRom(true);
+    try {
+      let response = await fetch('/api/mk/default-rom');
+      if (!response.ok) {
+        response = await fetch('/roms/mortal_kombat_3.bin');
+      }
+      if (response.ok) {
+        const blob = await response.blob();
+        const file = new File([blob], 'Ultimate_Mortal_Kombat_3.bin', { type: 'application/octet-stream' });
+        setRomFile(file);
+        setRomInfo({ name: 'Ultimate Mortal Kombat 3 (Sega Mega Drive)', size: file.size });
+        setCore('segaMD');
+        setIsBuiltinRom(true);
+        setIsEmulatorRunning(false);
+        playMKGongSound();
+        return true;
+      }
+    } catch (err) {
+      console.warn('Could not load built-in Mortal Kombat ROM:', err);
+    } finally {
+      setIsLoadingRom(false);
+    }
+    return false;
+  };
+
+  // Load saved ROM on mount from IndexedDB, or fallback to built-in MK ROM
   useEffect(() => {
     async function checkSavedRom() {
       setIsLoadingRom(true);
       try {
         const saved = await loadRomFromIndexedDB();
-        if (saved) {
+        if (saved && saved.file) {
           setRomFile(saved.file);
           setRomInfo({ name: saved.name, size: saved.size });
+          setIsBuiltinRom(false);
+        } else {
+          // Pre-load Mortal Kombat into the system automatically!
+          await loadBuiltinMortalKombatRom();
         }
       } catch (e) {
         console.error(e);
+        await loadBuiltinMortalKombatRom();
       } finally {
         setIsLoadingRom(false);
       }
@@ -196,6 +249,7 @@ export default function MKEmulatorView({
       await saveRomToIndexedDB(file);
       setRomFile(file);
       setRomInfo({ name: file.name, size: file.size });
+      setIsBuiltinRom(false);
       setIsEmulatorRunning(false);
       playMKGongSound();
     } catch (err) {
@@ -209,6 +263,7 @@ export default function MKEmulatorView({
     await clearRomFromIndexedDB();
     setRomFile(null);
     setRomInfo(null);
+    setIsBuiltinRom(false);
     setIsEmulatorRunning(false);
     if (iframeBlobUrl) {
       URL.revokeObjectURL(iframeBlobUrl);
@@ -500,6 +555,18 @@ export default function MKEmulatorView({
       document.body.style.overflow = 'hidden';
       document.documentElement.style.overflow = 'hidden';
 
+      // If emulator is not running yet, launch it immediately in fullscreen!
+      if (!isEmulatorRunning) {
+        requestNativeFullscreen(document.documentElement);
+        launchEmulator();
+        try {
+          if ((window.screen as any)?.orientation?.lock) {
+            (window.screen as any).orientation.lock('landscape').catch(() => {});
+          }
+        } catch {}
+        return;
+      }
+
       const targetEl = gameContainerRef.current || containerRef.current || document.documentElement;
       if (targetEl) {
         await requestNativeFullscreen(targetEl);
@@ -525,10 +592,17 @@ export default function MKEmulatorView({
   };
 
   const launchEmulatorAndFullscreen = () => {
+    setIsFullscreen(true);
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+    // Must call requestNativeFullscreen synchronously inside user gesture handler!
+    requestNativeFullscreen(document.documentElement);
     launchEmulator();
-    setTimeout(() => {
-      toggleFullscreen();
-    }, 200);
+    try {
+      if ((window.screen as any)?.orientation?.lock) {
+        (window.screen as any).orientation.lock('landscape').catch(() => {});
+      }
+    } catch {}
   };
 
   const copyRoomCode = () => {
@@ -834,32 +908,68 @@ export default function MKEmulatorView({
       {/* ROM UPLOAD / SELECTION CARD */}
       {!isEmulatorRunning && (
         <div className="bg-stone-900 border border-stone-800 rounded-2xl p-5 md:p-6 shadow-xl space-y-5 text-white">
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            onChange={handleFileChange} 
+            accept=".bin,.gen,.smd,.md,.iso,.cue,.chd,.pbp,.sfc,.smc,.zip" 
+            className="hidden" 
+          />
+
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-stone-800 pb-4">
             <div>
               <h3 className="text-base sm:text-lg font-black text-amber-400 uppercase flex items-center gap-2">
-                <span>🎮 Загрузка ROM Mortal Kombat</span>
+                <span>🎮 Игра Mortal Kombat & Загрузка ROM</span>
                 {romFile && (
                   <span className="text-xs bg-green-900/60 text-green-300 border border-green-700/60 font-bold px-2 py-0.5 rounded-full">
-                    ROM готов к запуску
+                    {isBuiltinRom ? '🔥 Встроенный MK3 готов' : 'Свой ROM готов'}
                   </span>
                 )}
               </h3>
               <p className="text-xs text-stone-400 mt-0.5">
-                Поддерживаются файлы .bin, .gen, .smd, .iso, .cue, .zip для UMK3, MK Trilogy, MK2
+                {isBuiltinRom 
+                  ? 'В систему уже встроен официальный Ultimate Mortal Kombat 3. Вы также можете загрузить любой другой ROM.'
+                  : 'Загружен индивидуальный файл ROM. Вы всегда можете вернуться к встроенному Mortal Kombat 3.'}
               </p>
             </div>
 
-            {/* Clear Saved ROM Button */}
-            {romFile && (
+            {/* Quick Actions: Restore Built-in or Upload Custom */}
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={handleClearRom}
-                className="px-3 py-1.5 bg-stone-800 hover:bg-stone-700 text-stone-300 hover:text-red-300 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer border border-stone-700"
+                onClick={loadBuiltinMortalKombatRom}
+                disabled={isLoadingRom || isBuiltinRom}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer border ${
+                  isBuiltinRom
+                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 opacity-70 cursor-default'
+                    : 'bg-stone-800 hover:bg-stone-700 text-amber-400 border-stone-700'
+                }`}
+                title="Загрузить встроенный в систему Mortal Kombat 3"
               >
-                <Trash2 size={13} />
-                <span>Сменить / Удалить ROM</span>
+                <span>🔥 Встроенный MK 3</span>
               </button>
-            )}
+
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="px-3 py-1.5 bg-stone-800 hover:bg-stone-700 text-stone-300 hover:text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer border border-stone-700"
+                title="Загрузить свой файл ROM с устройства"
+              >
+                <Upload size={13} />
+                <span>Свой ROM файл</span>
+              </button>
+
+              {romFile && (
+                <button
+                  type="button"
+                  onClick={handleClearRom}
+                  className="px-2.5 py-1.5 bg-stone-800 hover:bg-stone-700 text-stone-400 hover:text-red-300 rounded-xl text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer border border-stone-700"
+                  title="Очистить память"
+                >
+                  <Trash2 size={13} />
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Active ROM info or Drop Zone */}
@@ -913,13 +1023,6 @@ export default function MKEmulatorView({
               onClick={() => fileInputRef.current?.click()}
               className="border-2 border-dashed border-stone-700 hover:border-amber-400 rounded-2xl p-8 text-center bg-stone-950/60 hover:bg-stone-950 transition-all cursor-pointer space-y-3 group"
             >
-              <input 
-                type="file" 
-                ref={fileInputRef} 
-                onChange={handleFileChange} 
-                accept=".bin,.gen,.smd,.md,.iso,.cue,.chd,.pbp,.sfc,.smc,.zip" 
-                className="hidden" 
-              />
               <div className="w-12 h-12 rounded-full bg-stone-800 group-hover:bg-amber-500 text-stone-300 group-hover:text-stone-950 flex items-center justify-center mx-auto transition-colors">
                 <Upload size={22} />
               </div>
@@ -975,12 +1078,12 @@ export default function MKEmulatorView({
           ref={gameContainerRef}
           className={
             isFullscreen
-              ? "fixed inset-0 z-[99999] w-screen h-screen w-[100dvw] h-[100dvh] bg-black flex flex-col overflow-hidden select-none touch-none"
+              ? "fixed inset-0 z-[999999] w-full h-[100dvh] bg-black flex flex-col overflow-hidden select-none touch-none overscroll-none"
               : "bg-black border-2 border-red-900/80 rounded-2xl overflow-hidden shadow-2xl relative"
           }
         >
           {/* Top In-Game Bar */}
-          <div className={`bg-stone-950 border-b border-stone-800 ${isFullscreen ? 'px-3 py-2' : 'px-4 py-2.5'} flex items-center justify-between text-xs text-white shrink-0 z-10`}>
+          <div className={`bg-stone-950/95 border-b border-stone-800 ${isFullscreen ? 'px-3 py-1.5' : 'px-4 py-2.5'} flex items-center justify-between text-xs text-white shrink-0 z-10 backdrop-blur-xs`}>
             <div className="flex items-center gap-2 min-w-0">
               <span className="w-2.5 h-2.5 rounded-full bg-green-500 animate-ping shrink-0" />
               <span className="font-bold text-amber-400 truncate text-[11px] sm:text-xs">
@@ -1041,10 +1144,36 @@ export default function MKEmulatorView({
 
           {/* Orientation Recommendation Banner on Mobile */}
           {isFullscreen && isPortrait && (
-            <div className="bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 text-stone-950 px-3 py-1.5 text-[11px] font-black text-center flex items-center justify-center gap-1.5 shrink-0 shadow-md">
+            <div className="bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 text-stone-950 px-3 py-1.5 text-[11px] font-black text-center flex items-center justify-center gap-2 shrink-0 shadow-md">
               <RotateCcw size={13} className="animate-spin text-stone-950 shrink-0" />
-              <span>Поверните смартфон горизонтально (альбомный режим) для широкой арены и сенсорного джойстика!</span>
+              <span>Поверните телефон горизонтально для широкого экрана и джойстика!</span>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    if ((window.screen as any)?.orientation?.lock) {
+                      await (window.screen as any).orientation.lock('landscape');
+                    }
+                  } catch {}
+                }}
+                className="ml-1 px-2 py-0.5 bg-stone-950 text-amber-300 rounded text-[10px] font-black uppercase cursor-pointer"
+              >
+                Повернуть
+              </button>
             </div>
+          )}
+
+          {/* Floating Minimize Button for Mobile Quick Exit */}
+          {isFullscreen && (
+            <button
+              type="button"
+              onClick={toggleFullscreen}
+              className="fixed top-2 right-2 z-[9999999] bg-stone-900/85 hover:bg-stone-800 text-amber-400 border border-amber-500/80 rounded-full px-2.5 py-1 shadow-2xl flex items-center gap-1 text-[11px] font-black backdrop-blur-md transition-all cursor-pointer opacity-80 hover:opacity-100"
+              title="Свернуть экран"
+            >
+              <Minimize2 size={12} />
+              <span>Свернуть</span>
+            </button>
           )}
 
           {/* Iframe Viewport */}

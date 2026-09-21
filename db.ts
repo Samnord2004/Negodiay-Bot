@@ -20,7 +20,8 @@ import {
   initialCreativityIdeas,
   INITIAL_STORIES,
   initialRallyCoins,
-  initialFundExpenses
+  initialFundExpenses,
+  initialContestHistory
 } from "./src/mockData";
 import { 
   Participant, 
@@ -40,7 +41,8 @@ import {
   TeamStory, 
   UserRole, 
   AccountStatus,
-  RallyCoin
+  RallyCoin,
+  ContestHistoryEntry
 } from "./src/types";
 import { formatChatTimestamp, deduplicateChatMessages } from "./src/utils/chatUtils";
 
@@ -110,6 +112,7 @@ export function saveLocalFileBackup() {
       creativityIdeas: cacheCreativityIdeas,
       stories: cacheStories,
       rallyCoins: cacheRallyCoins,
+      contestHistory: cacheContestHistory,
       adminPassword: cacheAdminPassword,
       savedAt: new Date().toISOString()
     };
@@ -142,6 +145,7 @@ export function loadLocalFileBackup(): boolean {
       if (Array.isArray(data.creativityIdeas)) cacheCreativityIdeas = data.creativityIdeas;
       if (Array.isArray(data.stories)) cacheStories = data.stories;
       if (Array.isArray(data.rallyCoins)) cacheRallyCoins = data.rallyCoins;
+      if (Array.isArray(data.contestHistory)) cacheContestHistory = data.contestHistory;
       if (data.adminPassword) cacheAdminPassword = data.adminPassword;
       console.log(`[Storage] Loaded persistent state from disk (${STORAGE_FILE})`);
       return true;
@@ -161,6 +165,7 @@ let cacheGroceryItems: GroceryItem[] = [...initialGroceryItems];
 let cacheInventoryItems: InventoryItem[] = [...initialInventoryItems];
 let cacheBotConfig: BotConfig = { ...initialBotConfig };
 let cacheContests: Contest[] = [...initialContests];
+let cacheContestHistory: ContestHistoryEntry[] = [...initialContestHistory];
 let cacheMessages: ChatMessage[] = [...initialMessages];
 let cachePhotos: GalleryPhoto[] = [...initialPhotos];
 let cacheDocuments: TeamDocument[] = [...initialDocuments];
@@ -1263,6 +1268,15 @@ export function saveContests(contests: Contest[]) {
   })();
 }
 
+export function getContestHistory(): ContestHistoryEntry[] {
+  return cacheContestHistory;
+}
+
+export function saveContestHistory(history: ContestHistoryEntry[]) {
+  cacheContestHistory = [...history];
+  saveLocalFileBackup();
+}
+
 export function getMessages(): ChatMessage[] {
   return cacheMessages;
 }
@@ -2030,4 +2044,17 @@ export function deleteRallyCoin(coinId: string): RallyCoin[] {
   saveLocalFileBackup();
   return cacheRallyCoins;
 }
+
+export function updateAllCoinsYear(year: number): RallyCoin[] {
+  cacheRallyCoins = cacheRallyCoins.map(c => ({ ...c, year }));
+  saveLocalFileBackup();
+  return cacheRallyCoins;
+}
+
+export function resetAllRallyCoins(): RallyCoin[] {
+  cacheRallyCoins = [];
+  saveLocalFileBackup();
+  return cacheRallyCoins;
+}
+
 

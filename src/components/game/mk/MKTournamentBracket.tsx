@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { 
   Trophy, Flame, Swords, Shield, Award, 
-  CheckCircle2, Plus, Sparkles, User, HelpCircle, ChevronRight
+  CheckCircle2, Plus, Sparkles, User, HelpCircle, ChevronRight,
+  Edit2, Trash2
 } from 'lucide-react';
 import { Participant, RallyCoin } from '../../../types';
 import { MKBout, FinishType, MKFighter } from '../../../types/mkTournament';
@@ -32,8 +33,17 @@ export default function MKTournamentBracket({
   isCaptain,
   onAwardCoin
 }: MKTournamentBracketProps) {
-  // Sample initial tournament matches
+  // Sample initial tournament matches with localStorage persistence
   const [bouts, setBouts] = useState<MKBout[]>(() => {
+    try {
+      const saved = localStorage.getItem('mk_tournament_bouts_v2');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.warn("Could not load MK bouts from localStorage", e);
+    }
     // Generate 3 sample tournament bouts using actual participants
     const p1 = participants[0] || { id: 'p1', name: 'Андрей Самойлов', nickname: 'Капитан' };
     const p2 = participants[1] || { id: 'p2', name: 'Максим Леонов', nickname: 'Душнила' };
@@ -129,6 +139,93 @@ export default function MKTournamentBracket({
   const [newP2Fighter, setNewP2Fighter] = useState('subzero');
   const [newPrize, setNewPrize] = useState(3);
 
+  // Edit Bout state
+  const [editingBout, setEditingBout] = useState<MKBout | null>(null);
+  const [editRoundName, setEditRoundName] = useState('');
+  const [editP1Id, setEditP1Id] = useState('');
+  const [editP2Id, setEditP2Id] = useState('');
+  const [editP1Fighter, setEditP1Fighter] = useState('scorpion');
+  const [editP2Fighter, setEditP2Fighter] = useState('subzero');
+  const [editP1Score, setEditP1Score] = useState(0);
+  const [editP2Score, setEditP2Score] = useState(0);
+  const [editStatus, setEditStatus] = useState<'pending' | 'active' | 'completed'>('pending');
+  const [editWinnerId, setEditWinnerId] = useState('');
+  const [editFinishType, setEditFinishType] = useState<FinishType | undefined>('fatality');
+  const [editPrize, setEditPrize] = useState(3);
+
+  const saveBoutsToStorage = (updatedBouts: MKBout[]) => {
+    try {
+      localStorage.setItem('mk_tournament_bouts_v2', JSON.stringify(updatedBouts));
+    } catch (e) {
+      console.warn("Failed to persist MK bouts", e);
+    }
+  };
+
+  const handleStartEditBout = (bout: MKBout) => {
+    setEditingBout(bout);
+    setEditRoundName(bout.roundName);
+    setEditP1Id(bout.player1.participantId);
+    setEditP2Id(bout.player2.participantId);
+    setEditP1Fighter(bout.player1.fighterId);
+    setEditP2Fighter(bout.player2.fighterId);
+    setEditP1Score(bout.player1.score || 0);
+    setEditP2Score(bout.player2.score || 0);
+    setEditStatus(bout.status);
+    setEditWinnerId(bout.winnerParticipantId || bout.player1.participantId);
+    setEditFinishType(bout.finishType || 'fatality');
+    setEditPrize(bout.coinPrize);
+  };
+
+  const handleSaveEditBout = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingBout) return;
+
+    const p1 = participants.find(p => p.id === editP1Id) || editingBout.player1;
+    const p2 = participants.find(p => p.id === editP2Id) || editingBout.player2;
+
+    const updated = bouts.map(b => {
+      if (b.id !== editingBout.id) return b;
+      return {
+        ...b,
+        roundName: editRoundName,
+        player1: {
+          ...b.player1,
+          participantId: p1.id,
+          name: p1.name,
+          nickname: (p1 as any).nickname || p1.name,
+          avatar: getParticipantAvatar(p1 as any),
+          fighterId: editP1Fighter,
+          score: Number(editP1Score)
+        },
+        player2: {
+          ...b.player2,
+          participantId: p2.id,
+          name: p2.name,
+          nickname: (p2 as any).nickname || p2.name,
+          avatar: getParticipantAvatar(p2 as any),
+          fighterId: editP2Fighter,
+          score: Number(editP2Score)
+        },
+        status: editStatus,
+        winnerParticipantId: editStatus === 'completed' ? (editWinnerId || undefined) : undefined,
+        finishType: editStatus === 'completed' ? (editFinishType || undefined) : undefined,
+        coinPrize: Number(editPrize)
+      };
+    });
+
+    setBouts(updated);
+    saveBoutsToStorage(updated);
+    setEditingBout(null);
+  };
+
+  const handleDeleteBout = (boutId: string) => {
+    if (window.confirm("Удалить этот поединок из турнирной сетки?")) {
+      const updated = bouts.filter(b => b.id !== boutId);
+      setBouts(updated);
+      saveBoutsToStorage(updated);
+    }
+  };
+
   // Finish match modal state
   const [finishWinnerId, setFinishWinnerId] = useState<string>('');
   const [finishScoreP1, setFinishScoreP1] = useState(2);
@@ -164,17 +261,19 @@ export default function MKTournamentBracket({
       });
     }
 
-    setBouts(prev => prev.map(b => {
+    const updated = bouts.map(b => {
       if (b.id !== selectedBout.id) return b;
       return {
         ...b,
-        status: 'completed',
+        status: 'completed' as const,
         winnerParticipantId: finishWinnerId,
         finishType,
         player1: { ...b.player1, score: finishScoreP1 },
         player2: { ...b.player2, score: finishScoreP2 }
       };
-    }));
+    });
+    setBouts(updated);
+    saveBoutsToStorage(updated);
 
     setSelectedBoutId(null);
   };
@@ -195,13 +294,15 @@ export default function MKTournamentBracket({
       amount: betAmount
     };
 
-    setBouts(prev => prev.map(b => {
+    const updated = bouts.map(b => {
       if (b.id !== betBoutId) return b;
       return {
         ...b,
         bets: [...b.bets, newBet]
       };
-    }));
+    });
+    setBouts(updated);
+    saveBoutsToStorage(updated);
 
     setBetBoutId(null);
     playMKGongSound();
@@ -237,7 +338,9 @@ export default function MKTournamentBracket({
       bets: []
     };
 
-    setBouts(prev => [newBout, ...prev]);
+    const updated = [newBout, ...bouts];
+    setBouts(updated);
+    saveBoutsToStorage(updated);
     setShowCreateModal(false);
     playMKGongSound();
   };
@@ -291,15 +394,37 @@ export default function MKTournamentBracket({
                   {bout.roundName}
                 </span>
 
-                <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${
-                  bout.status === 'completed'
-                    ? 'bg-emerald-950 text-emerald-300 border border-emerald-700'
-                    : bout.status === 'active'
-                    ? 'bg-amber-950 text-amber-300 border border-amber-500 animate-pulse'
-                    : 'bg-stone-800 text-stone-400'
-                }`}>
-                  {bout.status === 'completed' ? 'Завершён' : bout.status === 'active' ? 'Идёт бой!' : 'Ожидание'}
-                </span>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {/* Edit Bout Button */}
+                  <button
+                    type="button"
+                    onClick={() => handleStartEditBout(bout)}
+                    className="p-1 text-stone-400 hover:text-amber-300 hover:bg-stone-800 rounded-lg transition-colors cursor-pointer"
+                    title="Редактировать поединок"
+                  >
+                    <Edit2 size={13} />
+                  </button>
+
+                  {/* Delete Bout Button */}
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteBout(bout.id)}
+                    className="p-1 text-stone-400 hover:text-red-400 hover:bg-stone-800 rounded-lg transition-colors cursor-pointer"
+                    title="Удалить поединок"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+
+                  <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${
+                    bout.status === 'completed'
+                      ? 'bg-emerald-950 text-emerald-300 border border-emerald-700'
+                      : bout.status === 'active'
+                      ? 'bg-amber-950 text-amber-300 border border-amber-500 animate-pulse'
+                      : 'bg-stone-800 text-stone-400'
+                  }`}>
+                    {bout.status === 'completed' ? 'Завершён' : bout.status === 'active' ? 'Идёт бой!' : 'Ожидание'}
+                  </span>
+                </div>
               </div>
 
               {/* Matchup: Player 1 VS Player 2 */}
@@ -747,6 +872,208 @@ export default function MKTournamentBracket({
             </div>
 
           </div>
+        </div>
+      )}
+
+      {/* MODAL: EDIT BOUT */}
+      {editingBout && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-stone-950/80 backdrop-blur-xs animate-fade-in overflow-y-auto">
+          <form onSubmit={handleSaveEditBout} className="bg-stone-900 border-2 border-amber-400 rounded-2xl w-full max-w-md p-4 shadow-2xl space-y-4 my-8">
+            
+            <div className="flex items-center justify-between border-b border-stone-800 pb-2">
+              <h3 className="font-black text-sm text-white uppercase flex items-center gap-2">
+                <Edit2 size={16} className="text-amber-400" />
+                <span>Редактировать поединок MK</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setEditingBout(null)}
+                className="text-stone-400 hover:text-white font-bold cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Round Title */}
+            <div>
+              <label className="text-xs font-bold text-stone-300 block mb-1">Название раунда:</label>
+              <input
+                type="text"
+                required
+                value={editRoundName}
+                onChange={(e) => setEditRoundName(e.target.value)}
+                placeholder="Например: 1/4 Финала, Финал..."
+                className="w-full bg-stone-800 border border-stone-700 rounded-xl px-3 py-2 text-xs text-white"
+              />
+            </div>
+
+            {/* Status & Prize */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-bold text-stone-300 block mb-1">Статус поединка:</label>
+                <select
+                  value={editStatus}
+                  onChange={(e) => setEditStatus(e.target.value as any)}
+                  className="w-full bg-stone-800 border border-stone-700 rounded-xl p-2 text-xs text-white"
+                >
+                  <option value="pending">Ожидание (Pending)</option>
+                  <option value="active">Идёт бой (Active)</option>
+                  <option value="completed">Завершён (Completed)</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-bold text-stone-300 block mb-1">Призовой фонд (монеты):</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={50}
+                  value={editPrize}
+                  onChange={(e) => setEditPrize(Number(e.target.value))}
+                  className="w-full bg-stone-800 border border-stone-700 rounded-xl p-2 text-xs text-white font-bold text-amber-400"
+                />
+              </div>
+            </div>
+
+            {/* Fighters & Scores */}
+            <div className="grid grid-cols-2 gap-3">
+              {/* Player 1 */}
+              <div className="space-y-2 bg-stone-950/60 p-2.5 rounded-xl border border-stone-800">
+                <span className="text-[11px] font-black uppercase text-amber-400">Игрок 1</span>
+                <select
+                  value={editP1Id}
+                  onChange={(e) => setEditP1Id(e.target.value)}
+                  className="w-full bg-stone-800 border border-stone-700 rounded-lg p-1.5 text-xs text-white"
+                >
+                  {participants.map(p => (
+                    <option key={p.id} value={p.id}>{p.name} ({p.nickname})</option>
+                  ))}
+                </select>
+
+                <select
+                  value={editP1Fighter}
+                  onChange={(e) => setEditP1Fighter(e.target.value)}
+                  className="w-full bg-stone-800 border border-stone-700 rounded-lg p-1.5 text-xs text-amber-400"
+                >
+                  {MK_FIGHTERS.map(f => (
+                    <option key={f.id} value={f.id}>{f.name}</option>
+                  ))}
+                </select>
+
+                <div>
+                  <label className="text-[10px] text-stone-400 block mb-0.5">Счёт раундов:</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={10}
+                    value={editP1Score}
+                    onChange={(e) => setEditP1Score(Number(e.target.value))}
+                    className="w-full bg-stone-800 border border-stone-700 rounded-lg p-1.5 text-xs text-white font-bold text-center"
+                  />
+                </div>
+              </div>
+
+              {/* Player 2 */}
+              <div className="space-y-2 bg-stone-950/60 p-2.5 rounded-xl border border-stone-800">
+                <span className="text-[11px] font-black uppercase text-cyan-400">Игрок 2</span>
+                <select
+                  value={editP2Id}
+                  onChange={(e) => setEditP2Id(e.target.value)}
+                  className="w-full bg-stone-800 border border-stone-700 rounded-lg p-1.5 text-xs text-white"
+                >
+                  {participants.map(p => (
+                    <option key={p.id} value={p.id}>{p.name} ({p.nickname})</option>
+                  ))}
+                </select>
+
+                <select
+                  value={editP2Fighter}
+                  onChange={(e) => setEditP2Fighter(e.target.value)}
+                  className="w-full bg-stone-800 border border-stone-700 rounded-lg p-1.5 text-xs text-cyan-400"
+                >
+                  {MK_FIGHTERS.map(f => (
+                    <option key={f.id} value={f.id}>{f.name}</option>
+                  ))}
+                </select>
+
+                <div>
+                  <label className="text-[10px] text-stone-400 block mb-0.5">Счёт раундов:</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={10}
+                    value={editP2Score}
+                    onChange={(e) => setEditP2Score(Number(e.target.value))}
+                    className="w-full bg-stone-800 border border-stone-700 rounded-lg p-1.5 text-xs text-white font-bold text-center"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Winner selection if completed */}
+            {editStatus === 'completed' && (
+              <div className="bg-stone-950/80 p-3 rounded-xl border border-amber-500/50 space-y-2">
+                <div className="text-xs font-bold text-amber-400">Победитель поединка:</div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditWinnerId(editP1Id)}
+                    className={`p-2 rounded-lg text-xs font-bold border transition-colors cursor-pointer ${
+                      editWinnerId === editP1Id
+                        ? 'bg-amber-500 text-stone-950 border-amber-400'
+                        : 'bg-stone-800 text-stone-300 border-stone-700'
+                    }`}
+                  >
+                    Победа Игрока 1
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditWinnerId(editP2Id)}
+                    className={`p-2 rounded-lg text-xs font-bold border transition-colors cursor-pointer ${
+                      editWinnerId === editP2Id
+                        ? 'bg-amber-500 text-stone-950 border-amber-400'
+                        : 'bg-stone-800 text-stone-300 border-stone-700'
+                    }`}
+                  >
+                    Победа Игрока 2
+                  </button>
+                </div>
+
+                <div className="pt-1">
+                  <label className="text-[10px] text-stone-400 block mb-1">Тип добивания (Finish Type):</label>
+                  <select
+                    value={editFinishType}
+                    onChange={(e) => setEditFinishType(e.target.value as FinishType)}
+                    className="w-full bg-stone-800 border border-stone-700 rounded-lg p-1.5 text-xs text-amber-300 font-bold"
+                  >
+                    <option value="fatality">FATALITY</option>
+                    <option value="brutality">BRUTALITY</option>
+                    <option value="babality">BABALITY</option>
+                    <option value="friendship">FRIENDSHIP</option>
+                    <option value="flawless">FLAWLESS VICTORY</option>
+                    <option value="decision">По очкам (Decision)</option>
+                  </select>
+                </div>
+              </div>
+            )}
+
+            <div className="pt-2 flex justify-end gap-2 border-t border-stone-800">
+              <button
+                type="button"
+                onClick={() => setEditingBout(null)}
+                className="px-3 py-1.5 bg-stone-800 hover:bg-stone-700 text-stone-300 font-bold rounded-lg text-xs cursor-pointer"
+              >
+                Отмена
+              </button>
+
+              <button
+                type="submit"
+                className="px-4 py-1.5 bg-amber-500 hover:bg-amber-400 text-stone-950 font-black rounded-lg text-xs uppercase cursor-pointer shadow-md"
+              >
+                Сохранить изменения
+              </button>
+            </div>
+
+          </form>
         </div>
       )}
 

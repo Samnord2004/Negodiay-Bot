@@ -475,7 +475,7 @@ export default function AdminPanel({
               { id: 'pending', label: `Заявки (${pendingUsers.length + pendingResetCount})`, icon: UserCheck, alert: (pendingUsers.length > 0 || pendingResetCount > 0) },
               { id: 'roles', label: 'Роли & Пароли', icon: Shield },
               { id: 'excursions', label: 'Слёты и Взносы', icon: Calendar },
-              { id: 'captain_panel', label: 'Панель Капитана', icon: Crown }
+              { id: 'captain_panel', label: 'Мотивация команды', icon: Crown }
             ].map(tab => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -1219,7 +1219,7 @@ export default function AdminPanel({
                 <Crown size={22} />
               </div>
               <div>
-                <h3 className="font-black text-base uppercase text-red-700">Панель Капитана: Мотивация и Монеты слёта</h3>
+                <h3 className="font-black text-base uppercase text-red-700">Мотивация команды: Монеты слёта</h3>
                 <p className="text-xs text-amber-900 font-medium">
                   Чеканка именных монет Негодяев, поощрение за дежурства, помощь лагерю и управление скидками на слёт.
                 </p>

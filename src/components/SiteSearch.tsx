@@ -401,10 +401,14 @@ export default function SiteSearch({
           ref={searchInputRef}
           type="text"
           value={query}
-          onFocus={() => setIsOpen(true)}
           onChange={(e) => {
             setQuery(e.target.value);
-            if (!isOpen) setIsOpen(true);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              setIsOpen(true);
+            }
           }}
           placeholder="участники, долги, задачи, документы, конкурсы..."
           className="w-full pl-20 pr-24 py-2 bg-amber-50/95 hover:bg-white focus:bg-white text-amber-950 font-bold text-xs sm:text-sm border-2 border-amber-400 focus:border-red-600 focus:ring-2 focus:ring-red-500/20 rounded-xl shadow-xs placeholder:text-amber-800/60 focus:outline-none transition-all duration-150"

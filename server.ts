@@ -1,6 +1,7 @@
 import express from "express";
 import http from "http";
 import path from "path";
+import fs from "fs";
 import dotenv from "dotenv";
 import { GoogleGenAI, Type } from "@google/genai";
 import { createServer as createViteServer } from "vite";
@@ -35,6 +36,8 @@ import {
   saveBotConfig,
   getContests,
   saveContests,
+  getContestHistory,
+  saveContestHistory,
   getMessages,
   addMessage,
   saveMessages,
@@ -67,7 +70,9 @@ import {
   getRallyCoins,
   saveRallyCoins,
   addRallyCoin,
-  deleteRallyCoin
+  deleteRallyCoin,
+  updateAllCoinsYear,
+  resetAllRallyCoins
 } from "./db";
 import { ORIENTEERING_SIGNS_SVG, KNOTS_DIAGRAM_SVG, CONTEST_SCHEDULE_SVG } from "./src/mockData";
 import { Participant, UserRole, RallyCoin, FundExpense, RallyParticipantEntry } from "./src/types";
@@ -539,12 +544,14 @@ ${recentHistoryText}
 `;
 
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+    const generatePromise = ai.models.generateContent({
+      model: "gemini-3.8-flash",
       contents: "Ответь на последнее сообщение команды.",
       config: {
         systemInstruction: systemPrompt,
         responseMimeType: "application/json",
+        maxOutputTokens: 600,
+        temperature: 0.8,
         responseSchema: {
           type: Type.OBJECT,
           properties: {
@@ -558,12 +565,21 @@ ${recentHistoryText}
       }
     });
 
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("AI_TIMEOUT_EXCEEDED")), 4000)
+    );
+
+    const response: any = await Promise.race([generatePromise, timeoutPromise]);
     const parsedResponse = JSON.parse(response.text?.trim() || "{}");
     return parsedResponse;
 
   } catch (error: any) {
+    const isTimeout = error?.message === "AI_TIMEOUT_EXCEEDED";
     const isQuotaOrBilling = error?.status === 429 || String(error?.message || '').includes('429') || String(error?.message || '').includes('RESOURCE_EXHAUSTED') || String(error?.message || '').includes('prepayment credits');
-    if (isQuotaOrBilling) {
+    
+    if (isTimeout) {
+      console.warn("[AI BOT] Gemini response timed out (>4s). Instant fallback invoked.");
+    } else if (isQuotaOrBilling) {
       console.warn("[AI BOT] Gemini prepayment/quota limit reached. Seamlessly utilizing internal Negodyai rule-based generator.");
     } else {
       console.error("Error communicating with Gemini:", error?.message || error);
@@ -585,7 +601,7 @@ ${recentHistoryText}
     );
     return {
       ...fallback,
-      warning: "Ответ сформирован встроенным алгоритмом Негодяя."
+      warning: "Ответ сформирован мгновенным генератором Негодяя."
     };
   }
 }
@@ -640,8 +656,27 @@ app.get("/api/sync", (req, res) => {
     fundExpenses: getFundExpenses(),
     creativityIdeas: getCreativityIdeas(),
     stories: getStories(),
-    rallyCoins: getRallyCoins()
+    rallyCoins: getRallyCoins(),
+    contestHistory: getContestHistory()
   });
+});
+
+app.get("/api/contests/history", (req, res) => {
+  res.json({ history: getContestHistory() });
+});
+
+app.post("/api/contests/history", (req, res) => {
+  try {
+    const history = req.body;
+    if (Array.isArray(history)) {
+      saveContestHistory(history);
+      res.json({ success: true, history: getContestHistory() });
+    } else {
+      res.status(400).json({ error: "Invalid history array" });
+    }
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || "Failed to save contest history" });
+  }
 });
 
 app.get("/api/chat/messages", (req, res) => {
@@ -701,6 +736,47 @@ app.delete("/api/coins/:id", (req, res) => {
     res.status(500).json({ error: "Failed to delete coin" });
   }
 });
+
+// Update year for all coins
+app.post("/api/coins/update-year", (req, res) => {
+  try {
+    const { year } = req.body;
+    const targetYear = Number(year) || 2026;
+    const updated = updateAllCoinsYear(targetYear);
+    res.json({ success: true, year: targetYear, coins: updated });
+  } catch (err: any) {
+    console.error("Error updating coins year:", err);
+    res.status(500).json({ error: "Failed to update year" });
+  }
+});
+
+// Reset season upon crowning winner
+app.post("/api/coins/reset-season", (req, res) => {
+  try {
+    const { winnerId, winnerName, winnerNickname, totalCoins, newYear, note } = req.body;
+    
+    // Add an announcement to team chat if winner provided
+    if (winnerName) {
+      const yearLabel = newYear ? `${newYear - 1}` : '2026';
+      addMessage({
+        id: "msg_" + Date.now(),
+        senderId: "system",
+        senderName: "👑 ШТАБ КАПИТАНА",
+        senderNickname: "Штаб",
+        isBot: false,
+        text: `🏆 ПОДВЕДЕНИЕ ИТОГОВ СЛЁТА ${yearLabel}!\n\nТриумфатором и победителем сезона признан: ${winnerName} (@${winnerNickname || winnerName}) с результатом ${totalCoins || 0} монет Негодяев!\nВсе накопленные монеты зафиксированы в Зале Славы. Балансы обнулены для нового слёта ${newYear || 2027}! Начинаем копить заново! 🔥`,
+        timestamp: formatChatTimestamp(new Date())
+      });
+    }
+
+    const updated = resetAllRallyCoins();
+    res.json({ success: true, coins: updated });
+  } catch (err: any) {
+    console.error("Error resetting coins season:", err);
+    res.status(500).json({ error: "Failed to reset season" });
+  }
+});
+
 
 // Transfer coins won in poker tournament between team members
 app.post("/api/coins/poker-settle", (req, res) => {
@@ -793,7 +869,8 @@ app.post("/api/sync", (req, res) => {
       messages,
       fundRecords,
       stories,
-      rallyCoins 
+      rallyCoins,
+      contestHistory
     } = req.body;
     if (participants) saveParticipants(participants);
     if (excursions) saveExcursions(excursions);
@@ -803,6 +880,7 @@ app.post("/api/sync", (req, res) => {
     if (inventoryItems) saveInventoryItems(inventoryItems);
     if (botConfig) saveBotConfig(botConfig);
     if (contests) saveContests(contests);
+    if (contestHistory && Array.isArray(contestHistory)) saveContestHistory(contestHistory);
     if (messages && Array.isArray(messages) && messages.length > 0) saveMessages(messages);
     if (fundRecords) saveFundRecords(fundRecords);
     if (stories) saveStories(stories);
@@ -2025,6 +2103,20 @@ app.delete("/api/mk/rooms/:code", (req, res) => {
   mkNetplayManager.closeRoom(req.params.code);
   res.json({ success: true, rooms: mkNetplayManager.getActiveRooms() });
 });
+
+// Built-in Default Mortal Kombat ROM route
+app.use("/roms", express.static(path.join(process.cwd(), "public", "roms")));
+
+app.get("/api/mk/default-rom", (req, res) => {
+  const romPath = path.join(process.cwd(), "public", "roms", "mortal_kombat_3.bin");
+  if (fs.existsSync(romPath)) {
+    res.setHeader("Content-Type", "application/octet-stream");
+    res.setHeader("Content-Disposition", 'attachment; filename="Ultimate_Mortal_Kombat_3.bin"');
+    return res.sendFile(romPath);
+  }
+  res.status(404).json({ error: "Default Mortal Kombat ROM not found" });
+});
+
 
 // Bot Debt Nudge endpoint ("Пнуть" должника в общем чате)
 app.post("/api/chat/nudge", async (req, res) => {

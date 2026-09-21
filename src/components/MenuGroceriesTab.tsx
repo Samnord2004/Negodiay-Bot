@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   Coffee, ShoppingCart, Plus, Trash, Check, CheckCircle2, 
-  Circle, Flame, DollarSign, Calendar, User, Lock, ChefHat, AlertCircle
+  Circle, Flame, DollarSign, Calendar, User, Lock, ChefHat, AlertCircle, Edit2, X
 } from 'lucide-react';
 import { MenuItem, GroceryItem, Participant } from '../types';
 
@@ -47,6 +47,10 @@ export default function MenuGroceriesTab({
   const [dishName, setDishName] = useState('');
   const [dishChef, setDishChef] = useState(teamChef?.name || currentUser?.name || 'Шеф-повар');
   const [dishIngredients, setDishIngredients] = useState('');
+
+  // Edit Dish Modal State
+  const [editingDish, setEditingDish] = useState<MenuItem | null>(null);
+  const [editDishIngredients, setEditDishIngredients] = useState('');
 
   // New Grocery Modal
   const [showAddGrocery, setShowAddGrocery] = useState(false);
@@ -367,14 +371,27 @@ export default function MenuGroceriesTab({
                     </span>
                   </div>
                   {canManageMenu && (
-                    <button
-                      type="button"
-                      onClick={() => onUpdateMenu(menuItems.filter(m => m.id !== dish.id))}
-                      className="text-stone-400 hover:text-red-600 p-1 transition-colors"
-                      title="Удалить блюдо (Шеф-повар)"
-                    >
-                      <Trash size={14} />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingDish({ ...dish });
+                          setEditDishIngredients((dish.ingredients || []).join(', '));
+                        }}
+                        className="text-stone-400 hover:text-amber-600 p-1 transition-colors cursor-pointer"
+                        title="Редактировать блюдо (Шеф-повар)"
+                      >
+                        <Edit2 size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onUpdateMenu(menuItems.filter(m => m.id !== dish.id))}
+                        className="text-stone-400 hover:text-red-600 p-1 transition-colors cursor-pointer"
+                        title="Удалить блюдо (Шеф-повар)"
+                      >
+                        <Trash size={14} />
+                      </button>
+                    </div>
                   )}
                 </div>
 
@@ -639,6 +656,132 @@ export default function MenuGroceriesTab({
             ))}
           </div>
 
+        </div>
+      )}
+
+      {/* EDIT DISH MODAL */}
+      {editingDish && canManageMenu && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4 border border-stone-300 max-h-[92vh] overflow-y-auto animate-in fade-in zoom-in-95 text-left">
+            <div className="flex items-center justify-between border-b border-stone-200 pb-3">
+              <h3 className="font-bold text-base uppercase text-stone-900 flex items-center gap-2">
+                <Edit2 size={18} className="text-amber-600" /> Редактирование блюда
+              </h3>
+              <button
+                type="button"
+                onClick={() => setEditingDish(null)}
+                className="p-1.5 text-stone-400 hover:text-stone-700 rounded-xl hover:bg-stone-100 transition-colors cursor-pointer"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!editingDish.dishName.trim()) return;
+                const ingredientsArr = editDishIngredients
+                  ? editDishIngredients.split(',').map(s => s.trim()).filter(Boolean)
+                  : [];
+                const updated: MenuItem = {
+                  ...editingDish,
+                  dishName: editingDish.dishName.trim(),
+                  day: editingDish.day.trim() || 'День 1. Обед',
+                  chef: editingDish.chef?.trim() || undefined,
+                  description: editingDish.description?.trim() || undefined,
+                  ingredients: ingredientsArr
+                };
+                onUpdateMenu(menuItems.map(m => m.id === updated.id ? updated : m));
+                setEditingDish(null);
+              }}
+              className="space-y-3.5"
+            >
+              <div>
+                <label className="block text-[10px] uppercase font-bold text-stone-500 mb-1">День и приём пищи:</label>
+                <input
+                  type="text"
+                  required
+                  value={editingDish.day}
+                  onChange={(e) => setEditingDish({ ...editingDish, day: e.target.value })}
+                  placeholder="Например: День 2. Обед"
+                  className="w-full bg-stone-50 border border-stone-200 rounded-xl p-2.5 text-xs font-medium text-stone-900 focus:outline-hidden focus:border-red-500"
+                />
+                <div className="flex flex-wrap gap-1 mt-1.5">
+                  {['День 1. Ужин', 'День 2. Завтрак', 'День 2. Обед', 'День 2. Ужин', 'День 3. Завтрак', 'День 3. Обед', 'День 3. Ужин'].map(opt => (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() => setEditingDish({ ...editingDish, day: opt })}
+                      className="text-[10px] font-semibold bg-stone-100 hover:bg-amber-100 text-stone-700 px-2 py-0.5 rounded cursor-pointer transition-colors"
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] uppercase font-bold text-stone-500 mb-1">Название блюда:</label>
+                <input
+                  type="text"
+                  required
+                  value={editingDish.dishName}
+                  onChange={(e) => setEditingDish({ ...editingDish, dishName: e.target.value })}
+                  placeholder="Например: Плов с бараниной в 50л казане"
+                  className="w-full bg-stone-50 border border-stone-200 rounded-xl p-2.5 text-xs font-medium text-stone-900 focus:outline-hidden focus:border-red-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] uppercase font-bold text-stone-500 mb-1">Шеф-повар / Ответственный:</label>
+                <input
+                  type="text"
+                  value={editingDish.chef || ''}
+                  onChange={(e) => setEditingDish({ ...editingDish, chef: e.target.value })}
+                  placeholder="Имя ответственного"
+                  className="w-full bg-stone-50 border border-stone-200 rounded-xl p-2.5 text-xs font-medium text-stone-900 focus:outline-hidden focus:border-red-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] uppercase font-bold text-stone-500 mb-1">Ингредиенты (через запятую):</label>
+                <input
+                  type="text"
+                  value={editDishIngredients}
+                  onChange={(e) => setEditDishIngredients(e.target.value)}
+                  placeholder="Рис, баранина, морковь, лук, зира..."
+                  className="w-full bg-stone-50 border border-stone-200 rounded-xl p-2.5 text-xs font-medium text-stone-900 focus:outline-hidden focus:border-red-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] uppercase font-bold text-stone-500 mb-1">Описание / способ подачи:</label>
+                <textarea
+                  rows={2}
+                  value={editingDish.description || ''}
+                  onChange={(e) => setEditingDish({ ...editingDish, description: e.target.value })}
+                  placeholder="Особенности приготовления, порции..."
+                  className="w-full bg-stone-50 border border-stone-200 rounded-xl p-2.5 text-xs font-medium text-stone-900 focus:outline-hidden focus:border-red-500"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-stone-200">
+                <button
+                  type="button"
+                  onClick={() => setEditingDish(null)}
+                  className="px-4 py-2 bg-stone-100 hover:bg-stone-200 text-stone-800 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                >
+                  Отмена
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold uppercase shadow transition-colors cursor-pointer"
+                >
+                  Сохранить изменения
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 

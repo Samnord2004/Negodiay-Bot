@@ -44,9 +44,6 @@ export default function MKTournamentHub({
               <h2 className="text-lg sm:text-2xl font-black uppercase tracking-wider text-amber-400">
                 Mortal Kombat Турнир
               </h2>
-              <span className="bg-red-600 text-white font-black text-[10px] uppercase px-2 py-0.5 rounded-full shadow-sm">
-                MK Арена
-              </span>
             </div>
             <p className="text-xs text-stone-300">
               Эмулятор ретро-консолей (Sega / PS1), загрузка любых ROM-файлов и турнир на монеты Негодяев!

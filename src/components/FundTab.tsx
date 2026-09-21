@@ -25,6 +25,13 @@ const MONTHS_NAMES = [
   'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
 ];
 
+// Фонд Негодяев основан в сентябре 2026 года. Месяцы до этого не существовали.
+export const isFundMonthValid = (year: number, month: number) => {
+  if (year < 2026) return false;
+  if (year === 2026 && month < 9) return false;
+  return true;
+};
+
 export default function FundTab({
   fundRecords,
   participants,
@@ -72,27 +79,33 @@ export default function FundTab({
   const [newPaymentNote, setNewPaymentNote] = useState('');
 
   // Dynamic list of years available for the fund statement:
-  // Combines all years from records, 2018 up to currentYear + 4, and any custom selected year.
+  // Фонд начался с сентября 2026 года, поэтому года начинаются с 2026!
   const availableYears = useMemo(() => {
     const set = new Set<number>();
     fundRecords.forEach(r => {
-      if (r.year && typeof r.year === 'number' && !isNaN(r.year)) {
+      if (r.year && typeof r.year === 'number' && !isNaN(r.year) && r.year >= 2026) {
         set.add(r.year);
       }
     });
-    const minYear = 2018;
-    const maxYear = Math.max(currentYear + 4, selectedYear + 1);
+    const minYear = 2026;
+    const maxYear = Math.max(currentYear + 4, selectedYear + 1, 2026);
     for (let y = minYear; y <= maxYear; y++) {
       set.add(y);
     }
-    if (selectedYear && !isNaN(selectedYear)) {
+    if (selectedYear && !isNaN(selectedYear) && selectedYear >= 2026) {
       set.add(selectedYear);
     }
-    if (newPaymentYear && !isNaN(newPaymentYear)) {
+    if (newPaymentYear && !isNaN(newPaymentYear) && newPaymentYear >= 2026) {
       set.add(newPaymentYear);
     }
     return Array.from(set).sort((a, b) => b - a);
   }, [fundRecords, currentYear, selectedYear, newPaymentYear]);
+
+  // Отображаемые месяцы для выбранного года (для 2026 года: только с сентября по декабрь!)
+  const displayedMonths = useMemo(() => {
+    return MONTHS_NAMES.map((name, idx) => ({ name, monthNum: idx + 1 }))
+      .filter(m => isFundMonthValid(selectedYear, m.monthNum));
+  }, [selectedYear]);
 
   // Expenses from Fund (stored locally and in state)
   const [expenses, setExpenses] = useState<FundExpense[]>(() => {
@@ -167,11 +180,13 @@ export default function FundTab({
     return { isPaid: false, amount: monthlyRate };
   };
 
-  // Calculate debt for each participant (all 12 for past years, up to current month for current year, 0 for future years)
+  // Calculate debt for each participant (all 12 for past years, up to current month for current year, 0 for future years; фонд с сентября 2026)
   const calculateParticipantFundDebt = (pId: string) => {
+    if (selectedYear < 2026) return 0;
     let unpaidMonths = 0;
+    const startMonth = selectedYear === 2026 ? 9 : 1;
     const maxMonth = selectedYear < currentYear ? 12 : selectedYear === currentYear ? currentMonth : 0;
-    for (let m = 1; m <= maxMonth; m++) {
+    for (let m = startMonth; m <= maxMonth; m++) {
       const rec = getRecord(pId, m);
       if (!rec.isPaid) unpaidMonths++;
     }
@@ -298,20 +313,25 @@ export default function FundTab({
       setNotificationToast("Только Казначей и Капитан команды имеют право вносить изменения.");
       return;
     }
+    const startM = selectedYear === 2026 ? 9 : 1;
     const maxMonth = selectedYear === currentYear ? currentMonth : 12;
-    for (let m = 1; m <= maxMonth; m++) {
+    for (let m = startM; m <= maxMonth; m++) {
       const rec = getRecord(p.id, m);
       if (!rec.isPaid) {
         await handleToggleMonth(p, m);
       }
     }
-    setNotificationToast(`Все взносы до ${MONTHS_NAMES[maxMonth - 1]} для ${p.name} отмечены как оплаченные!`);
+    setNotificationToast(`Все взносы с ${selectedYear === 2026 ? 'сентября 2026' : 'начала года'} до ${MONTHS_NAMES[maxMonth - 1]} для ${p.name} отмечены как оплаченные!`);
   };
 
   // Create manual payment
   const handleAddManualPayment = async () => {
     if (!canEdit) {
       setNotificationToast("Только Казначей и Капитан команды имеют право вносить взносы.");
+      return;
+    }
+    if (!isFundMonthValid(Number(newPaymentYear), Number(newPaymentMonth))) {
+      setNotificationToast("Фонд Негодяев основан в сентябре 2026 года! Запрещено указывать взносы за период до сентября 2026 года.");
       return;
     }
     const p = participants.find(part => part.id === newPaymentParticipantId) || participants[0];
@@ -792,9 +812,11 @@ export default function FundTab({
                 const input = window.prompt('Введите любой год для ведомости фонда (например, 2024, 2028, 2030):', String(selectedYear));
                 if (input) {
                   const parsed = parseInt(input.trim(), 10);
-                  if (!isNaN(parsed) && parsed >= 1990 && parsed <= 2100) {
+                  if (!isNaN(parsed) && parsed >= 2026 && parsed <= 2100) {
                     setSelectedYear(parsed);
                     setNotificationToast(`Открыта ведомость фонда за ${parsed} год`);
+                  } else if (parsed < 2026) {
+                    alert('Фонд Негодяев основан в сентябре 2026 года и ранее не существовал.');
                   }
                 }
               }}
@@ -807,20 +829,27 @@ export default function FundTab({
           </div>
         </div>
 
+        {selectedYear === 2026 && (
+          <div className="mx-6 my-2 px-3 py-2 bg-amber-50/80 border border-amber-300/80 rounded-xl text-xs text-amber-900 flex items-center gap-2">
+            <span className="font-bold">⭐ Примечание:</span>
+            <span>Фонд Негодяев учреждён в сентябре 2026 года. Предыдущие месяцы (январь — август) скрыты, так как фонда ещё не существовало.</span>
+          </div>
+        )}
+
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="bg-amber-50 border-b border-amber-200 text-amber-900 uppercase font-black">
               <tr>
                 <th className="px-4 py-3 sticky left-0 bg-amber-50 z-10 min-w-[190px]">Участник Негодяй</th>
                 <th className="px-2 py-3 text-center text-red-600 min-w-[85px]">Долг</th>
-                {MONTHS_NAMES.map((m, idx) => (
+                {displayedMonths.map((item) => (
                   <th 
-                    key={m} 
+                    key={item.monthNum} 
                     className={`px-2 py-3 text-center min-w-[62px] ${
-                      idx + 1 === currentMonth && selectedYear === currentYear ? 'bg-yellow-200 text-red-800' : ''
+                      item.monthNum === currentMonth && selectedYear === currentYear ? 'bg-yellow-200 text-red-800' : ''
                     }`}
                   >
-                    {m.slice(0, 3)}
+                    {item.name.slice(0, 3)}
                   </th>
                 ))}
                 <th className="px-3 py-3 text-center min-w-[80px]">
@@ -858,9 +887,10 @@ export default function FundTab({
                       )}
                     </td>
 
-                    {/* Months 1-12 */}
-                    {MONTHS_NAMES.map((_, idx) => {
-                      const monthNum = idx + 1;
+                    {/* Active Months */}
+                    {displayedMonths.map((item) => {
+                      const monthNum = item.monthNum;
+                      const idx = monthNum - 1;
                       const rec = getRecord(p.id, monthNum);
                       const isCurrentM = monthNum === currentMonth && selectedYear === currentYear;
                       return (
@@ -1174,9 +1204,11 @@ export default function FundTab({
                     onChange={(e) => setNewPaymentMonth(Number(e.target.value))}
                     className="w-full px-3 py-2 border-2 border-amber-300 rounded-xl text-xs font-bold text-amber-950 bg-white"
                   >
-                    {MONTHS_NAMES.map((m, idx) => (
-                      <option key={m} value={idx + 1}>{m}</option>
-                    ))}
+                    {MONTHS_NAMES.map((m, idx) => {
+                      const mNum = idx + 1;
+                      if (newPaymentYear === 2026 && mNum < 9) return null;
+                      return <option key={m} value={mNum}>{m}</option>;
+                    })}
                   </select>
                 </div>
 
@@ -1196,12 +1228,18 @@ export default function FundTab({
                   {isCustomNewPaymentYear ? (
                     <input
                       type="number"
-                      min={1990}
+                      min={2026}
                       max={2100}
                       value={newPaymentYear}
-                      onChange={(e) => setNewPaymentYear(Number(e.target.value))}
+                      onChange={(e) => {
+                        const yr = Number(e.target.value);
+                        setNewPaymentYear(yr);
+                        if (yr === 2026 && newPaymentMonth < 9) {
+                          setNewPaymentMonth(9);
+                        }
+                      }}
                       className="w-full px-3 py-2 border-2 border-amber-300 rounded-xl text-xs font-bold text-amber-950 bg-white focus:outline-none focus:border-red-600"
-                      placeholder="Например, 2024"
+                      placeholder="Например, 2026"
                     />
                   ) : (
                     <select

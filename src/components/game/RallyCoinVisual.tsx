@@ -158,7 +158,7 @@ export default function RallyCoinVisual({
                 
                 {(size === 'lg' || size === 'hero') && (
                   <span className="text-[7px] font-bold text-amber-300/80 mt-1 uppercase tracking-widest border-t border-amber-500/40 pt-0.5">
-                    СЛЁТ 2026
+                    СЛЁТ {coin?.year || 2026}
                   </span>
                 )}
               </div>

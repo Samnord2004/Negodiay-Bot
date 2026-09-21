@@ -333,6 +333,14 @@ export interface Contest {
   attachments?: ContestAttachment[]; // Прикреплённые фото, карты, схемы узлов и знаков
 }
 
+export interface ContestHistoryEntry {
+  id: string;
+  title: string;
+  category?: string; // 'Общий зачёт' | 'Творчество' | 'Туризм' | 'Спорт' | 'Лагерь'
+  isOverall?: boolean;
+  results: Record<string, string>; // "1993": "1", "1994": "2", ...
+}
+
 export type StoryCategory = 
   | 'logo' 
   | 'origin' 
