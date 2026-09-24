@@ -43,6 +43,7 @@ export default function RallyGameHub({
   onOpenProfileEdit
 }: RallyGameHubProps) {
   const [activeTab, setActiveTab] = useState<GameSubTab>('cabinet');
+  const [isDedicatedPokerOpen, setIsDedicatedPokerOpen] = useState(true);
   const [inspectedParticipant, setInspectedParticipant] = useState<Participant | null>(null);
 
   // Participant to display in Cabinet: inspected participant if set, else currentUser, else first participant
@@ -114,7 +115,10 @@ export default function RallyGameHub({
 
           <button
             type="button"
-            onClick={() => setActiveTab('poker')}
+            onClick={() => {
+              setActiveTab('poker');
+              setIsDedicatedPokerOpen(true);
+            }}
             className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
               activeTab === 'poker'
                 ? 'bg-emerald-800 text-white shadow-xs ring-2 ring-emerald-500/50'
@@ -216,6 +220,8 @@ export default function RallyGameHub({
           onAwardCoin={onAwardCoin}
           onDeleteCoin={onDeleteCoin}
           onUpdateCoins={onUpdateCoins}
+          isDedicatedWindow={isDedicatedPokerOpen}
+          onCloseDedicatedWindow={() => setIsDedicatedPokerOpen(false)}
         />
       )}
 

@@ -6,14 +6,23 @@ export const participants = pgTable("participants", {
   nickname: text("nickname").notNull(),
   psychotype: text("psychotype"),
   avatar: text("avatar").notNull(),
+  photoFront: text("photo_front"),
+  photoProfile: text("photo_profile"),
+  selectedAvatarSource: text("selected_avatar_source").default("front"),
   paidAmount: integer("paid_amount").notNull().default(0),
   totalCost: integer("total_cost").notNull().default(0),
   debtAmount: integer("debt_amount").notNull().default(0),
   joined: boolean("joined").notNull().default(true),
   birthday: text("birthday"),
-  joinedYear: integer("joined_year").notNull().default(2025),
+  joinedYear: integer("joined_year").notNull().default(1993),
   skippedYears: jsonb("skipped_years").$type<number[]>().notNull().default([]),
-  gender: text("gender").notNull().default("boy")
+  gender: text("gender").notNull().default("boy"),
+  role: text("role").default("member"),
+  email: text("email").default(""),
+  phone: text("phone").default(""),
+  password: text("password").default("123"),
+  accountStatus: text("account_status").default("active"),
+  biometricEnabled: boolean("biometric_enabled").default(false)
 });
 
 export const excursions = pgTable("excursions", {
@@ -25,7 +34,8 @@ export const excursions = pgTable("excursions", {
   costPerPerson: integer("cost_per_person").notNull().default(0),
   costBoys: integer("cost_boys").notNull().default(0),
   costGirls: integer("cost_girls").notNull().default(0),
-  isActive: boolean("is_active").notNull().default(true)
+  isActive: boolean("is_active").notNull().default(true),
+  participantStatuses: jsonb("participant_statuses").$type<Record<string, any>>().default({})
 });
 
 export const tasks = pgTable("tasks", {
@@ -99,4 +109,117 @@ export const messages = pgTable("messages", {
 export const adminSettings = pgTable("admin_settings", {
   id: integer("id").primaryKey().default(1),
   password: text("password").notNull().default("admin")
+});
+
+export const galleryPhotos = pgTable("gallery_photos", {
+  id: text("id").primaryKey(),
+  year: integer("year").notNull(),
+  title: text("title").notNull(),
+  description: text("description").default(""),
+  imageUrl: text("image_url").default(""),
+  cloudUrl: text("cloud_url").default(""),
+  itemType: text("item_type").default("photo"),
+  uploadedBy: text("uploaded_by").notNull(),
+  uploadedAt: text("uploaded_at").notNull(),
+  likes: integer("likes").notNull().default(0),
+  likedUserIds: jsonb("liked_user_ids").$type<string[]>().notNull().default([])
+});
+
+export const teamDocuments = pgTable("team_documents", {
+  id: text("id").primaryKey(),
+  category: text("category").notNull(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  fileUrl: text("file_url"),
+  fileName: text("file_name"),
+  fileType: text("file_type").default("pdf"),
+  content: text("content"),
+  uploadedBy: text("uploaded_by").notNull(),
+  uploadedAt: text("uploaded_at").notNull()
+});
+
+export const fundRecords = pgTable("fund_records", {
+  id: text("id").primaryKey(),
+  participantId: text("participant_id").notNull(),
+  participantName: text("participant_name").notNull(),
+  participantNickname: text("participant_nickname").notNull(),
+  year: integer("year").notNull(),
+  month: integer("month").notNull(),
+  amount: integer("amount").notNull().default(500),
+  isPaid: boolean("is_paid").notNull().default(false),
+  paidAt: text("paid_at"),
+  note: text("note").default("")
+});
+
+export const fundExpenses = pgTable("fund_expenses", {
+  id: text("id").primaryKey(),
+  title: text("title").notNull(),
+  amount: integer("amount").notNull().default(0),
+  date: text("date").notNull(),
+  category: text("category").notNull(),
+  spentBy: text("spent_by").notNull(),
+  note: text("note"),
+  receiptUrl: text("receipt_url"),
+  status: text("status").notNull().default("approved"),
+  submittedById: text("submitted_by_id"),
+  submittedByName: text("submitted_by_name"),
+  approvedBy: text("approved_by"),
+  approvedAt: text("approved_at")
+});
+
+export const creativityIdeas = pgTable("creativity_ideas", {
+  id: text("id").primaryKey(),
+  category: text("category").notNull(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  authorId: text("author_id").notNull(),
+  authorName: text("author_name").notNull(),
+  imageUrl: text("image_url"),
+  materialsBudget: text("materials_budget").default(""),
+  status: text("status").notNull().default("idea"),
+  votes: integer("votes").notNull().default(0),
+  votedUserIds: jsonb("voted_user_ids").$type<string[]>().notNull().default([]),
+  comments: jsonb("comments").$type<any[]>().notNull().default([]),
+  createdAt: text("created_at").notNull(),
+  isArchived: boolean("is_archived").default(false),
+  archivedAt: text("archived_at"),
+  captainApproval: text("captain_approval"),
+  captainApprovedAt: text("captain_approved_at"),
+  captainNote: text("captain_note")
+});
+
+export const teamStories = pgTable("team_stories", {
+  id: text("id").primaryKey(),
+  category: text("category").notNull(),
+  categoryTitle: text("category_title").notNull(),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  photos: jsonb("photos").$type<string[]>().notNull().default([]),
+  videos: jsonb("videos").$type<string[]>().notNull().default([]),
+  authorName: text("author_name"),
+  year: integer("year"),
+  createdAt: text("created_at").notNull()
+});
+
+export const rallyCoins = pgTable("rally_coins", {
+  id: text("id").primaryKey(),
+  participantId: text("participant_id").notNull(),
+  participantName: text("participant_name").notNull(),
+  participantNickname: text("participant_nickname").notNull(),
+  participantAvatar: text("participant_avatar"),
+  participantPhotoProfile: text("participant_photo_profile"),
+  taskTitle: text("task_title").notNull(),
+  category: text("category").notNull(),
+  comment: text("comment"),
+  awardedAt: text("awarded_at").notNull(),
+  awardedBy: text("awarded_by").notNull(),
+  year: integer("year").notNull().default(2026)
+});
+
+export const contestHistory = pgTable("contest_history", {
+  id: text("id").primaryKey(),
+  title: text("title").notNull(),
+  category: text("category"),
+  isOverall: boolean("is_overall").notNull().default(false),
+  results: jsonb("results").$type<Record<string, string>>().notNull().default({})
 });

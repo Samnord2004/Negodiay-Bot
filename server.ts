@@ -60,6 +60,7 @@ import {
   getCreativityIdeas,
   addCreativityIdea,
   updateCreativityIdea,
+  deleteCreativityIdea,
   toggleIdeaVote,
   addIdeaComment,
   getStories,
@@ -1231,6 +1232,76 @@ app.delete("/api/excursions/:id", async (req, res) => {
   }
 });
 
+// Tasks REST endpoints
+app.get("/api/tasks", (req, res) => {
+  res.json(getTasks());
+});
+
+app.post("/api/tasks", async (req, res) => {
+  try {
+    const task = req.body;
+    if (!task || !task.title) {
+      return res.status(400).json({ error: "Title required" });
+    }
+    const currentTasks = getTasks();
+    const newTask = {
+      id: task.id || ('task_' + Date.now()),
+      title: task.title,
+      assigneeId: task.assigneeId || '',
+      assigneeName: task.assigneeName || 'Не назначен',
+      deadline: task.deadline || 'До слёта',
+      isCompleted: Boolean(task.isCompleted)
+    };
+    saveTasks([...currentTasks, newTask]);
+    res.json({ success: true, message: "Задача создана", task: newTask, tasks: getTasks() });
+  } catch (err: any) {
+    console.error("Error creating task:", err);
+    res.status(500).json({ success: false, error: "Ошибка создания задачи" });
+  }
+});
+
+app.put("/api/tasks/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const taskUpdates = req.body;
+    const currentTasks = getTasks();
+    const existingIndex = currentTasks.findIndex(t => t.id === id);
+    if (existingIndex === -1) {
+      // If not found by exact id, still allow upserting
+      const newTask = {
+        id,
+        title: taskUpdates.title || 'Новая задача',
+        assigneeId: taskUpdates.assigneeId || '',
+        assigneeName: taskUpdates.assigneeName || '',
+        deadline: taskUpdates.deadline || 'До слёта',
+        isCompleted: Boolean(taskUpdates.isCompleted)
+      };
+      saveTasks([...currentTasks, newTask]);
+      return res.json({ success: true, message: "Задача сохранена", task: newTask, tasks: getTasks() });
+    }
+    const updated = { ...currentTasks[existingIndex], ...taskUpdates, id };
+    const updatedList = currentTasks.map(t => t.id === id ? updated : t);
+    saveTasks(updatedList);
+    res.json({ success: true, message: "Задача обновлена", task: updated, tasks: getTasks() });
+  } catch (err: any) {
+    console.error("Error updating task:", err);
+    res.status(500).json({ success: false, error: "Ошибка обновления задачи" });
+  }
+});
+
+app.delete("/api/tasks/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const currentTasks = getTasks();
+    const updatedList = currentTasks.filter(t => t.id !== id);
+    saveTasks(updatedList);
+    res.json({ success: true, message: "Задача удалена", tasks: getTasks() });
+  } catch (err: any) {
+    console.error("Error deleting task:", err);
+    res.status(500).json({ success: false, error: "Ошибка удаления задачи" });
+  }
+});
+
 app.post("/api/auth/login", (req, res) => {
   const { identifier, password, useBiometrics } = req.body;
   const participants = getParticipants();
@@ -2012,8 +2083,105 @@ app.post("/api/creativity/:id/comment", (req, res) => {
 
 app.post("/api/creativity/:id/status", (req, res) => {
   const { status } = req.body;
-  updateCreativityIdea(req.params.id, { status });
+  const current = getCreativityIdeas().find(i => i.id === req.params.id);
+  const shouldAutoArchive = status === 'done' && current?.captainApproval === 'approved';
+  updateCreativityIdea(req.params.id, {
+    status,
+    ...(shouldAutoArchive ? { isArchived: true, archivedAt: current?.archivedAt || new Date().toISOString() } : {})
+  });
+  res.json({ success: true, ideas: getCreativityIdeas(), autoArchived: shouldAutoArchive });
+});
+
+app.put("/api/creativity/:id", (req, res) => {
+  const { category, title, description, materialsBudget, imageUrl, status, isArchived, captainApproval, captainApprovedAt, captainNote } = req.body;
+  const current = getCreativityIdeas().find(i => i.id === req.params.id);
+  const effectiveStatus = status || current?.status;
+  const effectiveApproval = captainApproval !== undefined ? captainApproval : current?.captainApproval;
+  const shouldAutoArchive = effectiveStatus === 'done' && effectiveApproval === 'approved';
+  const finalArchived = shouldAutoArchive ? true : (isArchived !== undefined ? isArchived : current?.isArchived);
+
+  updateCreativityIdea(req.params.id, {
+    ...(category && { category }),
+    ...(title && { title }),
+    ...(description && { description }),
+    ...(materialsBudget !== undefined && { materialsBudget }),
+    ...(imageUrl !== undefined && { imageUrl }),
+    ...(status && { status }),
+    isArchived: finalArchived,
+    ...(shouldAutoArchive && !current?.archivedAt ? { archivedAt: new Date().toISOString() } : {}),
+    ...(captainApproval !== undefined && { captainApproval }),
+    ...(captainApprovedAt !== undefined && { captainApprovedAt }),
+    ...(captainNote !== undefined && { captainNote })
+  });
+  res.json({ success: true, ideas: getCreativityIdeas(), autoArchived: shouldAutoArchive });
+});
+
+app.post("/api/creativity/:id/captain-approval", (req, res) => {
+  const { approval, note } = req.body;
+  const captainApprovedAt = approval ? new Date().toISOString() : undefined;
+  const current = getCreativityIdeas().find(i => i.id === req.params.id);
+  const shouldAutoArchive = approval === 'approved' && current?.status === 'done';
+  updateCreativityIdea(req.params.id, {
+    captainApproval: approval || null,
+    captainApprovedAt,
+    ...(note !== undefined ? { captainNote: note } : {}),
+    ...(shouldAutoArchive ? { isArchived: true, archivedAt: current?.archivedAt || new Date().toISOString() } : {})
+  });
+  res.json({ success: true, ideas: getCreativityIdeas(), autoArchived: shouldAutoArchive });
+});
+
+app.post("/api/creativity/:id/archive", (req, res) => {
+  const { isArchived } = req.body;
+  const currentIdeas = getCreativityIdeas();
+  const current = currentIdeas.find(i => i.id === req.params.id);
+  const targetArchived = isArchived !== undefined ? isArchived : !(current?.isArchived || current?.status === 'archived');
+  updateCreativityIdea(req.params.id, {
+    isArchived: targetArchived,
+    status: targetArchived ? 'archived' : 'idea'
+  });
+  res.json({ success: true, ideas: getCreativityIdeas(), isArchived: targetArchived });
+});
+
+app.delete("/api/creativity/:id", (req, res) => {
+  deleteCreativityIdea(req.params.id);
   res.json({ success: true, ideas: getCreativityIdeas() });
+});
+
+// Inventory specific endpoints
+app.get("/api/inventory", (req, res) => {
+  res.json(getInventoryItems());
+});
+
+app.post("/api/inventory", (req, res) => {
+  if (Array.isArray(req.body)) {
+    saveInventoryItems(req.body);
+    return res.json({ success: true, items: getInventoryItems() });
+  }
+  const newItem = {
+    id: req.body.id || 'inv_' + Date.now(),
+    name: req.body.name,
+    condition: req.body.condition || 'нормальное',
+    responsibleName: req.body.responsibleName || 'Общий лагерь',
+    quantity: req.body.quantity || 1,
+    imageUrl: req.body.imageUrl || undefined
+  };
+  const current = getInventoryItems();
+  saveInventoryItems([...current, newItem]);
+  res.json({ success: true, items: getInventoryItems(), item: newItem });
+});
+
+app.put("/api/inventory/:id", (req, res) => {
+  const current = getInventoryItems();
+  const updated = current.map(item => item.id === req.params.id ? { ...item, ...req.body } : item);
+  saveInventoryItems(updated);
+  res.json({ success: true, items: getInventoryItems() });
+});
+
+app.delete("/api/inventory/:id", (req, res) => {
+  const current = getInventoryItems();
+  const filtered = current.filter(item => item.id !== req.params.id);
+  saveInventoryItems(filtered);
+  res.json({ success: true, items: getInventoryItems() });
 });
 
 // Team Stories & History endpoints
@@ -2863,18 +3031,21 @@ function generateMockNegodyaiResponse(
 async function startServer() {
   await initDb();
 
-  if (process.env.NODE_ENV !== "production") {
+  const distPath = path.join(process.cwd(), "dist");
+  const hasDist = fs.existsSync(path.join(distPath, "index.html"));
+
+  if (process.env.NODE_ENV === "production" || (hasDist && process.env.NODE_ENV !== "development")) {
+    console.log("[Negodyai MAX Server] Running in PRODUCTION mode, serving static files from:", distPath);
+    app.use(express.static(distPath));
+    app.get("*", (req, res) => {
+      res.sendFile(path.join(distPath, "index.html"));
+    });
+  } else {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
-    });
   }
 
   const httpServer = http.createServer(app);

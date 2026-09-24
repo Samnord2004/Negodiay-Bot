@@ -1,38 +1,39 @@
-# ─── Stage 1: сборка ────────────────────────────────────────────────────────
-FROM node:20-alpine AS builder
+# Production Dockerfile for Negodyai Portal deployment on Beget VPS / Cloud
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-# Копируем только манифесты — слой кешируется если они не менялись
+# Install dependencies first for efficient layer caching
 COPY package*.json ./
-
-# Устанавливаем ВСЕ зависимости (нужны devDeps: vite, esbuild, typescript)
 RUN npm ci
 
-# Копируем исходники
+# Copy source code and build
 COPY . .
-
-# Собираем: vite build (фронт) + esbuild (сервер) → dist/
 RUN npm run build
 
-# ─── Stage 2: рантайм ────────────────────────────────────────────────────────
-FROM node:20-alpine
+# Production runtime stage
+FROM node:22-alpine AS runner
 
 WORKDIR /app
 
 ENV NODE_ENV=production
-ENV DATA_DIR=/app/data
+ENV PORT=3000
 
-RUN mkdir -p /app/data && chmod 777 /app/data
-
+# Install production dependencies only
 COPY package*.json ./
-
-# Только продакшн-зависимости (express, @google/genai, dotenv, …)
 RUN npm ci --omit=dev
 
-# Копируем собранный dist/ из builder-стейджа
+# Copy compiled assets from builder
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/data ./data
+COPY --from=builder /app/app.js ./app.js
 
+# Expose server port
 EXPOSE 3000
 
+# Health check
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1
+
+# Start production server
 CMD ["node", "dist/server.cjs"]

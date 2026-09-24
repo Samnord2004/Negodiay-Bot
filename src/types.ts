@@ -233,11 +233,16 @@ export interface CreativityIdea {
   authorName: string;
   imageUrl?: string;
   materialsBudget?: string;
-  status: 'idea' | 'discussing' | 'approved' | 'in_progress' | 'done';
+  status: 'idea' | 'discussing' | 'approved' | 'in_progress' | 'done' | 'archived';
   votes: number;
   votedUserIds: string[];
   comments: IdeaComment[];
   createdAt: string;
+  isArchived?: boolean;
+  archivedAt?: string;
+  captainApproval?: 'approved' | 'rejected' | null;
+  captainApprovedAt?: string;
+  captainNote?: string;
 }
 
 export interface Excursion {
@@ -297,7 +302,7 @@ export interface GroceryItem {
   id: string;
   name: string;
   quantity: string;
-  category: string; // e.g., "Еда" or "Расходники" or "Жидкая валюта"
+  category: string; // e.g., "Еда" or "Расходники" or "Алкоголь"
   isBought: boolean;
   responsibleName?: string;
   estimatedCost?: number;
@@ -311,6 +316,7 @@ export interface InventoryItem {
   condition: InventoryCondition;
   responsibleName: string;
   quantity?: number;
+  imageUrl?: string;
 }
 
 export interface ContestAttachment {
@@ -331,6 +337,8 @@ export interface Contest {
   schedule?: string; // График проведения
   imageUrl?: string; // Обложка/главное фото
   attachments?: ContestAttachment[]; // Прикреплённые фото, карты, схемы узлов и знаков
+  excursionId?: string; // Привязка к конкретному слёту/сбору
+  category?: 'Общий зачёт' | 'Творчество' | 'Туризм' | 'Спорт' | 'Лагерь' | string;
 }
 
 export interface ContestHistoryEntry {

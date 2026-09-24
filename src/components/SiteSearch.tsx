@@ -442,14 +442,16 @@ export default function SiteSearch({
         </div>
       </div>
 
-      {/* SEARCH RESULTS POPUP PANEL - STRICTLY CENTERED ON SCREEN */}
+      {/* SEARCH RESULTS POPUP PANEL - ATTACHED DIRECTLY TO SEARCH BAR & 'НАЙТИ' BUTTON */}
       {isOpen && (
-        <div 
-          className="fixed inset-0 z-50 bg-stone-950/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-150"
-          onClick={() => setIsOpen(false)}
-        >
+        <>
+          {/* Backdrop for outside click */}
           <div 
-            className="w-full sm:w-[580px] md:w-[680px] max-w-2xl bg-white border-4 border-amber-500 rounded-3xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col ring-1 ring-black/10 animate-in zoom-in-95 duration-150 pointer-events-auto"
+            className="fixed inset-0 z-40 bg-stone-950/25 backdrop-blur-2xs"
+            onClick={() => setIsOpen(false)}
+          />
+          <div 
+            className="absolute top-full left-0 right-0 sm:left-auto sm:right-0 mt-2 z-50 w-[95vw] sm:w-[580px] md:w-[680px] max-w-[95vw] sm:max-w-[680px] bg-white border-4 border-amber-500 rounded-3xl shadow-2xl overflow-hidden max-h-[80vh] flex flex-col ring-1 ring-black/10 animate-in fade-in slide-in-from-top-2 duration-150 pointer-events-auto"
             onClick={(e) => e.stopPropagation()}
           >
             
@@ -1068,9 +1070,9 @@ export default function SiteSearch({
             </button>
           </div>
 
-        </div>
-      </div>
-    )}
+          </div>
+        </>
+      )}
 
       {/* FULL PERSONAL DOSSIER MODAL VIEW */}
       {selectedParticipant && (

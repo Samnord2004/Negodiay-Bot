@@ -358,6 +358,12 @@ export async function initDb() {
         created_at TEXT NOT NULL
       );
 
+      ALTER TABLE creativity_ideas ADD COLUMN IF NOT EXISTS is_archived BOOLEAN DEFAULT FALSE;
+      ALTER TABLE creativity_ideas ADD COLUMN IF NOT EXISTS archived_at TEXT;
+      ALTER TABLE creativity_ideas ADD COLUMN IF NOT EXISTS captain_approval TEXT;
+      ALTER TABLE creativity_ideas ADD COLUMN IF NOT EXISTS captain_approved_at TEXT;
+      ALTER TABLE creativity_ideas ADD COLUMN IF NOT EXISTS captain_note TEXT;
+
       CREATE TABLE IF NOT EXISTS team_stories (
         id TEXT PRIMARY KEY,
         category TEXT NOT NULL,
@@ -411,6 +417,29 @@ export async function initDb() {
         approved_at TEXT
       );
       ALTER TABLE excursions ADD COLUMN IF NOT EXISTS participant_statuses JSONB DEFAULT '{}'::jsonb;
+
+      CREATE TABLE IF NOT EXISTS rally_coins (
+        id TEXT PRIMARY KEY,
+        participant_id TEXT NOT NULL,
+        participant_name TEXT NOT NULL,
+        participant_nickname TEXT NOT NULL,
+        participant_avatar TEXT,
+        participant_photo_profile TEXT,
+        task_title TEXT NOT NULL,
+        category TEXT NOT NULL,
+        comment TEXT,
+        awarded_at TEXT NOT NULL,
+        awarded_by TEXT NOT NULL,
+        year INT NOT NULL DEFAULT 2026
+      );
+
+      CREATE TABLE IF NOT EXISTS contest_history (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        category TEXT,
+        is_overall BOOLEAN NOT NULL DEFAULT FALSE,
+        results JSONB NOT NULL DEFAULT '{}'::jsonb
+      );
     `);
 
     // Load or seed Participants
@@ -791,7 +820,12 @@ export async function initDb() {
         votes: Number(r.votes),
         votedUserIds: Array.isArray(r.voted_user_ids) ? r.voted_user_ids : JSON.parse(r.voted_user_ids || "[]"),
         comments: Array.isArray(r.comments) ? r.comments : JSON.parse(r.comments || "[]"),
-        createdAt: r.created_at
+        createdAt: r.created_at,
+        isArchived: Boolean(r.is_archived),
+        archivedAt: r.archived_at || undefined,
+        captainApproval: r.captain_approval || undefined,
+        captainApprovedAt: r.captain_approved_at || undefined,
+        captainNote: r.captain_note || undefined
       }));
     }
 
@@ -818,6 +852,55 @@ export async function initDb() {
         authorName: r.author_name || undefined,
         year: r.year ? Number(r.year) : undefined,
         createdAt: r.created_at
+      }));
+    }
+
+    // Load or seed Contest History
+    const resCH = await pool.query("SELECT * FROM contest_history");
+    if (resCH.rows.length === 0) {
+      for (const ch of initialContestHistory) {
+        await pool.query(
+          `INSERT INTO contest_history (id, title, category, is_overall, results)
+           VALUES ($1, $2, $3, $4, $5) ON CONFLICT (id) DO NOTHING`,
+          [ch.id, ch.title, ch.category || "", ch.isOverall || false, JSON.stringify(ch.results || {})]
+        );
+      }
+      cacheContestHistory = [...initialContestHistory];
+    } else {
+      cacheContestHistory = resCH.rows.map(r => ({
+        id: r.id,
+        title: r.title,
+        category: r.category || undefined,
+        isOverall: Boolean(r.is_overall),
+        results: typeof r.results === 'object' && r.results !== null ? r.results : JSON.parse(r.results || "{}")
+      }));
+    }
+
+    // Load or seed Rally Coins
+    const resCoins = await pool.query("SELECT * FROM rally_coins ORDER BY awarded_at DESC");
+    if (resCoins.rows.length === 0) {
+      for (const coin of initialRallyCoins) {
+        await pool.query(
+          `INSERT INTO rally_coins (id, participant_id, participant_name, participant_nickname, participant_avatar, participant_photo_profile, task_title, category, comment, awarded_at, awarded_by, year)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) ON CONFLICT (id) DO NOTHING`,
+          [coin.id, coin.participantId, coin.participantName, coin.participantNickname, coin.participantAvatar || null, coin.participantPhotoProfile || null, coin.taskTitle, coin.category, coin.comment || null, coin.awardedAt, coin.awardedBy, coin.year || 2026]
+        );
+      }
+      cacheRallyCoins = [...initialRallyCoins];
+    } else {
+      cacheRallyCoins = resCoins.rows.map(r => ({
+        id: r.id,
+        participantId: r.participant_id,
+        participantName: r.participant_name,
+        participantNickname: r.participant_nickname,
+        participantAvatar: r.participant_avatar || undefined,
+        participantPhotoProfile: r.participant_photo_profile || undefined,
+        taskTitle: r.task_title,
+        category: r.category as any,
+        comment: r.comment || undefined,
+        awardedAt: r.awarded_at,
+        awardedBy: r.awarded_by,
+        year: Number(r.year) || 2026
       }));
     }
 
@@ -1024,12 +1107,13 @@ export async function addOrUpdateExcursion(e: Excursion) {
 }
 
 export async function deleteExcursion(id: string) {
-  cacheExcursions = cacheExcursions.filter(x => x.id !== id);
+  cacheExcursions = cacheExcursions.filter(x => String(x.id) !== String(id));
+  cacheContests = cacheContests.map(c => String(c.excursionId) === String(id) ? { ...c, excursionId: undefined } : c);
   saveLocalFileBackup();
   if (!isPgConnected) return;
 
   try {
-    await pool.query("DELETE FROM excursions WHERE id = $1", [id]);
+    await pool.query("DELETE FROM excursions WHERE id = $1 OR id = $2", [id, String(id)]);
   } catch (err) {
     console.error("PSQL deleteExcursion error:", err);
   }
@@ -1275,6 +1359,23 @@ export function getContestHistory(): ContestHistoryEntry[] {
 export function saveContestHistory(history: ContestHistoryEntry[]) {
   cacheContestHistory = [...history];
   saveLocalFileBackup();
+  if (!isPgConnected) return;
+  (async () => {
+    try {
+      for (const h of history) {
+        await pool.query(
+          `INSERT INTO contest_history (id, title, category, is_overall, results)
+           VALUES ($1, $2, $3, $4, $5)
+           ON CONFLICT (id) DO UPDATE SET
+           title = EXCLUDED.title, category = EXCLUDED.category,
+           is_overall = EXCLUDED.is_overall, results = EXCLUDED.results`,
+          [h.id, h.title, h.category || "", h.isOverall || false, JSON.stringify(h.results || {})]
+        );
+      }
+    } catch (e) {
+      console.error("PSQL saveContestHistory error:", e);
+    }
+  })();
 }
 
 export function getMessages(): ChatMessage[] {
@@ -1875,14 +1976,27 @@ export function updateCreativityIdea(id: string, updates: Partial<CreativityIdea
     (async () => {
       try {
         await pool.query(
-          `UPDATE creativity_ideas SET title = $1, description = $2, status = $3, materials_budget = $4, votes = $5, voted_user_ids = $6, comments = $7 WHERE id = $8`,
-          [idea.title, idea.description, idea.status, idea.materialsBudget || "", idea.votes, JSON.stringify(idea.votedUserIds || []), JSON.stringify(idea.comments || []), idea.id]
+          `UPDATE creativity_ideas SET category = $1, title = $2, description = $3, status = $4, materials_budget = $5, votes = $6, voted_user_ids = $7, comments = $8, image_url = $9, is_archived = $10, archived_at = $11, captain_approval = $12, captain_approved_at = $13, captain_note = $14 WHERE id = $15`,
+          [idea.category, idea.title, idea.description, idea.status, idea.materialsBudget || "", idea.votes, JSON.stringify(idea.votedUserIds || []), JSON.stringify(idea.comments || []), idea.imageUrl || null, Boolean(idea.isArchived), idea.archivedAt || null, idea.captainApproval || null, idea.captainApprovedAt || null, idea.captainNote || null, idea.id]
         );
       } catch (e) {
         console.error("PSQL updateCreativityIdea error:", e);
       }
     })();
   }
+}
+
+export function deleteCreativityIdea(id: string) {
+  cacheCreativityIdeas = cacheCreativityIdeas.filter(i => i.id !== id);
+  saveLocalFileBackup();
+  if (!isPgConnected) return;
+  (async () => {
+    try {
+      await pool.query("DELETE FROM creativity_ideas WHERE id = $1", [id]);
+    } catch (e) {
+      console.error("PSQL deleteCreativityIdea error:", e);
+    }
+  })();
 }
 
 export function toggleIdeaVote(ideaId: string, userId: string) {
@@ -2031,29 +2145,93 @@ export function getRallyCoins(): RallyCoin[] {
 export function saveRallyCoins(coins: RallyCoin[]) {
   cacheRallyCoins = [...coins];
   saveLocalFileBackup();
+  if (!isPgConnected) return;
+  (async () => {
+    let client: any = null;
+    try {
+      client = await pool.connect();
+      await client.query("BEGIN");
+      await client.query("DELETE FROM rally_coins");
+      for (const coin of coins) {
+        await client.query(
+          `INSERT INTO rally_coins (id, participant_id, participant_name, participant_nickname, participant_avatar, participant_photo_profile, task_title, category, comment, awarded_at, awarded_by, year)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+          [coin.id, coin.participantId, coin.participantName, coin.participantNickname, coin.participantAvatar || null, coin.participantPhotoProfile || null, coin.taskTitle, coin.category, coin.comment || null, coin.awardedAt, coin.awardedBy, coin.year || 2026]
+        );
+      }
+      await client.query("COMMIT");
+    } catch (e) {
+      if (client) await client.query("ROLLBACK");
+      console.error("PSQL saveRallyCoins error:", e);
+    } finally {
+      if (client) client.release();
+    }
+  })();
 }
 
 export function addRallyCoin(coin: RallyCoin): RallyCoin[] {
   cacheRallyCoins = [coin, ...cacheRallyCoins];
   saveLocalFileBackup();
+  if (!isPgConnected) return cacheRallyCoins;
+  (async () => {
+    try {
+      await pool.query(
+        `INSERT INTO rally_coins (id, participant_id, participant_name, participant_nickname, participant_avatar, participant_photo_profile, task_title, category, comment, awarded_at, awarded_by, year)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+         ON CONFLICT (id) DO UPDATE SET
+         participant_id = EXCLUDED.participant_id, participant_name = EXCLUDED.participant_name,
+         participant_nickname = EXCLUDED.participant_nickname, participant_avatar = EXCLUDED.participant_avatar,
+         participant_photo_profile = EXCLUDED.participant_photo_profile, task_title = EXCLUDED.task_title,
+         category = EXCLUDED.category, comment = EXCLUDED.comment,
+         awarded_at = EXCLUDED.awarded_at, awarded_by = EXCLUDED.awarded_by, year = EXCLUDED.year`,
+        [coin.id, coin.participantId, coin.participantName, coin.participantNickname, coin.participantAvatar || null, coin.participantPhotoProfile || null, coin.taskTitle, coin.category, coin.comment || null, coin.awardedAt, coin.awardedBy, coin.year || 2026]
+      );
+    } catch (e) {
+      console.error("PSQL addRallyCoin error:", e);
+    }
+  })();
   return cacheRallyCoins;
 }
 
 export function deleteRallyCoin(coinId: string): RallyCoin[] {
   cacheRallyCoins = cacheRallyCoins.filter(c => c.id !== coinId);
   saveLocalFileBackup();
+  if (!isPgConnected) return cacheRallyCoins;
+  (async () => {
+    try {
+      await pool.query("DELETE FROM rally_coins WHERE id = $1", [coinId]);
+    } catch (e) {
+      console.error("PSQL deleteRallyCoin error:", e);
+    }
+  })();
   return cacheRallyCoins;
 }
 
 export function updateAllCoinsYear(year: number): RallyCoin[] {
   cacheRallyCoins = cacheRallyCoins.map(c => ({ ...c, year }));
   saveLocalFileBackup();
+  if (!isPgConnected) return cacheRallyCoins;
+  (async () => {
+    try {
+      await pool.query("UPDATE rally_coins SET year = $1", [year]);
+    } catch (e) {
+      console.error("PSQL updateAllCoinsYear error:", e);
+    }
+  })();
   return cacheRallyCoins;
 }
 
 export function resetAllRallyCoins(): RallyCoin[] {
   cacheRallyCoins = [];
   saveLocalFileBackup();
+  if (!isPgConnected) return cacheRallyCoins;
+  (async () => {
+    try {
+      await pool.query("DELETE FROM rally_coins");
+    } catch (e) {
+      console.error("PSQL resetAllRallyCoins error:", e);
+    }
+  })();
   return cacheRallyCoins;
 }
 

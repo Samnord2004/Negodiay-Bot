@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Volume2, VolumeX, History, HelpCircle, RefreshCw, 
   Flame, UserPlus, Eye, EyeOff, Search, Trophy, Shield, Sparkles,
-  Wifi, Users, Bot, Zap, ArrowRight, Play, CheckCircle2
+  Wifi, Users, Bot, Zap, ArrowRight, Play, CheckCircle2,
+  Maximize2, Minimize2, RotateCw, X, ArrowLeft
 } from 'lucide-react';
 import { Participant, RallyCoin } from '../../../types';
 import { 
@@ -36,6 +37,8 @@ interface PokerTableProps {
   }) => Promise<void> | void;
   onDeleteCoin?: (coinId: string) => Promise<void> | void;
   onUpdateCoins?: (coins: RallyCoin[]) => void;
+  isDedicatedWindow?: boolean;
+  onCloseDedicatedWindow?: () => void;
 }
 
 const BLUFF_REPLIES = [
@@ -66,10 +69,92 @@ export default function PokerTable({
   isCaptain,
   onAwardCoin,
   onDeleteCoin,
-  onUpdateCoins
+  onUpdateCoins,
+  isDedicatedWindow = false,
+  onCloseDedicatedWindow
 }: PokerTableProps) {
   // Game Mode: 'multiplayer' (online via WebSockets) or 'training' (singleplayer vs bots)
   const [mode, setMode] = useState<PokerPlayMode>('multiplayer');
+
+  // Dedicated Window & Mobile Landscape State
+  const [isWindowExpanded, setIsWindowExpanded] = useState<boolean>(false);
+  const [forceMobileLandscape, setForceMobileLandscape] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const isMobile = window.innerWidth < 850 || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      const isPortrait = window.innerHeight > window.innerWidth;
+      return isMobile && isPortrait;
+    }
+    return false;
+  });
+  const [isLandscape, setIsLandscape] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') return window.innerWidth > window.innerHeight;
+    return false;
+  });
+  const [isMobileDevice, setIsMobileDevice] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth < 850 || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    }
+    return false;
+  });
+
+  const isDedicatedActive = isDedicatedWindow || isWindowExpanded;
+
+  useEffect(() => {
+    try {
+      (screen.orientation as any)?.lock?.('landscape')?.catch(() => {});
+    } catch (e) {}
+
+    const handleResize = () => {
+      if (typeof window === 'undefined') return;
+      const landscape = window.innerWidth > window.innerHeight;
+      setIsLandscape(landscape);
+      setIsMobileDevice(window.innerWidth < 850 || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent));
+      if (landscape) {
+        setForceMobileLandscape(false);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
+    };
+  }, []);
+
+  const handleCloseDedicatedWindow = () => {
+    if (onCloseDedicatedWindow) {
+      onCloseDedicatedWindow();
+    }
+    setIsWindowExpanded(false);
+    setForceMobileLandscape(false);
+    if (document.fullscreenElement) {
+      document.exitFullscreen?.().catch(() => {});
+    }
+  };
+
+  const handleToggleDedicatedWindow = () => {
+    setIsWindowExpanded(prev => !prev);
+  };
+
+  const handleToggleMobileLandscape = async () => {
+    try {
+      if (screen.orientation && 'lock' in screen.orientation) {
+        await (screen.orientation as any).lock('landscape');
+      }
+    } catch (e) {}
+    setForceMobileLandscape(prev => !prev);
+  };
+
+  const handleToggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen?.().catch(() => {});
+      try {
+        (screen.orientation as any)?.lock?.('landscape')?.catch(() => {});
+      } catch (e) {}
+    } else {
+      document.exitFullscreen?.().catch(() => {});
+    }
+  };
 
   // Audio & Modals
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -90,6 +175,7 @@ export default function PokerTable({
   const [peekedSeats, setPeekedSeats] = useState<Record<number, boolean>>({});
   const [communityCards, setCommunityCards] = useState<Card[]>([]);
   const [deck, setDeck] = useState<Card[]>([]);
+  const deckRef = useRef<Card[]>([]);
   const [gameStage, setGameStage] = useState<GameStage>('waiting');
   const [pot, setPot] = useState<number>(0);
   const [currentBetToCall, setCurrentBetToCall] = useState<number>(0);
@@ -314,7 +400,9 @@ export default function PokerTable({
       };
     });
 
-    setDeck(newDeck.slice(deckIdx));
+    const remainingDeck = newDeck.slice(deckIdx);
+    deckRef.current = remainingDeck;
+    setDeck(remainingDeck);
     setCommunityCards([]);
     setSeats(updatedSeats);
     setPot(initialPot);
@@ -326,6 +414,56 @@ export default function PokerTable({
     triggerSound(playCardDealSound);
   };
 
+  // Fast forward remaining hand in Training Mode straight to Showdown
+  const handleFastForwardHand = useCallback(() => {
+    if (mode !== 'training') return;
+    if (gameStage === 'waiting' || gameStage === 'showdown') return;
+
+    const active = seats.filter((p): p is PokerPlayer => p !== null && !p.folded);
+    if (active.length === 0) return;
+
+    if (active.length === 1) {
+      const winner = active[0];
+      setSeats(prev => prev.map(p => p?.id === winner.id ? { ...p, chips: p.chips + pot, currentRoundBet: 0 } : p));
+      setGameStage('showdown');
+      setActiveTurnSeat(-1);
+      triggerSound(playWinSound);
+      setStatusMessage(`🏆 ${winner.name} побеждает (все остальные спасовали)! Банк: ${pot} 🎯`);
+      return;
+    }
+
+    const currentDeck = [...deckRef.current];
+    let finalCards = [...communityCards];
+    while (finalCards.length < 5 && currentDeck.length > 0) {
+      finalCards.push(currentDeck.shift()!);
+    }
+    deckRef.current = currentDeck;
+    setDeck(currentDeck);
+    setCommunityCards(finalCards);
+    setGameStage('showdown');
+    setActiveTurnSeat(-1);
+
+    const evaluated = active.map(p => ({
+      player: p,
+      evaluation: evaluateHoldemHand(p.cards, finalCards)
+    }));
+    evaluated.sort((a, b) => b.evaluation.score - a.evaluation.score);
+    const winner = evaluated[0];
+    setSeats(prev => prev.map(p => p?.id === winner.player.id ? { ...p, chips: p.chips + pot, currentRoundBet: 0 } : p));
+    triggerSound(playWinSound);
+    setStatusMessage(`🏆 Победитель: ${winner.player.name} (${winner.evaluation.description})! Банк: ${pot} 🎯`);
+    setHandHistory(prev => [{
+      id: 'train_' + Date.now(),
+      handNumber: handCount,
+      winnerNames: [winner.player.name],
+      potAmount: pot,
+      winningHandDescription: winner.evaluation.description,
+      timestamp: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
+      isCoinHand: false
+    }, ...prev]);
+    setHandCount(c => c + 1);
+  }, [mode, gameStage, seats, pot, communityCards, handCount, triggerSound]);
+
   // Bot logic runner in Training Mode
   useEffect(() => {
     if (mode !== 'training') return;
@@ -333,25 +471,41 @@ export default function PokerTable({
     if (activeTurnSeat === -1) return;
 
     const currentPlayer = seats[activeTurnSeat];
-    if (!currentPlayer || currentPlayer.isUser || currentPlayer.folded || currentPlayer.isAllIn) return;
+    if (!currentPlayer || currentPlayer.folded || currentPlayer.isAllIn) {
+      // Current active seat cannot act (is folded, all-in or empty) - auto advance to next seat!
+      advanceTrainingTurn(seats, activeTurnSeat);
+      return;
+    }
 
-    // Simulate bot thinking delay
+    if (currentPlayer.isUser || (activeUser && currentPlayer.participantId === activeUser.id)) {
+      // User turn, wait for user
+      return;
+    }
+
+    // It is a bot's turn!
+    // If user has folded, make bot turns faster (280ms) so user is never blocked or waiting long!
+    const userIsFolded = seats.some(p => p && (p.isUser || (activeUser && p.participantId === activeUser.id)) && p.folded);
+    const delay = userIsFolded ? 280 : 750;
+
     const timer = setTimeout(() => {
       executeBotTurn(currentPlayer);
-    }, 900);
+    }, delay);
 
     return () => clearTimeout(timer);
-  }, [mode, activeTurnSeat, gameStage, seats]);
+  }, [mode, activeTurnSeat, gameStage, seats, activeUser]);
 
   const executeBotTurn = (bot: PokerPlayer) => {
     const callDiff = currentBetToCall - bot.currentRoundBet;
     const rand = Math.random();
 
-    // Occasional fun remark
+    // Occasional fun remark without in-place mutation
     if (rand < 0.25) {
       const phrase = BLUFF_REPLIES[Math.floor(Math.random() * BLUFF_REPLIES.length)];
-      bot.speechBubble = phrase;
+      setSeats(prev => prev.map((p, idx) => idx === bot.seatIndex && p ? { ...p, speechBubble: phrase } : p));
       triggerSound(playBluffSound);
+      setTimeout(() => {
+        setSeats(prev => prev.map((p, idx) => idx === bot.seatIndex && p ? { ...p, speechBubble: undefined } : p));
+      }, 2500);
     }
 
     if (callDiff === 0) {
@@ -442,61 +596,144 @@ export default function PokerTable({
       };
     });
 
+    const newPot = pot + addedToPot;
     setSeats(updated);
-    setPot(prev => prev + addedToPot);
-    advanceTrainingTurn(updated);
+    setPot(newPot);
+    advanceTrainingTurn(updated, seatIdx, newPot);
   };
 
-  const advanceTrainingTurn = (currentSeats: (PokerPlayer | null)[]) => {
+  const advanceTrainingTurn = (currentSeats: (PokerPlayer | null)[], actingSeatIdx?: number, currentPotAmount?: number) => {
+    const livePot = currentPotAmount !== undefined ? currentPotAmount : pot;
     const active = currentSeats.filter((p): p is PokerPlayer => p !== null && !p.folded);
-    if (active.length === 1) {
-      const winner = active[0];
-      setSeats(currentSeats.map(p => p?.id === winner.id ? { ...p, chips: p.chips + pot, currentRoundBet: 0 } : p));
-      setGameStage('showdown');
-      setActiveTurnSeat(-1);
-      triggerSound(playWinSound);
-      setStatusMessage(`🏆 ${winner.name} побеждает (все спасовали)! Банк: ${pot} 🎯`);
-      setHandHistory(prev => [{
-        id: 'train_' + Date.now(),
-        handNumber: handCount,
-        winnerNames: [winner.name],
-        potAmount: pot,
-        winningHandDescription: 'Все спасовали',
-        timestamp: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
-        isCoinHand: false
-      }, ...prev]);
-      setHandCount(c => c + 1);
+
+    // If only 1 player remains unfolded -> immediate win!
+    if (active.length <= 1) {
+      if (active.length === 1) {
+        const winner = active[0];
+        setSeats(currentSeats.map(p => p?.id === winner.id ? { ...p, chips: p.chips + livePot, currentRoundBet: 0 } : p));
+        setGameStage('showdown');
+        setActiveTurnSeat(-1);
+        triggerSound(playWinSound);
+        setStatusMessage(`🏆 ${winner.name} побеждает (все остальные спасовали)! Банк: ${livePot} 🎯`);
+        setHandHistory(prev => [{
+          id: 'train_' + Date.now(),
+          handNumber: handCount,
+          winnerNames: [winner.name],
+          potAmount: livePot,
+          winningHandDescription: 'Все спасовали',
+          timestamp: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
+          isCoinHand: false
+        }, ...prev]);
+        setHandCount(c => c + 1);
+      }
       return;
     }
 
-    // Check round complete
+    // Check if betting round on the current street is complete
     const nonAllIn = currentSeats.filter((p): p is PokerPlayer => p !== null && !p.folded && !p.isAllIn);
-    const highestBet = Math.max(...currentSeats.map(p => p?.currentRoundBet || 0));
+    const highestBet = nonAllIn.length > 0 ? Math.max(...nonAllIn.map(p => p.currentRoundBet)) : 0;
     const isRoundDone = nonAllIn.length <= 1 || nonAllIn.every(p => p.currentRoundBet === highestBet && p.lastAction !== undefined);
 
     if (isRoundDone) {
-      setSeats(currentSeats.map(p => p ? { ...p, currentRoundBet: 0 } : null));
+      // Clear round bets and reset lastAction for the next street
+      const freshSeats: (PokerPlayer | null)[] = currentSeats.map(p => p ? { ...p, currentRoundBet: 0, lastAction: undefined } : null);
+      setSeats(freshSeats);
       setCurrentBetToCall(0);
       triggerSound(playCardDealSound);
 
+      // Check if active non-all-in players can still make bets
+      const remainingNonAllIn = freshSeats.filter((p): p is PokerPlayer => p !== null && !p.folded && !p.isAllIn);
+
+      // If all remaining active players are all-in (or only 1 non-all-in player is left), deal remaining cards straight to showdown
+      if (remainingNonAllIn.length <= 1 && active.length > 1) {
+        let finalCommunityCards = [...communityCards];
+        const currentDeck = [...deckRef.current];
+        while (finalCommunityCards.length < 5 && currentDeck.length > 0) {
+          finalCommunityCards.push(currentDeck.shift()!);
+        }
+        deckRef.current = currentDeck;
+        setDeck(currentDeck);
+        setCommunityCards(finalCommunityCards);
+        setGameStage('showdown');
+        setActiveTurnSeat(-1);
+
+        const evaluated = active.map(p => ({
+          player: p,
+          evaluation: evaluateHoldemHand(p.cards, finalCommunityCards)
+        }));
+        evaluated.sort((a, b) => b.evaluation.score - a.evaluation.score);
+        const winner = evaluated[0];
+        setSeats(freshSeats.map(p => p?.id === winner.player.id ? { ...p, chips: p.chips + livePot } : p));
+        triggerSound(playWinSound);
+        setStatusMessage(`🏆 Победитель: ${winner.player.name} (${winner.evaluation.description})! Выигрыш: ${livePot} 🎯`);
+        setHandHistory(prev => [{
+          id: 'train_' + Date.now(),
+          handNumber: handCount,
+          winnerNames: [winner.player.name],
+          potAmount: livePot,
+          winningHandDescription: winner.evaluation.description,
+          timestamp: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
+          isCoinHand: false
+        }, ...prev]);
+        setHandCount(c => c + 1);
+        return;
+      }
+
+      // Helper to find the first active player who is not folded and not all-in
+      const getFirstActiveSeat = (list: (PokerPlayer | null)[]) => {
+        for (let i = 0; i < 6; i++) {
+          const p = list[i];
+          if (p && !p.folded && !p.isAllIn) {
+            return i;
+          }
+        }
+        return -1;
+      };
+
+      const currentDeck = [...deckRef.current];
+
       if (gameStage === 'preflop') {
-        setCommunityCards(deck.slice(0, 3));
-        setDeck(deck.slice(3));
+        const flopCards = currentDeck.splice(0, 3);
+        deckRef.current = currentDeck;
+        setDeck(currentDeck);
+        setCommunityCards(flopCards);
         setGameStage('flop');
-        setActiveTurnSeat(0);
-        setStatusMessage('Флоп открыт! Ваш ход.');
+        const nextSeat = getFirstActiveSeat(freshSeats);
+        if (nextSeat === -1) {
+          handleFastForwardHand();
+          return;
+        }
+        setActiveTurnSeat(nextSeat);
+        const actor = freshSeats[nextSeat];
+        setStatusMessage(actor?.isUser ? 'Флоп открыт! Ваш ход.' : `Флоп открыт! Ход за: ${actor?.name || 'соратником'}...`);
       } else if (gameStage === 'flop') {
-        setCommunityCards(prev => [...prev, deck[0]]);
-        setDeck(deck.slice(1));
+        const turnCard = currentDeck.splice(0, 1)[0];
+        deckRef.current = currentDeck;
+        setDeck(currentDeck);
+        setCommunityCards(prev => turnCard ? [...prev, turnCard] : prev);
         setGameStage('turn');
-        setActiveTurnSeat(0);
-        setStatusMessage('Тёрн открыт! Ваш ход.');
+        const nextSeat = getFirstActiveSeat(freshSeats);
+        if (nextSeat === -1) {
+          handleFastForwardHand();
+          return;
+        }
+        setActiveTurnSeat(nextSeat);
+        const actor = freshSeats[nextSeat];
+        setStatusMessage(actor?.isUser ? 'Тёрн открыт! Ваш ход.' : `Тёрн открыт! Ход за: ${actor?.name || 'соратником'}...`);
       } else if (gameStage === 'turn') {
-        setCommunityCards(prev => [...prev, deck[0]]);
-        setDeck(deck.slice(1));
+        const riverCard = currentDeck.splice(0, 1)[0];
+        deckRef.current = currentDeck;
+        setDeck(currentDeck);
+        setCommunityCards(prev => riverCard ? [...prev, riverCard] : prev);
         setGameStage('river');
-        setActiveTurnSeat(0);
-        setStatusMessage('Ривер открыт! Финальный раунд ставок.');
+        const nextSeat = getFirstActiveSeat(freshSeats);
+        if (nextSeat === -1) {
+          handleFastForwardHand();
+          return;
+        }
+        setActiveTurnSeat(nextSeat);
+        const actor = freshSeats[nextSeat];
+        setStatusMessage(actor?.isUser ? 'Ривер открыт! Финальный раунд ставок.' : `Ривер открыт! Ход за: ${actor?.name || 'соратником'}...`);
       } else if (gameStage === 'river') {
         // Showdown
         setGameStage('showdown');
@@ -507,14 +744,14 @@ export default function PokerTable({
         }));
         evaluated.sort((a, b) => b.evaluation.score - a.evaluation.score);
         const winner = evaluated[0];
-        setSeats(currentSeats.map(p => p?.id === winner.player.id ? { ...p, chips: p.chips + pot } : p));
+        setSeats(freshSeats.map(p => p?.id === winner.player.id ? { ...p, chips: p.chips + livePot } : p));
         triggerSound(playWinSound);
-        setStatusMessage(`🏆 Победитель: ${winner.player.name} (${winner.evaluation.description})! Выигрыш: ${pot} 🎯`);
+        setStatusMessage(`🏆 Победитель: ${winner.player.name} (${winner.evaluation.description})! Выигрыш: ${livePot} 🎯`);
         setHandHistory(prev => [{
           id: 'train_' + Date.now(),
           handNumber: handCount,
           winnerNames: [winner.player.name],
-          potAmount: pot,
+          potAmount: livePot,
           winningHandDescription: winner.evaluation.description,
           timestamp: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
           isCoinHand: false
@@ -524,14 +761,26 @@ export default function PokerTable({
       return;
     }
 
-    // Advance turn
-    let nextSeat = (activeTurnSeat + 1) % 6;
+    // Round is NOT done yet -> advance turn to the next player who is NOT folded and NOT all-in
+    const baseSeat = actingSeatIdx !== undefined ? actingSeatIdx : activeTurnSeat;
+    let nextSeat = (baseSeat + 1) % 6;
     let guard = 0;
     while ((currentSeats[nextSeat] === null || currentSeats[nextSeat]?.folded || currentSeats[nextSeat]?.isAllIn) && guard < 12) {
       nextSeat = (nextSeat + 1) % 6;
       guard++;
     }
+    if (guard >= 12 || currentSeats[nextSeat] === null || currentSeats[nextSeat]?.folded || currentSeats[nextSeat]?.isAllIn) {
+      handleFastForwardHand();
+      return;
+    }
     setActiveTurnSeat(nextSeat);
+    const nextPlayer = currentSeats[nextSeat];
+    const isCurrentUserFolded = currentSeats.some(p => p && (p.isUser || (activeUser && p.participantId === activeUser.id)) && p.folded);
+    if (nextPlayer?.isUser) {
+      setStatusMessage('Ваш ход! Выберите действие.');
+    } else {
+      setStatusMessage(isCurrentUserFolded ? `Вы спасовали. Ход за: ${nextPlayer?.name || 'соратником'}...` : `Ход за: ${nextPlayer?.name || 'соратником'}...`);
+    }
   };
 
   // User Actions wrapper (chooses WS or Local based on mode)
@@ -633,7 +882,7 @@ export default function PokerTable({
 
   // Active Player and Current User Seat
   const activeTurnPlayer = activeTurnSeat !== -1 ? seats[activeTurnSeat] : null;
-  const isMyTurn = activeTurnPlayer && (activeTurnPlayer.isUser || (activeUser && activeTurnPlayer.participantId === activeUser.id));
+  const isMyTurn = activeTurnPlayer && !activeTurnPlayer.folded && (activeTurnPlayer.isUser || (activeUser && activeTurnPlayer.participantId === activeUser.id));
   const userSeatIdx = seats.findIndex(p => p?.isUser || (activeUser && p?.participantId === activeUser.id));
   const userPlayer = userSeatIdx !== -1 ? seats[userSeatIdx] : null;
 
@@ -646,130 +895,154 @@ export default function PokerTable({
   const callDiff = activeTurnPlayer ? Math.max(0, currentBetToCall - activeTurnPlayer.currentRoundBet) : 0;
   const canCheck = callDiff === 0;
 
-  return (
-    <div className="select-none animate-fade-in w-full max-w-4xl mx-auto">
-
+  // Main Felt Table Content
+  const tableContent = (
+    <div className="relative w-full rounded-2xl sm:rounded-[36px] bg-gradient-to-b from-[#3a1a0d] via-[#281108] to-[#170a04] p-1.5 sm:p-3 border-4 sm:border-8 border-[#522410] shadow-2xl overflow-hidden ring-2 ring-amber-500/40">
+      
       {/* ========================================================================= */}
-      {/* THE INTEGRATED POKER ARENA (NO EXTERNAL PANELS - ALL BUTTONS ON THE FELT!) */}
+      {/* 1. TOP RAIL: MODE SWITCHER & QUICK CONTROLS (DOCKED ON TABLE) */}
       {/* ========================================================================= */}
-      <div className="relative w-full rounded-2xl sm:rounded-[36px] bg-gradient-to-b from-[#3a1a0d] via-[#281108] to-[#170a04] p-1.5 sm:p-3 border-4 sm:border-8 border-[#522410] shadow-2xl overflow-hidden ring-2 ring-amber-500/40">
+      <div className="relative z-20 flex flex-wrap items-center justify-between gap-1.5 px-2 py-1.5 mb-1.5 rounded-xl bg-stone-950/80 border border-amber-400/40 backdrop-blur-xs text-xs">
         
-        {/* ========================================================================= */}
-        {/* 1. TOP RAIL: MODE SWITCHER & QUICK CONTROLS (DOCKED ON TABLE) */}
-        {/* ========================================================================= */}
-        <div className="relative z-20 flex flex-wrap items-center justify-between gap-1.5 px-2 py-1.5 mb-1.5 rounded-xl bg-stone-950/80 border border-amber-400/40 backdrop-blur-xs text-xs">
-          
-          {/* Mode Switcher Tabs */}
-          <div className="flex items-center gap-1 bg-stone-900/90 p-0.5 rounded-lg border border-stone-800">
-            <button
-              type="button"
-              onClick={() => setMode('multiplayer')}
-              className={`px-2.5 py-1 rounded-md text-[11px] font-black uppercase flex items-center gap-1.5 transition-all cursor-pointer ${
-                mode === 'multiplayer'
-                  ? 'bg-amber-500 text-stone-950 shadow-sm'
-                  : 'text-stone-400 hover:text-stone-200'
-              }`}
-            >
-              <Wifi size={12} className={isConnected ? 'text-emerald-950' : 'text-stone-500'} />
-              <span>Сетевой онлайн</span>
-              {mode === 'multiplayer' && (
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-700 animate-pulse" />
-              )}
-            </button>
+        {/* Mode Switcher Tabs */}
+        <div className="flex items-center gap-1 bg-stone-900/90 p-0.5 rounded-lg border border-stone-800">
+          <button
+            type="button"
+            onClick={() => setMode('multiplayer')}
+            className={`px-2.5 py-1 rounded-md text-[11px] font-black uppercase flex items-center gap-1.5 transition-all cursor-pointer ${
+              mode === 'multiplayer'
+                ? 'bg-amber-500 text-stone-950 shadow-sm'
+                : 'text-stone-400 hover:text-stone-200'
+            }`}
+          >
+            <Wifi size={12} className={isConnected ? 'text-emerald-950' : 'text-stone-500'} />
+            <span>Сетевой онлайн</span>
+            {mode === 'multiplayer' && (
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-700 animate-pulse" />
+            )}
+          </button>
 
-            <button
-              type="button"
-              onClick={() => setMode('training')}
-              className={`px-2.5 py-1 rounded-md text-[11px] font-black uppercase flex items-center gap-1.5 transition-all cursor-pointer ${
-                mode === 'training'
-                  ? 'bg-purple-600 text-white shadow-sm'
-                  : 'text-stone-400 hover:text-stone-200'
-              }`}
-            >
-              <Bot size={12} />
-              <span>Тренировка</span>
-            </button>
-          </div>
-
-          {/* Quick Helper Toggles & Deal Button */}
-          <div className="flex items-center gap-1">
-            {/* Online / Bot badge */}
-            <span className="text-[10px] font-bold text-stone-400 hidden sm:inline-flex items-center gap-1 mr-1">
-              {mode === 'multiplayer' ? (
-                <>
-                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                  <span>Онлайн: {onlineCount}</span>
-                </>
-              ) : (
-                <>
-                  <span className="w-2 h-2 rounded-full bg-purple-400" />
-                  <span>Боты Негодяев (без риска)</span>
-                </>
-              )}
-            </span>
-
-            {/* Hand Combinations */}
-            <button
-              type="button"
-              onClick={() => setShowRulesModal(true)}
-              className="p-1.5 sm:px-2 sm:py-1 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-300 text-[11px] font-bold flex items-center gap-1 border border-stone-700 cursor-pointer"
-              title="Комбинации карт"
-            >
-              <HelpCircle size={13} className="text-amber-400" />
-              <span className="hidden md:inline">Комбинации</span>
-            </button>
-
-            {/* Hand History */}
-            <button
-              type="button"
-              onClick={() => setShowHistoryModal(true)}
-              className="p-1.5 sm:px-2 sm:py-1 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-300 text-[11px] font-bold flex items-center gap-1 border border-stone-700 cursor-pointer"
-              title="История раздач"
-            >
-              <History size={13} className="text-amber-400" />
-              <span className="hidden md:inline">История</span>
-            </button>
-
-            {/* Sound Toggle */}
-            <button
-              type="button"
-              onClick={() => setSoundEnabled(!soundEnabled)}
-              className="p-1.5 rounded-lg bg-stone-800 hover:bg-stone-700 text-amber-300 border border-stone-700 cursor-pointer"
-              title={soundEnabled ? "Выключить звук" : "Включить звук"}
-            >
-              {soundEnabled ? <Volume2 size={14} /> : <VolumeX size={14} className="text-stone-500" />}
-            </button>
-
-            {/* Peeking / Open Cards Toggle */}
-            <button
-              type="button"
-              onClick={() => setShowAllCardsOpen(!showAllCardsOpen)}
-              className={`p-1.5 rounded-lg border text-[11px] font-bold flex items-center gap-1 cursor-pointer ${
-                showAllCardsOpen
-                  ? 'bg-amber-500 text-stone-950 border-yellow-300'
-                  : 'bg-stone-800 border-stone-700 text-stone-300'
-              }`}
-              title="Режим открытых карт для общего ТВ"
-            >
-              {showAllCardsOpen ? <Eye size={13} /> : <EyeOff size={13} />}
-            </button>
-
-            {/* Start / Next Hand Button directly on table! */}
-            <button
-              type="button"
-              onClick={handleStartHand}
-              disabled={gameStage !== 'waiting' && gameStage !== 'showdown'}
-              className={`px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer ${
-                gameStage === 'waiting' || gameStage === 'showdown'
-                  ? 'bg-gradient-to-r from-amber-400 to-yellow-500 hover:from-amber-300 hover:to-yellow-400 text-stone-950 shadow-md ring-1 ring-yellow-300'
-                  : 'bg-stone-800/80 text-stone-500 border border-stone-700 cursor-not-allowed'
-              }`}
-            >
-              <Play size={12} className={gameStage !== 'waiting' && gameStage !== 'showdown' ? 'opacity-40' : 'fill-stone-950'} />
-              <span>{gameStage === 'showdown' ? 'Ещё' : 'Раздать'}</span>
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => setMode('training')}
+            className={`px-2.5 py-1 rounded-md text-[11px] font-black uppercase flex items-center gap-1.5 transition-all cursor-pointer ${
+              mode === 'training'
+                ? 'bg-purple-600 text-white shadow-sm'
+                : 'text-stone-400 hover:text-stone-200'
+            }`}
+          >
+            <Bot size={12} />
+            <span>Тренировка</span>
+          </button>
         </div>
+
+        {/* Quick Helper Toggles & Deal Button */}
+        <div className="flex items-center gap-1 flex-wrap">
+          {/* Online / Bot badge */}
+          <span className="text-[10px] font-bold text-stone-400 hidden sm:inline-flex items-center gap-1 mr-1">
+            {mode === 'multiplayer' ? (
+              <>
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                <span>Онлайн: {onlineCount}</span>
+              </>
+            ) : (
+              <>
+                <span className="w-2 h-2 rounded-full bg-purple-400" />
+                <span>Боты Негодяев (без риска)</span>
+              </>
+            )}
+          </span>
+
+          {/* Separate Window Toggle Button */}
+          {!isDedicatedActive && (
+            <button
+              type="button"
+              onClick={handleToggleDedicatedWindow}
+              className="p-1 sm:px-2 sm:py-1 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white text-[11px] font-black uppercase flex items-center gap-1 border border-emerald-500 shadow-sm cursor-pointer"
+              title="Открыть покерный стол в отдельном окне во весь экран"
+            >
+              <Maximize2 size={12} />
+              <span className="hidden sm:inline">В отдельном окне</span>
+            </button>
+          )}
+
+          {/* Mobile Landscape Rotate Button */}
+          <button
+            type="button"
+            onClick={handleToggleMobileLandscape}
+            className={`p-1 sm:px-2 sm:py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 border cursor-pointer ${
+              forceMobileLandscape
+                ? 'bg-amber-500 text-stone-950 border-yellow-300 shadow-xs'
+                : 'bg-stone-800 hover:bg-stone-700 text-stone-300 border-stone-700'
+            }`}
+            title="Горизонтальный экран для мобильного (Альбомная ориентация)"
+          >
+            <RotateCw size={12} className={forceMobileLandscape ? 'animate-spin' : ''} />
+            <span className="hidden sm:inline">Альбомный</span>
+          </button>
+
+          {/* Hand Combinations */}
+          <button
+            type="button"
+            onClick={() => setShowRulesModal(true)}
+            className="p-1.5 sm:px-2 sm:py-1 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-300 text-[11px] font-bold flex items-center gap-1 border border-stone-700 cursor-pointer"
+            title="Комбинации карт"
+          >
+            <HelpCircle size={13} className="text-amber-400" />
+            <span className="hidden md:inline">Комбинации</span>
+          </button>
+
+          {/* Hand History */}
+          <button
+            type="button"
+            onClick={() => setShowHistoryModal(true)}
+            className="p-1.5 sm:px-2 sm:py-1 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-300 text-[11px] font-bold flex items-center gap-1 border border-stone-700 cursor-pointer"
+            title="История раздач"
+          >
+            <History size={13} className="text-amber-400" />
+            <span className="hidden md:inline">История</span>
+          </button>
+
+          {/* Sound Toggle */}
+          <button
+            type="button"
+            onClick={() => setSoundEnabled(!soundEnabled)}
+            className="p-1.5 rounded-lg bg-stone-800 hover:bg-stone-700 text-amber-300 border border-stone-700 cursor-pointer"
+            title={soundEnabled ? "Выключить звук" : "Включить звук"}
+          >
+            {soundEnabled ? <Volume2 size={14} /> : <VolumeX size={14} className="text-stone-500" />}
+          </button>
+
+          {/* Peeking / Open Cards Toggle */}
+          <button
+            type="button"
+            onClick={() => setShowAllCardsOpen(!showAllCardsOpen)}
+            className={`p-1.5 rounded-lg border text-[11px] font-bold flex items-center gap-1 cursor-pointer ${
+              showAllCardsOpen
+                ? 'bg-amber-500 text-stone-950 border-yellow-300'
+                : 'bg-stone-800 border-stone-700 text-stone-300'
+            }`}
+            title="Режим открытых карт для общего ТВ"
+          >
+            {showAllCardsOpen ? <Eye size={13} /> : <EyeOff size={13} />}
+          </button>
+
+          {/* Start / Next Hand Button directly on table! */}
+          <button
+            type="button"
+            onClick={handleStartHand}
+            disabled={gameStage !== 'waiting' && gameStage !== 'showdown' && !(mode === 'training' && userPlayer?.folded)}
+            className={`px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer ${
+              gameStage === 'waiting' || gameStage === 'showdown' || (mode === 'training' && userPlayer?.folded)
+                ? 'bg-gradient-to-r from-amber-400 to-yellow-500 hover:from-amber-300 hover:to-yellow-400 text-stone-950 shadow-md ring-1 ring-yellow-300'
+                : 'bg-stone-800/80 text-stone-500 border border-stone-700 cursor-not-allowed'
+            }`}
+          >
+            <Play size={12} className={gameStage !== 'waiting' && gameStage !== 'showdown' && !(mode === 'training' && userPlayer?.folded) ? 'opacity-40' : 'fill-stone-950'} />
+            <span>{gameStage === 'showdown' ? 'Ещё' : mode === 'training' && userPlayer?.folded ? 'Новая' : 'Раздать'}</span>
+          </button>
+        </div>
+      </div>
 
         {/* ========================================================================= */}
         {/* 2. GREEN FELT PLAYING SURFACE */}
@@ -847,7 +1120,7 @@ export default function PokerTable({
                     <PokerCard
                       key={`${card.suit}_${card.value}_${i}`}
                       card={card}
-                      size="sm"
+                      size="md"
                       className="animate-fade-in"
                     />
                   ))
@@ -986,6 +1259,39 @@ export default function PokerTable({
                     </button>
                   </div>
                 </div>
+              ) : mode === 'training' && userPlayer?.folded && gameStage !== 'waiting' && gameStage !== 'showdown' ? (
+                /* Fast-Forward / Next Hand HUD when user folded in Training Mode */
+                <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl bg-amber-950/90 border border-amber-400/80 text-[10px] sm:text-xs shadow-md animate-fade-in">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="px-1.5 py-0.5 rounded bg-rose-950 text-rose-300 border border-rose-600/60 font-black uppercase text-[9px] shrink-0">
+                      Пас
+                    </span>
+                    <span className="font-bold text-amber-200 truncate">
+                      {activeTurnPlayer ? `Ход: ${activeTurnPlayer.name}...` : 'Боты доигрывают...'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={handleFastForwardHand}
+                      className="px-2 py-1 bg-amber-500 hover:bg-amber-400 text-stone-950 font-black text-[10px] uppercase rounded-md shadow-xs flex items-center gap-1 cursor-pointer transition-all active:scale-95"
+                      title="Моментально раскрыть все карты и показать итог раздачи"
+                    >
+                      <Zap size={11} className="fill-stone-950" />
+                      <span>Быстрый исход</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleStartHand}
+                      className="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[10px] uppercase rounded-md shadow-xs flex items-center gap-1 cursor-pointer transition-all active:scale-95"
+                      title="Начать следующую раздачу"
+                    >
+                      <Play size={10} className="fill-white" />
+                      <span>Новая раздача</span>
+                    </button>
+                  </div>
+                </div>
               ) : (
                 /* On-Field Status / Deal Banner when not user turn */
                 <div className="flex items-center justify-between gap-1.5 px-2 py-1 rounded-xl bg-stone-950/75 border border-amber-400/40 text-[10px] sm:text-xs">
@@ -1019,14 +1325,14 @@ export default function PokerTable({
                       </button>
                     )}
 
-                    {(gameStage === 'waiting' || gameStage === 'showdown') && (
+                    {(gameStage === 'waiting' || gameStage === 'showdown' || (mode === 'training' && userPlayer?.folded)) && (
                       <button
                         type="button"
                         onClick={handleStartHand}
                         className="px-2.5 py-0.5 bg-amber-500 hover:bg-amber-400 text-stone-950 font-black text-[10px] uppercase rounded-md shadow-sm flex items-center gap-1 cursor-pointer"
                       >
                         <Play size={10} className="fill-stone-950" />
-                        <span>{gameStage === 'showdown' ? 'Дальше' : 'Раздать'}</span>
+                        <span>{gameStage === 'showdown' ? 'Дальше' : mode === 'training' && userPlayer?.folded ? 'Новая' : 'Раздать'}</span>
                       </button>
                     )}
                   </div>
@@ -1060,6 +1366,159 @@ export default function PokerTable({
         </div>
 
       </div>
+  );
+
+  return (
+    <>
+      {/* If Dedicated Active: Render Full-Screen Dedicated Window */}
+      {isDedicatedActive ? (
+        <div 
+          className="fixed inset-0 z-50 bg-[#071a10] text-white flex flex-col w-screen h-screen overflow-hidden animate-fade-in"
+          style={forceMobileLandscape ? {
+            position: 'fixed',
+            top: '50%',
+            left: '50%',
+            width: '100vh',
+            height: '100vw',
+            transform: 'translate(-50%, -50%) rotate(90deg)',
+            transformOrigin: 'center center',
+            zIndex: 9999,
+            overflow: 'hidden'
+          } : undefined}
+        >
+          {/* Dedicated Window Header */}
+          <div className="flex items-center justify-between px-3 sm:px-4 py-2 bg-stone-950/95 border-b border-amber-500/40 shadow-lg shrink-0 z-30">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleCloseDedicatedWindow}
+                className="px-2.5 py-1.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer border border-stone-700 shadow-sm"
+                title="Выйти из-за стола в хаб лагеря"
+              >
+                <ArrowLeft size={14} />
+                <span className="hidden sm:inline">В хаб лагеря</span>
+                <span className="sm:hidden">В лагерь</span>
+              </button>
+
+              <div className="flex items-center gap-1.5 ml-1">
+                <span className="text-base sm:text-lg">♠️</span>
+                <div>
+                  <h2 className="text-xs sm:text-sm font-black uppercase text-amber-300 leading-none">
+                    Покерный Стол «Негодяи»
+                  </h2>
+                  <div className="text-[10px] text-stone-400 leading-none mt-0.5">
+                    {mode === 'multiplayer' ? 'Сетевой стол онлайн' : 'Одиночная тренировка с ботами'}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Dedicated Window Controls */}
+            <div className="flex items-center gap-1 sm:gap-2">
+              {/* Mobile Landscape Orientation Button */}
+              <button
+                type="button"
+                onClick={handleToggleMobileLandscape}
+                className={`px-2 py-1 sm:px-2.5 sm:py-1 rounded-xl text-[10px] sm:text-[11px] font-black uppercase flex items-center gap-1 border transition-all cursor-pointer ${
+                  forceMobileLandscape
+                    ? 'bg-amber-500 text-stone-950 border-yellow-300 shadow-md ring-2 ring-yellow-400'
+                    : 'bg-stone-800 hover:bg-stone-700 text-stone-300 border-stone-700'
+                }`}
+                title="Повернуть экран горизонтально (Альбомный режим)"
+              >
+                <RotateCw size={12} className={forceMobileLandscape ? 'animate-spin' : ''} />
+                <span className="hidden sm:inline">Альбомный экран</span>
+                <span className="sm:hidden">Экран 🔄</span>
+              </button>
+
+              {/* Fullscreen Toggle Button */}
+              <button
+                type="button"
+                onClick={handleToggleFullscreen}
+                className="p-1.5 sm:px-2.5 sm:py-1 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-300 border border-stone-700 text-[10px] sm:text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                title="Развернуть во весь экран устройства"
+              >
+                <Maximize2 size={12} />
+                <span className="hidden md:inline">Полный экран</span>
+              </button>
+
+              {/* Close Button */}
+              <button
+                type="button"
+                onClick={handleCloseDedicatedWindow}
+                className="px-2.5 py-1.5 rounded-xl bg-rose-700 hover:bg-rose-600 text-white text-xs font-black uppercase flex items-center gap-1 shadow-md cursor-pointer transition-colors"
+                title="Закрыть отдельное окно стола"
+              >
+                <X size={14} />
+                <span className="hidden sm:inline">Закрыть</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Dedicated Window Body */}
+          <div className="flex-1 min-h-0 overflow-y-auto p-1 sm:p-3 flex flex-col justify-center items-center">
+            {/* Mobile portrait hint */}
+            {isMobileDevice && !isLandscape && !forceMobileLandscape && (
+              <div className="w-full max-w-4xl mb-1.5 px-3 py-1.5 rounded-xl bg-amber-950/90 border border-amber-400/60 text-amber-200 text-xs flex items-center justify-between gap-2 shadow-md">
+                <div className="flex items-center gap-2">
+                  <span className="text-base animate-bounce">📱</span>
+                  <span className="text-[11px] font-bold">
+                    Поверните телефон горизонтально для комфортного обзора стола
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleToggleMobileLandscape}
+                  className="px-2 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-stone-950 font-black text-[10px] uppercase flex items-center gap-1 shrink-0 cursor-pointer shadow-xs"
+                >
+                  <RotateCw size={11} />
+                  <span>Повернуть 🔄</span>
+                </button>
+              </div>
+            )}
+
+            <div className="w-full max-w-4xl mx-auto">
+              {tableContent}
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* Normal In-Tab View */
+        <div className="select-none animate-fade-in w-full max-w-4xl mx-auto space-y-2">
+          {/* Mobile Landscape Recommendation Banner */}
+          {isMobileDevice && !isLandscape && !forceMobileLandscape && (
+            <div className="px-3 py-2 rounded-2xl bg-amber-950/80 border border-amber-400/60 text-amber-200 text-xs flex items-center justify-between gap-2 shadow-md">
+              <div className="flex items-center gap-2">
+                <span className="text-base animate-bounce">📱</span>
+                <div>
+                  <div className="font-black text-white text-[11px]">Покерный турнир лучше смотрится в альбомной ориентации!</div>
+                  <div className="text-[10px] text-amber-300">Поверните смартфон или откройте в отдельном окне</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={handleToggleMobileLandscape}
+                  className="px-2 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-stone-950 font-black text-[10px] uppercase flex items-center gap-1 shrink-0 cursor-pointer shadow-xs"
+                >
+                  <RotateCw size={11} />
+                  <span>Повернуть</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleToggleDedicatedWindow}
+                  className="px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[10px] uppercase flex items-center gap-1 shrink-0 cursor-pointer shadow-xs"
+                >
+                  <Maximize2 size={11} />
+                  <span>В окно</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {tableContent}
+        </div>
+      )}
 
       {/* ========================================================================= */}
       {/* MODAL: SEATING PARTICIPANT */}
@@ -1218,7 +1677,6 @@ export default function PokerTable({
           </div>
         </div>
       )}
-
-    </div>
+    </>
   );
 }

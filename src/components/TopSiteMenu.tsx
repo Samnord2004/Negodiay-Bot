@@ -90,6 +90,18 @@ export default function TopSiteMenu({
   };
 
   const roleMeta = currentUser?.role ? ROLE_DEFINITIONS[currentUser.role] : null;
+  const [anchorPos, setAnchorPos] = useState<{ top: number; right: number } | null>(null);
+
+  const handleToggleMenu = (e: React.MouseEvent<HTMLButtonElement>) => {
+    if (!isOpen) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      setAnchorPos({
+        top: rect.bottom + 6,
+        right: Math.max(12, window.innerWidth - rect.right)
+      });
+    }
+    setIsOpen(!isOpen);
+  };
 
   return (
     <div ref={menuRef} className="relative z-40">
@@ -97,10 +109,10 @@ export default function TopSiteMenu({
       {/* TRIGGER BUTTON */}
       <button
         type="button"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={handleToggleMenu}
         aria-expanded={isOpen}
         aria-label="Главное меню сайта"
-        className={`w-full sm:w-auto px-3.5 py-2 rounded-2xl border-2 font-black text-xs uppercase flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 ${
+        className={`w-full sm:w-auto px-3.5 py-2 rounded-2xl border-2 font-black text-xs uppercase flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 cursor-pointer ${
           isOpen
             ? 'bg-red-600 text-yellow-300 border-amber-950 shadow-lg'
             : 'bg-gradient-to-r from-yellow-300 to-amber-400 hover:from-yellow-200 hover:to-amber-300 text-amber-950 border-amber-500'
@@ -117,18 +129,24 @@ export default function TopSiteMenu({
         )}
       </button>
 
-      {/* POPUP MENU PANEL - ALWAYS STRICTLY CENTERED ON SCREEN */}
+      {/* POPUP MENU PANEL - ANCHORED DIRECTLY TO TRIGGER BUTTON */}
       {isOpen && (
-        <div 
-          className="fixed inset-0 z-50 bg-stone-950/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-150"
-          onClick={() => setIsOpen(false)}
-        >
+        <>
+          <div 
+            className="fixed inset-0 z-40 bg-stone-950/25 backdrop-blur-2xs"
+            onClick={() => setIsOpen(false)}
+          />
           <div 
             role="dialog"
             aria-modal="true"
             aria-label="Главное меню сайта и навигация"
             onClick={(e) => e.stopPropagation()}
-            className={`w-full ${menuTab === 'guide' ? 'sm:w-[580px] max-w-[620px]' : 'sm:w-[420px] max-w-[440px]'} max-h-[85vh] bg-amber-50 border-4 border-amber-600 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 flex flex-col pointer-events-auto transition-all`}
+            style={{
+              top: `${Math.min(window.innerHeight - 520, Math.max(12, anchorPos?.top ?? 70))}px`,
+              right: `${Math.max(12, anchorPos?.right ?? 16)}px`,
+              maxHeight: 'calc(100vh - 85px)',
+            }}
+            className={`fixed z-50 w-[92vw] ${menuTab === 'guide' ? 'sm:w-[580px]' : 'sm:w-[430px]'} bg-amber-50 border-4 border-amber-600 rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 flex flex-col pointer-events-auto transition-all`}
           >
           
           {/* Header Bar */}
@@ -603,8 +621,8 @@ export default function TopSiteMenu({
           </div>
 
         </div>
-      </div>
-    )}
+        </>
+      )}
 
     </div>
   );

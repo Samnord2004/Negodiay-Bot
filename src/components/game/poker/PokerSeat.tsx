@@ -142,20 +142,22 @@ export default function PokerSeat({
 
       {/* Hole Cards & Peek Toggle */}
       <div className="relative flex flex-col items-center mt-1.5 z-10">
-        <div className="flex items-center -space-x-4 sm:-space-x-6">
+        <div className="flex items-center -space-x-3 sm:-space-x-4">
           {player.cards.length === 2 && (
             <>
               <PokerCard
                 card={player.cards[0]}
                 faceDown={!showCardsFaceUp}
-                size="sm"
-                className={`transform -rotate-6 transition-all ${player.folded ? 'opacity-40 grayscale' : ''}`}
+                size={isCurrentUser ? 'md' : 'sm'}
+                highlight={isCurrentUser && !player.folded}
+                className={`transform -rotate-4 hover:rotate-0 transition-all duration-200 ${player.folded ? 'opacity-40 grayscale' : ''}`}
               />
               <PokerCard
                 card={player.cards[1]}
                 faceDown={!showCardsFaceUp}
-                size="sm"
-                className={`transform rotate-6 transition-all ${player.folded ? 'opacity-40 grayscale' : ''}`}
+                size={isCurrentUser ? 'md' : 'sm'}
+                highlight={isCurrentUser && !player.folded}
+                className={`transform rotate-4 hover:rotate-0 transition-all duration-200 ${player.folded ? 'opacity-40 grayscale' : ''}`}
               />
             </>
           )}

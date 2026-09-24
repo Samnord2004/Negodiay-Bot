@@ -15,7 +15,8 @@ import DeleteParticipantModal from './DeleteParticipantModal';
 import RallyGameHub from './game/RallyGameHub';
 import { 
   Participant, Excursion, TaskItem, MenuItem, GroceryItem, Contest, 
-  CreativityIdea, RallyCoin, RallyParticipationStatus, RallyParticipantEntry 
+  CreativityIdea, RallyCoin, RallyParticipationStatus, RallyParticipantEntry,
+  ContestHistoryEntry
 } from '../types';
 
 export type HomeRallySubTab = 'overview' | 'game' | 'tasks' | 'menu' | 'contests' | 'creativity';
@@ -37,8 +38,13 @@ interface HomeRallyTabProps {
   onUpdateGroceries?: (items: GroceryItem[]) => void;
   contests?: Contest[];
   onUpdateContests?: (contests: Contest[]) => void;
+  contestHistory?: ContestHistoryEntry[];
+  onUpdateContestHistory?: (history: ContestHistoryEntry[]) => void;
   creativityIdeas?: CreativityIdea[];
   onIdeaAdded?: (idea: CreativityIdea) => void;
+  onIdeaUpdated?: (idea: CreativityIdea) => void;
+  onIdeaArchived?: (ideaId: string, archive: boolean) => void;
+  onIdeaDeleted?: (ideaId: string) => void;
   onIdeaVoted?: (ideaId: string) => void;
   onCommentAdded?: (ideaId: string, text: string) => void;
   onStatusChanged?: (ideaId: string, status: CreativityIdea['status']) => void;
@@ -77,8 +83,13 @@ export default function HomeRallyTab({
   onUpdateGroceries = () => {},
   contests = [],
   onUpdateContests = () => {},
+  contestHistory = [],
+  onUpdateContestHistory = () => {},
   creativityIdeas = [],
   onIdeaAdded = () => {},
+  onIdeaUpdated = () => {},
+  onIdeaArchived = () => {},
+  onIdeaDeleted = () => {},
   onIdeaVoted = () => {},
   onCommentAdded = () => {},
   onStatusChanged = () => {},
@@ -101,6 +112,8 @@ export default function HomeRallyTab({
   
   // Excursion editing state
   const [editingExcursion, setEditingExcursion] = useState<Excursion | null>(null);
+  const [deleteConfirmExcursion, setDeleteConfirmExcursion] = useState<Excursion | null>(null);
+  const [isDeletingExcursion, setIsDeletingExcursion] = useState(false);
   const [isSavingExcursion, setIsSavingExcursion] = useState(false);
 
   // Skipped years editing state
@@ -275,6 +288,34 @@ export default function HomeRallyTab({
       console.error("Excursion update failed:", err);
     } finally {
       setIsSavingExcursion(false);
+    }
+  };
+
+  const handleDeleteExcursion = async (excursionId: string) => {
+    setIsDeletingExcursion(true);
+    try {
+      const res = await fetch(`/api/excursions/${excursionId}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const updated = data.excursions || excursions.filter(e => e.id !== excursionId);
+        if (onUpdateExcursions) {
+          onUpdateExcursions(updated);
+        }
+        setDeleteConfirmExcursion(null);
+        if (editingExcursion?.id === excursionId) {
+          setEditingExcursion(null);
+        }
+        setStatusToast({ excursionId: '', message: 'Слёт успешно удалён' });
+        setTimeout(() => setStatusToast(null), 3500);
+      } else {
+        console.error("Failed to delete excursion on server");
+      }
+    } catch (err) {
+      console.error("Delete excursion error:", err);
+    } finally {
+      setIsDeletingExcursion(false);
     }
   };
 
@@ -521,15 +562,26 @@ export default function HomeRallyTab({
                             Актуальный слёт
                           </span>
                           {isCaptain && (
-                            <button
-                              type="button"
-                              onClick={() => setEditingExcursion({ ...ex })}
-                              className="px-2.5 py-1 bg-stone-200 hover:bg-stone-300 text-stone-800 font-bold text-xs uppercase rounded-xl flex items-center gap-1 shadow-2xs transition-all cursor-pointer"
-                              title="Редактировать слёт и взносы (доступно капитану)"
-                            >
-                              <Edit size={13} />
-                              <span>Редактировать</span>
-                            </button>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => setEditingExcursion({ ...ex })}
+                                className="px-2.5 py-1 bg-stone-200 hover:bg-stone-300 text-stone-800 font-bold text-xs uppercase rounded-xl flex items-center gap-1 shadow-2xs transition-all cursor-pointer"
+                                title="Редактировать слёт и взносы (доступно капитану)"
+                              >
+                                <Edit size={13} />
+                                <span>Редактировать</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setDeleteConfirmExcursion(ex)}
+                                className="px-2.5 py-1 bg-red-100 hover:bg-red-200 text-red-700 font-bold text-xs uppercase rounded-xl flex items-center gap-1 shadow-2xs transition-all cursor-pointer"
+                                title="Удалить слёт (доступно капитану)"
+                              >
+                                <Trash2 size={13} />
+                                <span>Удалить</span>
+                              </button>
+                            </div>
                           )}
                         </div>
                       </div>
@@ -895,6 +947,45 @@ export default function HomeRallyTab({
                   </div>
                 );
               })}
+              {activeExcursions.length === 0 && (
+                <div className="bg-amber-50/80 border-2 border-dashed border-amber-300 rounded-3xl p-8 text-center space-y-4 shadow-xs">
+                  <div className="w-14 h-14 bg-amber-100 text-amber-800 rounded-2xl flex items-center justify-center text-3xl mx-auto shadow-xs">
+                    ⛺
+                  </div>
+                  <div className="space-y-1">
+                    <h4 className="font-black text-base uppercase text-amber-950">Нет активных слётов</h4>
+                    <p className="text-xs text-amber-800 font-medium max-w-md mx-auto">
+                      В настоящее время нет активного слёта. Капитан команды может активировать слёт из архива или настроить его в панели управления.
+                    </p>
+                  </div>
+                  {isCaptain && excursions.length > 0 && (
+                    <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const first = excursions[0];
+                          try {
+                            const res = await fetch(`/api/excursions/${first.id}`, {
+                              method: 'PUT',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ ...first, isActive: true })
+                            });
+                            if (res.ok) {
+                              const data = await res.json();
+                              if (data.excursions && onUpdateExcursions) onUpdateExcursions(data.excursions);
+                            }
+                          } catch (e) {
+                            console.error(e);
+                          }
+                        }}
+                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase rounded-xl shadow-sm transition-all cursor-pointer"
+                      >
+                        Активировать слёт «{excursions[0].title}»
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
@@ -1319,6 +1410,10 @@ export default function HomeRallyTab({
             participants={participants}
             currentUser={currentUser}
             isAdmin={isAdmin}
+            contestHistory={contestHistory}
+            onUpdateContestHistory={onUpdateContestHistory}
+            excursions={excursions}
+            onUpdateExcursions={onUpdateExcursions}
           />
         </div>
       )}
@@ -1331,6 +1426,9 @@ export default function HomeRallyTab({
             currentUser={currentUser}
             isAdmin={isAdmin}
             onIdeaAdded={onIdeaAdded}
+            onIdeaUpdated={onIdeaUpdated}
+            onIdeaArchived={onIdeaArchived}
+            onIdeaDeleted={onIdeaDeleted}
             onIdeaVoted={onIdeaVoted}
             onCommentAdded={onCommentAdded}
             onStatusChanged={onStatusChanged}
@@ -1438,24 +1536,82 @@ export default function HomeRallyTab({
                   <span className="text-xs font-black text-amber-950 uppercase">Слёт активен (актуальный сбор)</span>
                 </label>
 
-                <div className="flex items-center gap-2 justify-end">
-                  <button 
-                    type="button" 
-                    onClick={() => setEditingExcursion(null)} 
-                    className="px-4 py-2 bg-amber-200 hover:bg-amber-300 text-amber-900 rounded-xl text-xs font-bold transition-colors"
-                  >
-                    Отмена
-                  </button>
-                  <button 
-                    type="submit" 
-                    disabled={isSavingExcursion}
-                    className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-black uppercase shadow-md transition-colors"
-                  >
-                    {isSavingExcursion ? 'Сохранение...' : 'Сохранить изменения'}
-                  </button>
+                <div className="flex items-center justify-between gap-2 pt-1">
+                  {isCaptain && (
+                    <button 
+                      type="button" 
+                      onClick={() => setDeleteConfirmExcursion(editingExcursion)} 
+                      className="px-3.5 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Trash2 size={14} />
+                      <span>Удалить слёт</span>
+                    </button>
+                  )}
+                  <div className="flex items-center gap-2 ml-auto">
+                    <button 
+                      type="button" 
+                      onClick={() => setEditingExcursion(null)} 
+                      className="px-4 py-2 bg-amber-200 hover:bg-amber-300 text-amber-900 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                    >
+                      Отмена
+                    </button>
+                    <button 
+                      type="submit" 
+                      disabled={isSavingExcursion}
+                      className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-black uppercase shadow-md transition-colors cursor-pointer"
+                    >
+                      {isSavingExcursion ? 'Сохранение...' : 'Сохранить изменения'}
+                    </button>
+                  </div>
                 </div>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: CONFIRM DELETE EXCURSION */}
+      {deleteConfirmExcursion && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border-4 border-red-500 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center shrink-0">
+                <Trash2 size={24} />
+              </div>
+              <div>
+                <h3 className="font-black text-base uppercase text-stone-900">Удалить слёт?</h3>
+                <p className="text-xs text-stone-500 font-medium">Подтверждение удаления капитаном</p>
+              </div>
+            </div>
+
+            <div className="p-3.5 bg-red-50 border border-red-200 rounded-2xl text-xs text-red-900 font-bold space-y-1">
+              <div>Слёт: <span className="font-black text-red-700">«{deleteConfirmExcursion.title}»</span></div>
+              <div className="text-[11px] text-stone-600 font-medium">
+                Локация: {deleteConfirmExcursion.location} • Даты: {deleteConfirmExcursion.date}
+              </div>
+              <p className="text-[11px] text-red-600 font-normal pt-1">
+                Все отметки присутствия участников команды на этом слёте будут также безвозвратно удалены.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                disabled={isDeletingExcursion}
+                onClick={() => setDeleteConfirmExcursion(null)}
+                className="px-4 py-2 bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingExcursion}
+                onClick={() => handleDeleteExcursion(deleteConfirmExcursion.id)}
+                className="px-5 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-black text-xs uppercase rounded-xl shadow-md transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                {isDeletingExcursion ? 'Удаление...' : 'Да, удалить слёт'}
+              </button>
+            </div>
           </div>
         </div>
       )}

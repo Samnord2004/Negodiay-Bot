@@ -126,6 +126,7 @@ export default function GalleryTab({
 
   // Modal and Lightbox states
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploadAnchorPos, setUploadAnchorPos] = useState<{ top: number; right: number } | null>(null);
   const [uploadMode, setUploadMode] = useState<'cloud' | 'photo'>('cloud');
   const [activeLightboxPhoto, setActiveLightboxPhoto] = useState<GalleryPhoto | null>(null);
 
@@ -202,7 +203,14 @@ export default function GalleryTab({
     reader.readAsDataURL(file);
   };
 
-  const openUploadModal = (mode: 'cloud' | 'photo' = 'cloud') => {
+  const openUploadModal = (mode: 'cloud' | 'photo' = 'cloud', e?: React.MouseEvent) => {
+    if (e) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      setUploadAnchorPos({
+        top: rect.bottom + 8,
+        right: Math.max(12, window.innerWidth - rect.right)
+      });
+    }
     setUploadMode(mode);
     setUploadError('');
     setNewTitle('');
@@ -303,8 +311,8 @@ export default function GalleryTab({
           <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 w-full lg:w-auto shrink-0">
             <button
               type="button"
-              onClick={() => openUploadModal('cloud')}
-              className="flex-1 sm:flex-none px-4 py-3 bg-red-600 hover:bg-red-700 text-yellow-300 font-black uppercase text-xs sm:text-sm rounded-2xl shadow-md transition-all hover:scale-[1.02] flex items-center justify-center gap-2 border-2 border-red-700"
+              onClick={(e) => openUploadModal('cloud', e)}
+              className="flex-1 sm:flex-none px-4 py-3 bg-red-600 hover:bg-red-700 text-yellow-300 font-black uppercase text-xs sm:text-sm rounded-2xl shadow-md transition-all hover:scale-[1.02] flex items-center justify-center gap-2 border-2 border-red-700 cursor-pointer"
               title="Добавить ссылку на архив в Яндекс Диске или облаке"
             >
               <HardDrive size={18} className="text-yellow-300" />
@@ -313,8 +321,8 @@ export default function GalleryTab({
 
             <button
               type="button"
-              onClick={() => openUploadModal('photo')}
-              className="flex-1 sm:flex-none px-4 py-3 bg-amber-900 hover:bg-black text-yellow-300 font-black uppercase text-xs sm:text-sm rounded-2xl shadow-md transition-all hover:scale-[1.02] flex items-center justify-center gap-2"
+              onClick={(e) => openUploadModal('photo', e)}
+              className="flex-1 sm:flex-none px-4 py-3 bg-amber-900 hover:bg-black text-yellow-300 font-black uppercase text-xs sm:text-sm rounded-2xl shadow-md transition-all hover:scale-[1.02] flex items-center justify-center gap-2 cursor-pointer"
               title="Загрузить фотографию напрямую"
             >
               <Camera size={18} className="text-yellow-300" />
@@ -527,16 +535,16 @@ export default function GalleryTab({
           <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
             <button
               type="button"
-              onClick={() => openUploadModal('cloud')}
-              className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-yellow-300 font-black uppercase text-xs rounded-xl shadow-xs flex items-center gap-2"
+              onClick={(e) => openUploadModal('cloud', e)}
+              className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-yellow-300 font-black uppercase text-xs rounded-xl shadow-xs flex items-center gap-2 cursor-pointer"
             >
               <HardDrive size={15} />
               Добавить ссылку на Яндекс.Диск ({selectedYear !== 'all' ? selectedYear : currentYear})
             </button>
             <button
               type="button"
-              onClick={() => openUploadModal('photo')}
-              className="px-5 py-2.5 bg-stone-800 hover:bg-stone-900 text-yellow-300 font-black uppercase text-xs rounded-xl shadow-xs flex items-center gap-2"
+              onClick={(e) => openUploadModal('photo', e)}
+              className="px-5 py-2.5 bg-stone-800 hover:bg-stone-900 text-yellow-300 font-black uppercase text-xs rounded-xl shadow-xs flex items-center gap-2 cursor-pointer"
             >
               <Camera size={15} />
               Загрузить фото
@@ -755,10 +763,25 @@ export default function GalleryTab({
         </div>
       )}
 
-      {/* UPLOAD / ADD ARCHIVE MODAL */}
+      {/* UPLOAD / ADD ARCHIVE MODAL (Anchored to trigger button) */}
       {showUploadModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-3 sm:p-4 animate-in fade-in duration-150">
-          <div className="bg-amber-50 border-4 border-red-600 rounded-3xl shadow-2xl w-full max-w-xl max-h-[92vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">
+        <>
+          <div 
+            className="fixed inset-0 z-40 bg-stone-950/35 backdrop-blur-2xs"
+            onClick={() => setShowUploadModal(false)}
+          />
+          <div 
+            role="dialog"
+            aria-modal="true"
+            aria-label="Загрузка фото или архива"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              top: `${Math.min(window.innerHeight - 560, Math.max(12, uploadAnchorPos?.top ?? 80))}px`,
+              right: `${Math.max(12, uploadAnchorPos?.right ?? 16)}px`,
+              maxHeight: 'calc(100vh - 90px)',
+            }}
+            className="fixed z-50 bg-amber-50 border-4 border-red-600 rounded-3xl shadow-2xl w-[92vw] max-w-xl max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+          >
             
             {/* Modal Header */}
             <div className="bg-yellow-400 border-b-4 border-red-600 px-6 py-4 flex items-center justify-between shrink-0">
@@ -1078,7 +1101,7 @@ export default function GalleryTab({
               </div>
             </form>
           </div>
-        </div>
+        </>
       )}
 
       {/* LIGHTBOX MODAL */}

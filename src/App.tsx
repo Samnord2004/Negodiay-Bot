@@ -34,14 +34,14 @@ import { formatChatTimestamp, deduplicateChatMessages } from './utils/chatUtils'
 import { 
   Participant, Excursion, ChatMessage, BotConfig, 
   TaskItem, MenuItem, GroceryItem, InventoryItem, 
-  Contest, GalleryPhoto, TeamDocument, FundRecord, CreativityIdea,
+  Contest, ContestHistoryEntry, GalleryPhoto, TeamDocument, FundRecord, CreativityIdea,
   TeamStory, UserRole, ROLE_DEFINITIONS, ThemeConfig, DEFAULT_THEME_CONFIG,
   RallyCoin
 } from './types';
 import { 
   initialParticipants, initialExcursions, initialMessages, 
   initialBotConfig, initialTasks, initialMenuItems, 
-  initialGroceryItems, initialInventoryItems, initialContests,
+  initialGroceryItems, initialInventoryItems, initialContests, initialContestHistory,
   initialPhotos, initialDocuments, initialFundRecords, initialCreativityIdeas,
   INITIAL_STORIES, initialRallyCoins
 } from './mockData';
@@ -92,6 +92,7 @@ export default function App() {
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>(initialInventoryItems);
   const [botConfig, setBotConfig] = useState<BotConfig>(initialBotConfig);
   const [contests, setContests] = useState<Contest[]>(initialContests);
+  const [contestHistory, setContestHistory] = useState<ContestHistoryEntry[]>(initialContestHistory);
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     try {
       const saved = localStorage.getItem('negodyai_chat_messages_v2');
@@ -242,6 +243,7 @@ export default function App() {
           });
         }
         if (data.contests) setContests(data.contests);
+        if (data.contestHistory && Array.isArray(data.contestHistory)) setContestHistory(data.contestHistory);
         if (data.messages && Array.isArray(data.messages) && data.messages.length > 0) {
           setMessages(prev => {
             const merged = deduplicateChatMessages([...prev, ...data.messages]);
@@ -295,6 +297,7 @@ export default function App() {
             inventoryItems,
             botConfig,
             contests,
+            contestHistory,
             messages,
             fundRecords,
             stories,
@@ -307,7 +310,7 @@ export default function App() {
     }, 1200);
 
     return () => clearTimeout(timer);
-  }, [participants, excursions, tasks, menuItems, groceryItems, inventoryItems, botConfig, contests, messages, fundRecords, stories, rallyCoins]);
+  }, [participants, excursions, tasks, menuItems, groceryItems, inventoryItems, botConfig, contests, contestHistory, messages, fundRecords, stories, rallyCoins]);
 
   // Persist messages to local storage whenever message array updates
   useEffect(() => {
@@ -991,8 +994,35 @@ export default function App() {
             onUpdateGroceries={setGroceryItems}
             contests={contests}
             onUpdateContests={setContests}
+            contestHistory={contestHistory}
+            onUpdateContestHistory={setContestHistory}
             creativityIdeas={creativityIdeas}
             onIdeaAdded={(idea) => setCreativityIdeas(prev => [idea, ...prev])}
+            onIdeaUpdated={(updatedIdea) => {
+              const shouldArchive = updatedIdea.status === 'done' && updatedIdea.captainApproval === 'approved';
+              const finalizedIdea = shouldArchive ? {
+                ...updatedIdea,
+                isArchived: true,
+                archivedAt: updatedIdea.archivedAt || new Date().toISOString()
+              } : updatedIdea;
+              setCreativityIdeas(prev => prev.map(i => i.id === finalizedIdea.id ? finalizedIdea : i));
+            }}
+            onIdeaArchived={(id, archive) => {
+              setCreativityIdeas(prev => prev.map(i => {
+                if (i.id === id) {
+                  return {
+                    ...i,
+                    isArchived: archive,
+                    status: archive ? (i.status === 'done' ? 'done' : 'archived') : (i.status === 'archived' ? 'idea' : i.status),
+                    archivedAt: archive ? new Date().toISOString() : undefined
+                  };
+                }
+                return i;
+              }));
+            }}
+            onIdeaDeleted={(id) => {
+              setCreativityIdeas(prev => prev.filter(i => i.id !== id));
+            }}
             onIdeaVoted={(id) => {
               if (!currentUser) return;
               setCreativityIdeas(prev => prev.map(i => {
@@ -1018,7 +1048,17 @@ export default function App() {
               setCreativityIdeas(prev => prev.map(i => i.id === id ? { ...i, comments: [...(i.comments || []), newComment] } : i));
             }}
             onStatusChanged={(id, status) => {
-              setCreativityIdeas(prev => prev.map(i => i.id === id ? { ...i, status } : i));
+              setCreativityIdeas(prev => prev.map(i => {
+                if (i.id === id) {
+                  const shouldArchive = status === 'done' && i.captainApproval === 'approved';
+                  return {
+                    ...i,
+                    status,
+                    ...(shouldArchive ? { isArchived: true, archivedAt: i.archivedAt || new Date().toISOString() } : {})
+                  };
+                }
+                return i;
+              }));
             }}
             currentUser={currentUser}
             isAdmin={currentUser?.role === 'admin'}
@@ -1127,6 +1167,8 @@ export default function App() {
             onUpdateInventoryItems={setInventoryItems}
             contests={contests}
             onUpdateContests={setContests}
+            contestHistory={contestHistory}
+            onUpdateContestHistory={setContestHistory}
             excursions={excursions}
             onUpdateExcursions={setExcursions}
             botConfig={botConfig}

@@ -7,11 +7,13 @@ import {
 import { 
   Participant, TaskItem, MenuItem, GroceryItem, 
   InventoryItem, Contest, Excursion, BotConfig, InventoryCondition,
-  UserRole, ROLE_DEFINITIONS, isUniqueRole, RallyCoin
+  UserRole, ROLE_DEFINITIONS, isUniqueRole, RallyCoin, ContestHistoryEntry
 } from '../types';
+import { initialContestHistory } from '../mockData';
 import { getSafeAvatar, getParticipantAvatar } from '../utils/avatar';
 import DeleteParticipantModal from './DeleteParticipantModal';
 import CaptainCoinPanel from './game/CaptainCoinPanel';
+import ArchiveRallyModal from './ArchiveRallyModal';
 
 interface AdminPanelProps {
   isAdmin: boolean;
@@ -30,6 +32,8 @@ interface AdminPanelProps {
   onUpdateInventoryItems: (i: InventoryItem[]) => void;
   contests: Contest[];
   onUpdateContests: (c: Contest[]) => void;
+  contestHistory?: ContestHistoryEntry[];
+  onUpdateContestHistory?: (h: ContestHistoryEntry[]) => void;
   excursions: Excursion[];
   onUpdateExcursions: (e: Excursion[]) => void;
   botConfig: BotConfig;
@@ -68,6 +72,8 @@ export default function AdminPanel({
   onUpdateInventoryItems,
   contests,
   onUpdateContests,
+  contestHistory = initialContestHistory,
+  onUpdateContestHistory = () => {},
   excursions,
   onUpdateExcursions,
   botConfig,
@@ -138,6 +144,8 @@ export default function AdminPanel({
   // Excursion state & forms
   const [showAddExcursion, setShowAddExcursion] = useState(false);
   const [editingExcursion, setEditingExcursion] = useState<Excursion | null>(null);
+  const [rallyToDelete, setRallyToDelete] = useState<Excursion | null>(null);
+  const [isDeletingRally, setIsDeletingRally] = useState(false);
   const [isSavingExcursion, setIsSavingExcursion] = useState(false);
   const [isRefreshingPending, setIsRefreshingPending] = useState(false);
 
@@ -342,6 +350,7 @@ export default function AdminPanel({
   };
 
   const handleDeleteExcursion = async (id: string) => {
+    setIsDeletingRally(true);
     try {
       const res = await fetch(`/api/excursions/${id}`, {
         method: 'DELETE'
@@ -353,30 +362,133 @@ export default function AdminPanel({
         } else {
           onUpdateExcursions(excursions.filter(e => e.id !== id));
         }
+        setRallyToDelete(null);
+        if (editingExcursion?.id === id) {
+          setEditingExcursion(null);
+        }
       }
     } catch (err) {
       console.error("Delete excursion error:", err);
+    } finally {
+      setIsDeletingRally(false);
     }
   };
 
+  const [archivingExcursion, setArchivingExcursion] = useState<Excursion | null>(null);
+
   const handleToggleExcursionActive = async (ex: Excursion) => {
+    if (ex.isActive) {
+      // Prompt captain to enter contest results, warn about missing places, and archive
+      setArchivingExcursion(ex);
+      return;
+    }
+
     try {
       const res = await fetch(`/api/excursions/${ex.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isActive: !ex.isActive })
+        body: JSON.stringify({ isActive: true })
       });
       if (res.ok) {
         const data = await res.json();
         if (data.excursions) {
           onUpdateExcursions(data.excursions);
         } else {
-          onUpdateExcursions(excursions.map(e => e.id === ex.id ? { ...e, isActive: !e.isActive } : e));
+          onUpdateExcursions(excursions.map(e => e.id === ex.id ? { ...e, isActive: true } : e));
         }
       }
     } catch (err) {
-      console.error("Toggle excursion error:", err);
+      console.error("Activate excursion error:", err);
     }
+  };
+
+  const handleConfirmArchiveFromAdmin = async ({
+    excursionId,
+    year,
+    overallPlace,
+    updatedContests
+  }: {
+    excursionId: string;
+    year: string;
+    overallPlace: string;
+    updatedContests: Contest[];
+  }) => {
+    // 1. Build updated history
+    let newHistory = [...contestHistory];
+
+    if (overallPlace && overallPlace.trim()) {
+      const overallIdx = newHistory.findIndex(h => 
+        h.isOverall || h.category === 'Общий зачёт' || h.title.toLowerCase().includes('общий зачёт')
+      );
+      if (overallIdx >= 0) {
+        newHistory[overallIdx] = {
+          ...newHistory[overallIdx],
+          results: { ...newHistory[overallIdx].results, [year]: overallPlace.trim() }
+        };
+      } else {
+        newHistory.unshift({
+          id: 'ch_overall_' + Date.now(),
+          title: '🏆 Общий зачёт слёта',
+          category: 'Общий зачёт',
+          isOverall: true,
+          results: { [year]: overallPlace.trim() }
+        });
+      }
+    }
+
+    updatedContests.forEach((c, idx) => {
+      const placeVal = (c.place || '').trim();
+      if (!placeVal) return;
+      const cleanTitle = c.title.trim();
+      const existingIdx = newHistory.findIndex(h => 
+        !h.isOverall && (h.title.toLowerCase() === cleanTitle.toLowerCase() || h.id === c.id)
+      );
+
+      if (existingIdx >= 0) {
+        newHistory[existingIdx] = {
+          ...newHistory[existingIdx],
+          category: c.category || newHistory[existingIdx].category || 'Туризм',
+          results: { ...newHistory[existingIdx].results, [year]: placeVal }
+        };
+      } else {
+        newHistory.push({
+          id: 'ch_' + Date.now() + '_' + idx,
+          title: cleanTitle,
+          category: c.category || 'Туризм',
+          results: { [year]: placeVal }
+        });
+      }
+    });
+
+    onUpdateContestHistory(newHistory);
+    try {
+      await fetch('/api/contests/history', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ history: newHistory })
+      });
+    } catch (err) {
+      console.error('History sync error:', err);
+    }
+
+    // Zero out contests for this excursion
+    const remainingContests = contests.filter(c => c.excursionId && c.excursionId !== excursionId);
+    onUpdateContests(remainingContests);
+
+    // Archive excursion
+    const updatedExcursions = excursions.map(e => e.id === excursionId ? { ...e, isActive: false } : e);
+    onUpdateExcursions(updatedExcursions);
+    try {
+      await fetch(`/api/excursions/${excursionId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isActive: false })
+      });
+    } catch (err) {
+      console.error('Archive excursion error:', err);
+    }
+
+    setArchivingExcursion(null);
   };
 
   // Verify if current user is the Captain
@@ -1109,21 +1221,34 @@ export default function AdminPanel({
                       <span className="text-xs font-black text-amber-950 uppercase">Слёт активен (актуальный сбор)</span>
                     </label>
 
-                    <div className="flex items-center gap-2 justify-end">
-                      <button 
-                        type="button" 
-                        onClick={() => setEditingExcursion(null)} 
-                        className="px-4 py-2 bg-amber-200 hover:bg-amber-300 text-amber-900 rounded-xl text-xs font-bold transition-colors"
+                    <div className="flex items-center justify-between gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRallyToDelete(editingExcursion);
+                        }}
+                        className="px-3.5 py-2 bg-red-100 hover:bg-red-200 text-red-700 font-black rounded-xl text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
                       >
-                        Отмена
+                        <Trash2 size={14} />
+                        <span>Удалить слёт</span>
                       </button>
-                      <button 
-                        type="submit" 
-                        disabled={isSavingExcursion}
-                        className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-black uppercase shadow-md transition-colors"
-                      >
-                        {isSavingExcursion ? 'Сохранение...' : 'Сохранить изменения'}
-                      </button>
+
+                      <div className="flex items-center gap-2">
+                        <button 
+                          type="button" 
+                          onClick={() => setEditingExcursion(null)} 
+                          className="px-4 py-2 bg-amber-200 hover:bg-amber-300 text-amber-900 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                        >
+                          Отмена
+                        </button>
+                        <button 
+                          type="submit" 
+                          disabled={isSavingExcursion}
+                          className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-black uppercase shadow-md transition-colors cursor-pointer"
+                        >
+                          {isSavingExcursion ? 'Сохранение...' : 'Сохранить изменения'}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </form>
@@ -1192,12 +1317,8 @@ export default function AdminPanel({
 
                     <button
                       type="button"
-                      onClick={() => {
-                        if (window.confirm(`Удалить слёт «${ex.title}»?`)) {
-                          handleDeleteExcursion(ex.id);
-                        }
-                      }}
-                      className="p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      onClick={() => setRallyToDelete(ex)}
+                      className="p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
                       title="Удалить слёт"
                     >
                       <Trash size={16} />
@@ -1206,6 +1327,52 @@ export default function AdminPanel({
                 </div>
               ))
             )}
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: CONFIRM DELETE RALLY / EXCURSION */}
+      {rallyToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border-4 border-red-500 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center shrink-0">
+                <Trash2 size={24} />
+              </div>
+              <div>
+                <h3 className="font-black text-base uppercase text-stone-900">Удалить слёт?</h3>
+                <p className="text-xs text-stone-500 font-medium">Подтверждение удаления капитаном</p>
+              </div>
+            </div>
+
+            <div className="p-3.5 bg-red-50 border border-red-200 rounded-2xl text-xs text-red-900 font-bold space-y-1">
+              <div>Слёт: <span className="font-black text-red-700">«{rallyToDelete.title}»</span></div>
+              <div className="text-[11px] text-stone-600 font-medium">
+                Локация: {rallyToDelete.location} • Даты: {rallyToDelete.date}
+              </div>
+              <p className="text-[11px] text-red-600 font-normal pt-1">
+                Все отметки присутствия участников на этом слёте будут также безвозвратно удалены.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                disabled={isDeletingRally}
+                onClick={() => setRallyToDelete(null)}
+                className="px-4 py-2 bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingRally}
+                onClick={() => handleDeleteExcursion(rallyToDelete.id)}
+                className="px-5 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-black text-xs uppercase rounded-xl shadow-md transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                {isDeletingRally ? 'Удаление...' : 'Да, удалить слёт'}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1468,6 +1635,18 @@ export default function AdminPanel({
             </div>
           </div>
         </div>
+      )}
+
+      {/* ARCHIVE RALLY MODAL */}
+      {archivingExcursion && (
+        <ArchiveRallyModal
+          isOpen={!!archivingExcursion}
+          onClose={() => setArchivingExcursion(null)}
+          excursion={archivingExcursion}
+          contests={contests}
+          contestHistory={contestHistory}
+          onConfirmArchive={handleConfirmArchiveFromAdmin}
+        />
       )}
 
     </div>

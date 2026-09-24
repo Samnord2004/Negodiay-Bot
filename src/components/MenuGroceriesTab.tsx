@@ -56,7 +56,7 @@ export default function MenuGroceriesTab({
   const [showAddGrocery, setShowAddGrocery] = useState(false);
   const [gName, setGName] = useState('');
   const [gQty, setGQty] = useState('');
-  const [gCategory, setGCategory] = useState<'Еда' | 'Расходники' | 'Жидкая валюта'>('Еда');
+  const [gCategory, setGCategory] = useState<'Еда' | 'Расходники' | 'Алкоголь'>('Еда');
   const [gResponsible, setGResponsible] = useState(teamChef?.name || 'Шеф-повар');
   const [gCost, setGCost] = useState<number>(0);
 
@@ -113,7 +113,13 @@ export default function MenuGroceriesTab({
   };
 
   const filteredDishes = menuItems.filter(d => selectedDay === 'all' || d.day.includes(`День ${selectedDay}`));
-  const filteredGroceries = groceryItems.filter(g => groceryCategory === 'all' || g.category === groceryCategory);
+  const filteredGroceries = groceryItems.filter(g => {
+    if (groceryCategory === 'all') return true;
+    if (groceryCategory === 'Алкоголь') {
+      return g.category === 'Алкоголь' || g.category === 'Жидкая валюта';
+    }
+    return g.category === groceryCategory;
+  });
 
   const boughtGroceriesCount = groceryItems.filter(g => g.isBought).length;
   const totalGroceryCost = groceryItems.reduce((acc, curr) => acc + (curr.estimatedCost || 0), 0);
@@ -447,7 +453,7 @@ export default function MenuGroceriesTab({
                 >
                   Все ({groceryItems.length})
                 </button>
-                {(['Еда', 'Расходники', 'Жидкая валюта'] as const).map(cat => (
+                {(['Еда', 'Расходники', 'Алкоголь'] as const).map(cat => (
                   <button
                     key={cat}
                     type="button"
@@ -542,7 +548,7 @@ export default function MenuGroceriesTab({
                   >
                     <option value="Еда">Еда (Провизия)</option>
                     <option value="Расходники">Расходники (Угли, салфетки, мешки)</option>
-                    <option value="Жидкая валюта">Жидкая валюта (Напитки, чай, кофе)</option>
+                    <option value="Алкоголь">Алкоголь</option>
                   </select>
                 </div>
                 <div>
@@ -622,7 +628,7 @@ export default function MenuGroceriesTab({
                         {item.quantity}
                       </span>
                       <span>
-                        Категория: <b className="text-stone-700">{item.category}</b>
+                        Категория: <b className="text-stone-700">{item.category === 'Жидкая валюта' ? 'Алкоголь' : item.category}</b>
                       </span>
                     </div>
                   </div>

@@ -38,6 +38,38 @@ const SECTOR_COLORS = [
   '#6366F1'  // Indigo
 ];
 
+/**
+ * Accurately determines which participant is located directly under the top pointer (at 12 o'clock)
+ * for any wheel rotation angle (in degrees).
+ *
+ * Coordinate system:
+ * In HTML Canvas: 0° is 3 o'clock, 90° is 6 o'clock, 180° is 9 o'clock, 270° is 12 o'clock (TOP).
+ * When canvas has CSS `transform: rotate(R deg)`, it rotates clockwise by R degrees.
+ * A slice drawn at canvas angle θ ends up at screen angle (θ + R) % 360.
+ * At the top pointer, screen angle is 270°.
+ * Thus: (θ + R) ≡ 270° (mod 360)  =>  θ ≡ (270 - (R % 360)) (mod 360).
+ */
+export const getParticipantAtWheelAngle = (
+  rotDeg: number,
+  participantList: Participant[]
+): { winner: Participant; winnerIndex: number } => {
+  const numSlices = participantList.length;
+  if (numSlices === 0) {
+    throw new Error('No participants on the wheel');
+  }
+  const sliceDegrees = 360 / numSlices;
+  
+  const normalizedRot = ((rotDeg % 360) + 360) % 360;
+  const canvasAngleAtPointer = ((270 - normalizedRot) % 360 + 360) % 360;
+  
+  const winnerIndex = Math.min(
+    numSlices - 1,
+    Math.floor(canvasAngleAtPointer / sliceDegrees)
+  );
+  
+  return { winner: participantList[winnerIndex], winnerIndex };
+};
+
 export default function WheelOfFortune({
   participants,
   coins,
@@ -224,35 +256,51 @@ export default function WheelOfFortune({
     setIsSpinning(true);
     setWinner(null);
 
-    // 1. Pick winner with WEIGHTED RANDOM (fewer coins = higher chance!)
+    // 1. Pick target candidate with WEIGHTED RANDOM (fewer coins = higher chance!)
     let rand = Math.random() * totalWeight;
-    let chosen = weightedParticipants[0].participant;
+    let candidate = weightedParticipants[0].participant;
     for (const item of weightedParticipants) {
       if (rand < item.weight) {
-        chosen = item.participant;
+        candidate = item.participant;
         break;
       }
       rand -= item.weight;
     }
 
-    const winnerIndex = activeParticipants.findIndex(p => p.id === chosen.id);
+    const targetIndex = activeParticipants.findIndex(p => p.id === candidate.id);
     const numSlices = activeParticipants.length;
     const sliceDegrees = 360 / numSlices;
 
-    // The pointer is at TOP (270 degrees in canvas space / standard angle)
-    // Angle of sector center:
-    const targetSectorCenter = winnerIndex * sliceDegrees + (sliceDegrees / 2);
-    
-    // We want this sector to end up at 270 deg (top):
-    // Final wheel rotation mod 360 should make: (270 - targetSectorCenter)
-    const baseTarget = (270 - targetSectorCenter + 360) % 360;
+    // Center of this sector in canvas space (0° to 360°):
+    const targetSectorCenter = targetIndex * sliceDegrees + (sliceDegrees / 2);
 
-    // Add 6 to 8 full spins for exciting suspense
-    const fullSpins = 360 * (6 + Math.floor(Math.random() * 2));
-    const randomSubSliceJiggle = (Math.random() - 0.5) * (sliceDegrees * 0.7); // subtle offset within slice
-    const totalRotation = rotation + fullSpins + baseTarget + randomSubSliceJiggle;
+    // In canvas coordinates, 270° is 12 o'clock (the top pointer).
+    // When wheel rotates by R degrees clockwise, canvas angle θ ends up at (θ + R) % 360 on screen.
+    // We want targetSectorCenter to land directly under the top pointer:
+    // (targetSectorCenter + R) ≡ 270° (mod 360)
+    // => R ≡ (270 - targetSectorCenter) (mod 360)
+    const desiredTargetMod = ((270 - targetSectorCenter) % 360 + 360) % 360;
 
-    setRotation(totalRotation);
+    // Current wheel rotation normalized mod 360:
+    const currentMod = ((rotation % 360) + 360) % 360;
+
+    // Distance clockwise from currentMod to desiredTargetMod:
+    let forwardAngle = (desiredTargetMod - currentMod + 360) % 360;
+    if (forwardAngle < 20) {
+      forwardAngle += 360;
+    }
+
+    // Add 7 to 9 full spins (360 * N) for exciting suspense
+    const fullSpins = 360 * (7 + Math.floor(Math.random() * 3));
+
+    // Optional safe subtle offset, strictly within the central 20% of the slice
+    // (so it never approaches the boundary line between sectors):
+    const maxSafeJiggle = sliceDegrees * 0.2;
+    const safeJiggle = (Math.random() - 0.5) * maxSafeJiggle;
+
+    const finalRotation = rotation + fullSpins + forwardAngle + safeJiggle;
+
+    setRotation(finalRotation);
 
     // Audio tick ticker simulation
     if (soundEnabled) {
@@ -263,10 +311,16 @@ export default function WheelOfFortune({
       setTimeout(() => clearInterval(interval), 4000);
     }
 
-    // Wheel stops after 5 seconds
+    // Wheel stops after 5.1 seconds
     setTimeout(async () => {
       setIsSpinning(false);
-      setWinner(chosen);
+
+      // CRITICAL REQUIREMENT:
+      // The prize winner is STRICTLY and EXCLUSIVELY the participant whose sector
+      // stopped directly under the top pointer arrow!
+      const { winner: actualWinner } = getParticipantAtWheelAngle(finalRotation, activeParticipants);
+
+      setWinner(actualWinner);
       setShowWinnerModal(true);
 
       if (soundEnabled) {
@@ -283,12 +337,12 @@ export default function WheelOfFortune({
         } catch (e) {}
       }
 
-      // Automatically award coin to winner
+      // Automatically award coin to the EXACT actual winner under the pointer:
       try {
         await onAwardCoin({
-          participantId: chosen.id,
-          participantName: chosen.name,
-          participantNickname: chosen.nickname || chosen.name,
+          participantId: actualWinner.id,
+          participantName: actualWinner.name,
+          participantNickname: actualWinner.nickname || actualWinner.name,
           taskTitle: "Удача Негодяя (Колесо Фортуны)",
           category: 'fortune',
           comment: "Счастливый сектор в ежемесячном Колесе Фортуны команды!",
@@ -354,14 +408,17 @@ export default function WheelOfFortune({
         {/* LEFT / CENTER: THE WHEEL CANVAS CONTAINER (7 COLS) */}
         <div className="lg:col-span-7 flex flex-col items-center justify-center relative p-4 sm:p-8 bg-white border border-stone-200 rounded-3xl shadow-xs">
           
-          {/* Wheel Pointer Triangle (Top Indicator) */}
-          <div className="absolute top-2 sm:top-6 z-20 flex flex-col items-center">
-            <div className="w-0 h-0 border-l-[14px] border-l-transparent border-r-[14px] border-r-transparent border-t-[26px] border-t-amber-500 drop-shadow-md" />
-            <div className="w-3 h-3 rounded-full bg-amber-200 border-2 border-amber-600 -mt-2 shadow-xs" />
-          </div>
-
-          {/* Rotating Canvas Wrapper */}
+          {/* Rotating Canvas Wrapper with Centered Top Pointer */}
           <div className="relative w-[340px] h-[340px] sm:w-[420px] sm:h-[420px] flex items-center justify-center">
+            
+            {/* Wheel Pointer Triangle (Top Indicator - strictly centered at 12 o'clock / 270°) */}
+            <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center pointer-events-none drop-shadow-lg">
+              <div className="w-0 h-0 border-l-[16px] border-l-transparent border-r-[16px] border-r-transparent border-t-[30px] border-t-red-600 filter drop-shadow-md" />
+              <div className="w-3.5 h-3.5 rounded-full bg-yellow-300 border-2 border-amber-950 -mt-2 shadow-xs flex items-center justify-center text-[7px] font-black text-amber-950">
+                ▼
+              </div>
+            </div>
+
             <canvas
               ref={canvasRef}
               width={420}
@@ -373,6 +430,17 @@ export default function WheelOfFortune({
               }}
             />
           </div>
+
+          {/* Real-time Indicator: Exactly which sector is currently under the pointer */}
+          {activeParticipants.length > 0 && (
+            <div className="mt-3 text-xs font-bold text-stone-600 flex items-center gap-1.5 bg-stone-100 px-3.5 py-1.5 rounded-full border border-stone-300 shadow-2xs">
+              <span>Стрелка указывает на:</span>
+              <span className="text-red-700 font-black text-xs uppercase bg-white px-2 py-0.5 rounded-md border border-red-200 shadow-2xs">
+                {getParticipantAtWheelAngle(rotation, activeParticipants).winner.nickname || 
+                 getParticipantAtWheelAngle(rotation, activeParticipants).winner.name}
+              </span>
+            </div>
+          )}
 
           {/* SPIN ACTION BUTTON */}
           <div className="mt-6 flex flex-col items-center space-y-2">

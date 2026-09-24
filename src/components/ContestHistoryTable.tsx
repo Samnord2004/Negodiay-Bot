@@ -37,14 +37,22 @@ export default function ContestHistoryTable({
   // Editing cell state: { contestId, year, currentPlace }
   const [editingCell, setEditingCell] = useState<{ contestId: string; year: string; currentPlace: string } | null>(null);
   const [cellInputValue, setCellInputValue] = useState('');
+  const [cellAnchorPos, setCellAnchorPos] = useState<{ top: number; left: number; bottom: number } | null>(null);
+
+  // Discipline name editing state
+  const [editingDisciplineId, setEditingDisciplineId] = useState<string | null>(null);
+  const [editingTitleInput, setEditingTitleInput] = useState('');
+  const [editingCategoryInput, setEditingCategoryInput] = useState<string>('Туризм');
 
   // Add new contest discipline modal state
   const [showAddContestModal, setShowAddContestModal] = useState(false);
+  const [addDisciplineAnchorPos, setAddDisciplineAnchorPos] = useState<{ top: number; left: number; bottom: number } | null>(null);
   const [newTitle, setNewTitle] = useState('');
   const [newCategory, setNewCategory] = useState<'Общий зачёт' | 'Творчество' | 'Туризм' | 'Спорт' | 'Лагерь'>('Туризм');
 
   // Add new year state
   const [showAddYearModal, setShowAddYearModal] = useState(false);
+  const [addYearAnchorPos, setAddYearAnchorPos] = useState<{ top: number; left: number; bottom: number } | null>(null);
   const [newYearInput, setNewYearInput] = useState('');
 
   // Save status notification
@@ -98,6 +106,21 @@ export default function ContestHistoryTable({
       );
     });
   }, [history, searchQuery]);
+
+  // Separate standard contests from overall ranking
+  const standardContests = useMemo(() => {
+    return filteredContests.filter(c => !c.isOverall);
+  }, [filteredContests]);
+
+  const overallContest = useMemo(() => {
+    return history.find(c => c.isOverall) || {
+      id: 'ch_overall',
+      title: '🏆 Общее место по слёту',
+      category: 'Общий зачёт',
+      isOverall: true,
+      results: {}
+    };
+  }, [history]);
 
   // Overall Statistics across all records
   const stats = useMemo(() => {
@@ -182,20 +205,26 @@ export default function ContestHistoryTable({
     );
   };
 
-  // Open Edit Cell Modal
-  const handleOpenEditCell = (contestId: string, year: string, currentPlace: string) => {
+  // Open Edit Cell Modal (Anchored to button / cell)
+  const handleOpenEditCell = (contestId: string, year: string, currentPlace: string, e?: React.MouseEvent<HTMLElement>) => {
     if (!isAdmin) return;
+    if (e) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      setCellAnchorPos({ top: rect.top, left: rect.left, bottom: rect.bottom });
+    }
     setEditingCell({ contestId, year, currentPlace });
     setCellInputValue(currentPlace === '—' ? '' : currentPlace);
   };
 
   // Save Cell Edit
-  const handleSaveCell = (newPlaceValue: string) => {
+  const handleSaveCell = async (newPlaceValue: string) => {
     if (!editingCell) return;
     const { contestId, year } = editingCell;
 
+    let found = false;
     const updated = history.map(item => {
       if (item.id === contestId) {
+        found = true;
         const nextResults = { ...(item.results || {}) };
         if (!newPlaceValue || newPlaceValue.trim() === '' || newPlaceValue === '—') {
           delete nextResults[year];
@@ -207,9 +236,62 @@ export default function ContestHistoryTable({
       return item;
     });
 
+    if (!found) {
+      updated.push({
+        id: contestId,
+        title: '🏆 Общее место по слёту',
+        category: 'Общий зачёт',
+        isOverall: true,
+        results: { [year]: newPlaceValue.trim() }
+      });
+    }
+
     onUpdateHistory(updated);
     setEditingCell(null);
     showNotification(`Место за ${year} год успешно сохранено!`);
+    try {
+      await fetch('/api/contests/history', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ history: updated })
+      });
+    } catch (err) {
+      console.error('Save history cell error:', err);
+    }
+  };
+
+  // Discipline name editing
+  const handleStartEditDiscipline = (entry: ContestHistoryEntry) => {
+    if (!isAdmin) return;
+    setEditingDisciplineId(entry.id);
+    setEditingTitleInput(entry.title);
+    setEditingCategoryInput(entry.category || 'Туризм');
+  };
+
+  const handleSaveDiscipline = async (id: string) => {
+    if (!editingTitleInput.trim()) return;
+    const updated = history.map(item => {
+      if (item.id === id) {
+        return {
+          ...item,
+          title: editingTitleInput.trim(),
+          category: editingCategoryInput
+        };
+      }
+      return item;
+    });
+    onUpdateHistory(updated);
+    setEditingDisciplineId(null);
+    showNotification(`Конкурс «${editingTitleInput.trim()}» обновлен!`);
+    try {
+      await fetch('/api/contests/history', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ history: updated })
+      });
+    } catch (err) {
+      console.error('Update discipline error:', err);
+    }
   };
 
   // Add Contest Discipline
@@ -308,7 +390,11 @@ export default function ContestHistoryTable({
             <div className="flex flex-wrap items-center gap-2 self-start md:self-center">
               <button
                 type="button"
-                onClick={() => setShowAddContestModal(true)}
+                onClick={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  setAddDisciplineAnchorPos({ top: rect.top, left: rect.left, bottom: rect.bottom });
+                  setShowAddContestModal(true);
+                }}
                 className="px-4 py-2.5 bg-red-600 hover:bg-red-700 text-yellow-300 font-black text-xs sm:text-sm uppercase tracking-wider rounded-xl shadow-md transition-all active:scale-95 flex items-center gap-2 cursor-pointer border border-amber-950"
               >
                 <Plus className="w-4 h-4" />
@@ -316,7 +402,11 @@ export default function ContestHistoryTable({
               </button>
               <button
                 type="button"
-                onClick={() => setShowAddYearModal(true)}
+                onClick={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  setAddYearAnchorPos({ top: rect.top, left: rect.left, bottom: rect.bottom });
+                  setShowAddYearModal(true);
+                }}
                 className="px-3.5 py-2.5 bg-amber-900 hover:bg-amber-950 text-amber-100 font-black text-xs sm:text-sm uppercase tracking-wider rounded-xl shadow-md transition-all active:scale-95 flex items-center gap-2 cursor-pointer"
               >
                 <Calendar className="w-4 h-4" />
@@ -486,61 +576,117 @@ export default function ContestHistoryTable({
             </thead>
 
             <tbody className="divide-y divide-amber-200/80 text-sm">
-              {filteredContests.map((contest, idx) => {
-                const isOverall = !!contest.isOverall;
+              {/* 1. STANDARD CONTEST DISCIPLINES */}
+              {standardContests.map((contest, idx) => {
                 return (
                   <tr 
                     key={contest.id}
                     className={`transition-colors ${
-                      isOverall 
-                        ? 'bg-amber-100/90 font-bold hover:bg-amber-100' 
-                        : idx % 2 === 0 
+                      idx % 2 === 0 
                         ? 'bg-white hover:bg-amber-50/60' 
                         : 'bg-amber-50/40 hover:bg-amber-50'
                     }`}
                   >
-                    {/* Sticky Contest Name Column */}
-                    <td className={`sticky left-0 z-20 px-4 py-3 border-r-2 border-amber-300 ${
-                      isOverall 
-                        ? 'bg-amber-200/95 text-amber-950 font-black' 
-                        : idx % 2 === 0 
+                    {/* Sticky Contest Name Column with Inline Editing */}
+                    <td className={`sticky left-0 z-20 px-3 sm:px-4 py-2.5 border-r-2 border-amber-300 ${
+                      idx % 2 === 0 
                         ? 'bg-white/95 text-amber-950' 
                         : 'bg-amber-50/95 text-amber-950'
                     }`}>
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="space-y-0.5 min-w-0">
-                          <div className="font-bold text-xs sm:text-sm text-amber-950 truncate max-w-[200px] sm:max-w-[230px]" title={contest.title}>
-                            {contest.title}
+                      {editingDisciplineId === contest.id ? (
+                        <div className="space-y-1.5 min-w-[200px] sm:min-w-[240px]">
+                          <input
+                            type="text"
+                            value={editingTitleInput}
+                            onChange={e => setEditingTitleInput(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') handleSaveDiscipline(contest.id);
+                              if (e.key === 'Escape') setEditingDisciplineId(null);
+                            }}
+                            placeholder="Название конкурса..."
+                            className="w-full px-2 py-1 bg-amber-50 text-xs font-bold text-amber-950 border-2 border-red-600 rounded-lg focus:outline-none"
+                            autoFocus
+                          />
+                          <div className="flex items-center justify-between gap-1.5">
+                            <select
+                              value={editingCategoryInput}
+                              onChange={e => setEditingCategoryInput(e.target.value)}
+                              className="px-1.5 py-0.5 text-[10px] font-bold bg-white text-amber-950 border border-amber-400 rounded cursor-pointer"
+                            >
+                              <option value="Туризм">Туризм</option>
+                              <option value="Творчество">Творчество</option>
+                              <option value="Спорт">Спорт</option>
+                              <option value="Лагерь">Лагерь</option>
+                              <option value="Общий зачёт">Общий зачёт</option>
+                            </select>
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleSaveDiscipline(contest.id)}
+                                className="p-1 bg-emerald-600 text-white rounded hover:bg-emerald-700 transition-colors"
+                                title="Сохранить название"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditingDisciplineId(null)}
+                                className="p-1 bg-stone-300 text-stone-700 rounded hover:bg-stone-400 transition-colors"
+                                title="Отмена"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </div>
-                          {contest.category && (
-                            <span className={`inline-block text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${
-                              contest.category === 'Общий зачёт'
-                                ? 'bg-red-600 text-yellow-200'
-                                : contest.category === 'Творчество'
-                                ? 'bg-purple-100 text-purple-900 border border-purple-300'
-                                : contest.category === 'Туризм'
-                                ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
-                                : contest.category === 'Спорт'
-                                ? 'bg-blue-100 text-blue-900 border border-blue-300'
-                                : 'bg-amber-200 text-amber-950 border border-amber-400'
-                            }`}>
-                              {contest.category}
-                            </span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="space-y-0.5 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-bold text-xs sm:text-sm text-amber-950 truncate max-w-[170px] sm:max-w-[210px]" title={contest.title}>
+                                {contest.title}
+                              </span>
+                              {isAdmin && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleStartEditDiscipline(contest)}
+                                  className="p-0.5 text-amber-700/60 hover:text-red-700 hover:bg-amber-200/60 rounded transition-colors cursor-pointer"
+                                  title="Редактировать название конкурса"
+                                >
+                                  <Edit3 className="w-3 h-3" />
+                                </button>
+                              )}
+                            </div>
+                            {contest.category && (
+                              <span className={`inline-block text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${
+                                contest.category === 'Общий зачёт'
+                                  ? 'bg-red-600 text-yellow-200'
+                                  : contest.category === 'Творчество'
+                                  ? 'bg-purple-100 text-purple-900 border border-purple-300'
+                                  : contest.category === 'Туризм'
+                                  ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
+                                  : contest.category === 'Спорт'
+                                  ? 'bg-blue-100 text-blue-900 border border-blue-300'
+                                  : 'bg-amber-200 text-amber-950 border border-amber-400'
+                              }`}>
+                                {contest.category}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Captain delete button for disciplines */}
+                          {isAdmin && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteDiscipline(contest.id, contest.title)}
+                              className="p-1 text-amber-600/60 hover:text-red-600 rounded hover:bg-amber-200/50 transition-colors cursor-pointer"
+                              title="Удалить дисциплину"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
                           )}
                         </div>
-
-                        {/* Captain delete button for non-overall disciplines */}
-                        {isAdmin && !isOverall && (
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteDiscipline(contest.id, contest.title)}
-                            className="p-1 text-amber-600/60 hover:text-red-600 rounded hover:bg-amber-200/50 transition-colors cursor-pointer"
-                            title="Удалить дисциплину"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
+                      )}
                     </td>
 
                     {/* Year Result Cells */}
@@ -551,7 +697,7 @@ export default function ContestHistoryTable({
                       return (
                         <td 
                           key={yearStr}
-                          onClick={() => handleOpenEditCell(contest.id, yearStr, placeValue || '—')}
+                          onClick={(e) => handleOpenEditCell(contest.id, yearStr, placeValue || '—', e)}
                           className={`px-2 py-2 text-center border-l border-amber-200/70 transition-colors ${
                             isAdmin 
                               ? 'cursor-pointer hover:bg-amber-200/60' 
@@ -560,7 +706,7 @@ export default function ContestHistoryTable({
                           title={isAdmin ? `Кликните, чтобы изменить место (${yearStr} год)` : undefined}
                         >
                           <div className="flex items-center justify-center min-h-[26px]">
-                            {renderPlaceBadge(placeValue, isOverall)}
+                            {renderPlaceBadge(placeValue, false)}
                           </div>
                         </td>
                       );
@@ -569,13 +715,55 @@ export default function ContestHistoryTable({
                 );
               })}
 
-              {filteredContests.length === 0 && (
+              {standardContests.length === 0 && (
                 <tr>
-                  <td colSpan={visibleYears.length + 1} className="py-12 text-center text-amber-800 font-bold">
+                  <td colSpan={visibleYears.length + 1} className="py-8 text-center text-amber-800 font-bold">
                     Дисциплины не найдены по запросу «{searchQuery}»
                   </td>
                 </tr>
               )}
+
+              {/* 2. DEDICATED BOTTOM ROW: ОБЩЕЕ МЕСТО ПО СЛЁТУ */}
+              <tr className="bg-gradient-to-r from-amber-200 via-amber-300 to-yellow-300 border-t-4 border-amber-600 font-black shadow-md">
+                <td className="sticky left-0 z-20 px-3 sm:px-4 py-3 bg-amber-300 border-r-2 border-amber-500 shadow-xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <div className="text-xs sm:text-sm font-black text-amber-950 flex items-center gap-1.5 uppercase tracking-tight">
+                        <span>🏆</span>
+                        <span>Общее место по слёту</span>
+                      </div>
+                      <div className="text-[10px] font-bold text-red-700 uppercase tracking-wider">
+                        Главный командный зачёт Негодяев
+                      </div>
+                    </div>
+                    <span className="bg-red-600 text-yellow-200 text-[9px] font-black uppercase px-2 py-0.5 rounded-full border border-amber-950 shadow-xs shrink-0">
+                      Кубок
+                    </span>
+                  </div>
+                </td>
+
+                {visibleYears.map(yearStr => {
+                  const placeValue = overallContest.results ? overallContest.results[yearStr] : undefined;
+                  const isCurrentYear = yearStr === '2026';
+
+                  return (
+                    <td 
+                      key={yearStr}
+                      onClick={(e) => handleOpenEditCell(overallContest.id, yearStr, placeValue || '—', e)}
+                      className={`px-2 py-2 text-center border-l-2 border-amber-400 transition-colors ${
+                        isAdmin 
+                          ? 'cursor-pointer hover:bg-amber-400/90 active:scale-95' 
+                          : ''
+                      } ${isCurrentYear ? 'bg-amber-400/50' : ''}`}
+                      title={isAdmin ? `Кликните, чтобы изменить общее место (${yearStr} год)` : undefined}
+                    >
+                      <div className="flex items-center justify-center min-h-[28px]">
+                        {renderPlaceBadge(placeValue, true)}
+                      </div>
+                    </td>
+                  );
+                })}
+              </tr>
             </tbody>
           </table>
         </div>
@@ -598,17 +786,22 @@ export default function ContestHistoryTable({
         </div>
       </div>
 
-      {/* MODAL: EDIT CELL PLACE (Captain Popover) */}
+      {/* MODAL: EDIT CELL PLACE (Captain Popover - Anchored to Triggering Cell) */}
       {editingCell && (
-        <div 
-          className="fixed inset-0 z-50 bg-stone-950/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
-          onClick={() => setEditingCell(null)}
-        >
+        <>
           <div 
-            className="bg-amber-50 border-4 border-red-600 rounded-3xl p-6 shadow-2xl max-w-sm w-full space-y-4"
+            className="fixed inset-0 z-40 bg-stone-950/20 backdrop-blur-2xs"
+            onClick={() => setEditingCell(null)}
+          />
+          <div 
+            className="fixed z-50 bg-amber-50 border-4 border-red-600 rounded-3xl p-5 shadow-2xl w-[92vw] max-w-sm space-y-3.5 animate-in fade-in zoom-in-95 duration-100"
+            style={{
+              top: Math.min(window.innerHeight - 380, Math.max(12, (cellAnchorPos?.bottom || 100) + 6)),
+              left: Math.min(window.innerWidth - 350, Math.max(12, (cellAnchorPos?.left || 100) - 100))
+            }}
             onClick={e => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-amber-300 pb-3">
+            <div className="flex items-center justify-between border-b border-amber-300 pb-2.5">
               <div>
                 <span className="text-xs font-black text-red-700 uppercase tracking-wider">
                   Редактирование результата
@@ -626,8 +819,10 @@ export default function ContestHistoryTable({
               </button>
             </div>
 
-            <p className="text-xs font-bold text-amber-900">
-              {history.find(c => c.id === editingCell.contestId)?.title}
+            <p className="text-xs font-bold text-amber-900 truncate">
+              {editingCell.contestId === overallContest.id 
+                ? overallContest.title 
+                : history.find(c => c.id === editingCell.contestId)?.title}
             </p>
 
             {/* Quick Presets */}
@@ -669,6 +864,9 @@ export default function ContestHistoryTable({
                   type="text"
                   value={cellInputValue}
                   onChange={e => setCellInputValue(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') handleSaveCell(cellInputValue);
+                  }}
                   placeholder="e.g. 1-е, 2, Приз симпатий"
                   className="flex-1 px-3 py-2 bg-white text-xs font-bold text-amber-950 border-2 border-amber-400 focus:border-red-600 focus:outline-none rounded-xl"
                   autoFocus
@@ -684,17 +882,22 @@ export default function ContestHistoryTable({
               </div>
             </div>
           </div>
-        </div>
+        </>
       )}
 
-      {/* MODAL: ADD CONTEST DISCIPLINE */}
+      {/* MODAL: ADD CONTEST DISCIPLINE (Anchored to + Дисциплина Button) */}
       {showAddContestModal && (
-        <div 
-          className="fixed inset-0 z-50 bg-stone-950/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
-          onClick={() => setShowAddContestModal(false)}
-        >
+        <>
           <div 
-            className="bg-amber-50 border-4 border-red-600 rounded-3xl p-6 shadow-2xl max-w-md w-full space-y-4"
+            className="fixed inset-0 z-40 bg-stone-950/20 backdrop-blur-2xs"
+            onClick={() => setShowAddContestModal(false)}
+          />
+          <div 
+            className="fixed z-50 bg-amber-50 border-4 border-red-600 rounded-3xl p-5 shadow-2xl w-[92vw] max-w-md space-y-4 animate-in fade-in zoom-in-95 duration-100"
+            style={{
+              top: Math.min(window.innerHeight - 440, Math.max(12, (addDisciplineAnchorPos?.bottom || 100) + 6)),
+              left: Math.min(window.innerWidth - 440, Math.max(12, (addDisciplineAnchorPos?.left || 100) - 200))
+            }}
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-amber-300 pb-3">
@@ -727,6 +930,7 @@ export default function ContestHistoryTable({
                   placeholder="e.g. 🏹 Стрельба из лука / Пневматика"
                   required
                   className="w-full px-3 py-2 bg-white text-sm font-bold text-amber-950 border-2 border-amber-400 focus:border-red-600 focus:outline-none rounded-xl"
+                  autoFocus
                 />
               </div>
 
@@ -765,17 +969,22 @@ export default function ContestHistoryTable({
               </div>
             </form>
           </div>
-        </div>
+        </>
       )}
 
-      {/* MODAL: ADD YEAR */}
+      {/* MODAL: ADD YEAR (Anchored to + Год Button) */}
       {showAddYearModal && (
-        <div 
-          className="fixed inset-0 z-50 bg-stone-950/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
-          onClick={() => setShowAddYearModal(false)}
-        >
+        <>
           <div 
-            className="bg-amber-50 border-4 border-red-600 rounded-3xl p-6 shadow-2xl max-w-sm w-full space-y-4"
+            className="fixed inset-0 z-40 bg-stone-950/20 backdrop-blur-2xs"
+            onClick={() => setShowAddYearModal(false)}
+          />
+          <div 
+            className="fixed z-50 bg-amber-50 border-4 border-red-600 rounded-3xl p-5 shadow-2xl w-[92vw] max-w-sm space-y-4 animate-in fade-in zoom-in-95 duration-100"
+            style={{
+              top: Math.min(window.innerHeight - 340, Math.max(12, (addYearAnchorPos?.bottom || 100) + 6)),
+              left: Math.min(window.innerWidth - 350, Math.max(12, (addYearAnchorPos?.left || 100) - 150))
+            }}
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-amber-300 pb-3">
@@ -832,7 +1041,7 @@ export default function ContestHistoryTable({
               </div>
             </form>
           </div>
-        </div>
+        </>
       )}
     </div>
   );

@@ -24,7 +24,9 @@ export default function DocumentsTab({
   const [activeCategory, setActiveCategory] = useState<'all' | TeamDocumentCategory>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [addAnchorPos, setAddAnchorPos] = useState<{ top: number; right: number } | null>(null);
   const [activeDocPreview, setActiveDocPreview] = useState<TeamDocument | null>(null);
+  const [previewAnchorPos, setPreviewAnchorPos] = useState<{ top: number; right: number } | null>(null);
   const [activeImageLightbox, setActiveImageLightbox] = useState<{ url: string; title: string } | null>(null);
 
   // Add document form states
@@ -221,8 +223,15 @@ export default function DocumentsTab({
 
         <button
           type="button"
-          onClick={() => setShowAddModal(true)}
-          className="px-4 py-2.5 bg-red-600 hover:bg-red-700 active:scale-95 text-white font-bold uppercase text-xs rounded-xl shadow-xs transition-all flex items-center gap-2 shrink-0"
+          onClick={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            setAddAnchorPos({
+              top: rect.bottom + 8,
+              right: Math.max(12, window.innerWidth - rect.right)
+            });
+            setShowAddModal(true);
+          }}
+          className="px-4 py-2.5 bg-red-600 hover:bg-red-700 active:scale-95 text-white font-bold uppercase text-xs rounded-xl shadow-xs transition-all flex items-center gap-2 shrink-0 cursor-pointer"
         >
           <Plus size={16} />
           Добавить документ или фото
@@ -389,8 +398,15 @@ export default function DocumentsTab({
                     ) : (
                       <button
                         type="button"
-                        onClick={() => setActiveDocPreview(doc)}
-                        className="px-3 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-800 font-bold text-xs rounded-lg transition-colors flex items-center gap-1"
+                        onClick={(e) => {
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          setPreviewAnchorPos({
+                            top: rect.bottom + 8,
+                            right: Math.max(12, window.innerWidth - rect.right)
+                          });
+                          setActiveDocPreview(doc);
+                        }}
+                        className="px-3 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-800 font-bold text-xs rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
                         title="Читать содержание документа"
                       >
                         <Eye size={13} /> Читать
@@ -424,10 +440,25 @@ export default function DocumentsTab({
         </div>
       )}
 
-      {/* ADD DOCUMENT / PHOTO MODAL */}
+      {/* ADD DOCUMENT / PHOTO MODAL (Anchored to trigger button) */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-4 animate-in fade-in duration-150">
-          <div className="bg-white border border-stone-200 rounded-3xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">
+        <>
+          <div 
+            className="fixed inset-0 z-40 bg-stone-950/30 backdrop-blur-2xs"
+            onClick={resetForm}
+          />
+          <div 
+            role="dialog"
+            aria-modal="true"
+            aria-label="Добавление документа или фотокопии"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              top: `${Math.min(window.innerHeight - 560, Math.max(12, addAnchorPos?.top ?? 80))}px`,
+              right: `${Math.max(12, addAnchorPos?.right ?? 16)}px`,
+              maxHeight: 'calc(100vh - 90px)',
+            }}
+            className="fixed z-50 bg-white border border-stone-300 rounded-3xl shadow-2xl w-[92vw] max-w-lg flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+          >
             
             <div className="px-6 py-4 border-b border-stone-100 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
@@ -595,13 +626,28 @@ export default function DocumentsTab({
               </div>
             </form>
           </div>
-        </div>
+        </>
       )}
 
-      {/* DOCUMENT PREVIEW MODAL */}
+      {/* DOCUMENT PREVIEW MODAL (Anchored to Document Card) */}
       {activeDocPreview && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-4 animate-in fade-in duration-150">
-          <div className="bg-white border border-stone-200 rounded-3xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">
+        <>
+          <div 
+            className="fixed inset-0 z-40 bg-stone-950/30 backdrop-blur-2xs" 
+            onClick={() => setActiveDocPreview(null)} 
+          />
+          <div 
+            role="dialog"
+            aria-modal="true"
+            aria-label="Просмотр документа"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              top: `${Math.min(window.innerHeight - 560, Math.max(12, previewAnchorPos?.top ?? 80))}px`,
+              right: `${Math.max(12, previewAnchorPos?.right ?? 16)}px`,
+              maxHeight: 'calc(100vh - 90px)',
+            }}
+            className="fixed z-50 bg-white border border-stone-300 rounded-3xl shadow-2xl w-[92vw] max-w-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+          >
             
             <div className="px-6 py-4 border-b border-stone-100 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2.5">
@@ -669,7 +715,7 @@ export default function DocumentsTab({
             </div>
 
           </div>
-        </div>
+        </>
       )}
 
       {/* FULL-SCREEN IMAGE LIGHTBOX FOR PHOTO DOCUMENTS */}

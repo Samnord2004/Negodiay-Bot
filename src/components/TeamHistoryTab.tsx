@@ -35,6 +35,7 @@ export default function TeamHistoryTab({
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [modalAnchorPos, setModalAnchorPos] = useState<{ top: number; right: number } | null>(null);
   const [editingStory, setEditingStory] = useState<TeamStory | null>(null);
 
   // Lightbox & Video Player Modal
@@ -53,7 +54,14 @@ export default function TeamHistoryTab({
   const [newVideoUrl, setNewVideoUrl] = useState('');
 
   // Open Add modal
-  const handleOpenAdd = () => {
+  const handleOpenAdd = (e?: React.MouseEvent) => {
+    if (e) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      setModalAnchorPos({
+        top: rect.bottom + 8,
+        right: Math.max(12, window.innerWidth - rect.right)
+      });
+    }
     setEditingStory(null);
     setFormCategory('custom');
     setFormCategoryTitle('История команды');
@@ -66,7 +74,14 @@ export default function TeamHistoryTab({
   };
 
   // Open Edit modal
-  const handleOpenEdit = (story: TeamStory) => {
+  const handleOpenEdit = (story: TeamStory, e?: React.MouseEvent) => {
+    if (e) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      setModalAnchorPos({
+        top: rect.bottom + 8,
+        right: Math.max(12, window.innerWidth - rect.right)
+      });
+    }
     setEditingStory(story);
     setFormCategory(story.category);
     setFormCategoryTitle(story.categoryTitle);
@@ -174,8 +189,8 @@ export default function TeamHistoryTab({
           <div className="shrink-0 flex flex-col sm:flex-row gap-3">
             <button
               type="button"
-              onClick={handleOpenAdd}
-              className="bg-red-600 hover:bg-red-700 active:scale-95 text-yellow-300 font-black uppercase text-xs sm:text-sm px-5 py-3 rounded-2xl border-2 border-amber-950 shadow-lg flex items-center justify-center gap-2 transition-all"
+              onClick={(e) => handleOpenAdd(e)}
+              className="bg-red-600 hover:bg-red-700 active:scale-95 text-yellow-300 font-black uppercase text-xs sm:text-sm px-5 py-3 rounded-2xl border-2 border-amber-950 shadow-lg flex items-center justify-center gap-2 transition-all cursor-pointer"
             >
               <Plus size={18} /> Добавить блок истории
             </button>
@@ -246,8 +261,8 @@ export default function TeamHistoryTab({
             </p>
             <button
               type="button"
-              onClick={handleOpenAdd}
-              className="bg-red-600 text-yellow-300 text-xs font-black uppercase px-4 py-2 rounded-xl shadow"
+              onClick={(e) => handleOpenAdd(e)}
+              className="bg-red-600 text-yellow-300 text-xs font-black uppercase px-4 py-2 rounded-xl shadow cursor-pointer"
             >
               + Добавить историю
             </button>
@@ -290,9 +305,9 @@ export default function TeamHistoryTab({
                   <div className="flex items-center gap-1.5 shrink-0">
                     <button
                       type="button"
-                      onClick={() => handleOpenEdit(story)}
+                      onClick={(e) => handleOpenEdit(story, e)}
                       title="Редактировать историю"
-                      className="p-2 text-amber-700 hover:text-amber-950 hover:bg-amber-100 rounded-xl transition-all"
+                      className="p-2 text-amber-700 hover:text-amber-950 hover:bg-amber-100 rounded-xl transition-all cursor-pointer"
                     >
                       <Edit size={16} />
                     </button>
@@ -392,10 +407,25 @@ export default function TeamHistoryTab({
         )}
       </div>
 
-      {/* MODAL: ADD / EDIT STORY BLOCK */}
+      {/* MODAL: ADD / EDIT STORY BLOCK (Anchored to Trigger Button) */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-150">
-          <div className="bg-yellow-50 border-4 border-red-600 rounded-3xl p-5 sm:p-7 max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150">
+        <>
+          <div 
+            className="fixed inset-0 z-40 bg-stone-950/35 backdrop-blur-2xs"
+            onClick={() => setShowAddModal(false)}
+          />
+          <div 
+            role="dialog"
+            aria-modal="true"
+            aria-label={editingStory ? 'Редактировать блок истории' : 'Добавить блок истории команды'}
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              top: `${Math.min(window.innerHeight - 580, Math.max(12, modalAnchorPos?.top ?? 80))}px`,
+              right: `${Math.max(12, modalAnchorPos?.right ?? 16)}px`,
+              maxHeight: 'calc(100vh - 90px)',
+            }}
+            className="fixed z-50 bg-yellow-50 border-4 border-red-600 rounded-3xl p-5 sm:p-7 max-w-2xl w-[92vw] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+          >
             <div className="flex items-center justify-between border-b-2 border-amber-300 pb-3 shrink-0">
               <h3 className="text-lg sm:text-xl font-black uppercase text-red-600 flex items-center gap-2">
                 <Sparkles size={20} />
@@ -404,7 +434,7 @@ export default function TeamHistoryTab({
               <button
                 type="button"
                 onClick={() => setShowAddModal(false)}
-                className="p-1.5 text-amber-900 hover:text-red-600 rounded-xl"
+                className="p-1.5 text-amber-900 hover:text-red-600 rounded-xl cursor-pointer"
               >
                 <X size={20} />
               </button>
@@ -635,7 +665,7 @@ export default function TeamHistoryTab({
 
             </form>
           </div>
-        </div>
+        </>
       )}
 
       {/* LIGHTBOX MODAL */}

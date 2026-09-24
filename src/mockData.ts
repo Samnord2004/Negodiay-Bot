@@ -175,7 +175,7 @@ export const initialGroceryItems: GroceryItem[] = [
   { id: "g1", name: "Тушёнка свиная ГОСТ (высший сорт, жесть)", quantity: "24 банки", category: "Еда", isBought: true },
   { id: "g2", name: "Гречка Ядрица (мешки по 2кг)", quantity: "3 пачки", category: "Еда", isBought: false },
   { id: "g3", name: "Сгущённое молоко Рогачёв (собачка на принте)", quantity: "8 банок", category: "Еда", isBought: true },
-  { id: "g4", name: "Ром золотой для команды (для дезинфекции души)", quantity: "3 бутылки", category: "Жидкая валюта", isBought: false },
+  { id: "g4", name: "Ром золотой для команды (для дезинфекции души)", quantity: "3 бутылки", category: "Алкоголь", isBought: false },
   { id: "g5", name: "Макароны Рожки (группа А)", quantity: "5 кг", category: "Еда", isBought: false },
   { id: "g6", name: "Вода питьевая в канистрах (по 5л)", quantity: "12 канистр", category: "Еда", isBought: true },
   { id: "g7", name: "Капуста, лук, картошка, специи для плова", quantity: "15 кг веса", category: "Еда", isBought: false },
@@ -183,13 +183,52 @@ export const initialGroceryItems: GroceryItem[] = [
 ];
 
 export const initialInventoryItems: InventoryItem[] = [
-  { id: "inv1", name: "Казан чугунный походный (20 литров)", condition: "нормальное", responsibleName: "Андрей Самойлов (Ковбой)" },
-  { id: "inv2", name: "Бензогенератор барахлящий (требует свечу)", condition: "пришло в негодность", responsibleName: "Андрей Самойлов (Ковбой)" },
-  { id: "inv3", name: "Укупорный тент защитный 4x6м", condition: "нормальное", responsibleName: "Андрей Самойлов (Ковбой)" },
-  { id: "inv4", name: "Гитара походная шестиструнная (но без струны 'ми')", condition: "нормальное", responsibleName: "Андрей Самойлов (Ковбой)" },
-  { id: "inv5", name: "Костровые треноги и цепи для котла", condition: "нормальное", responsibleName: "Андрей Самойлов (Ковбой)" },
-  { id: "inv6", name: "Большой надувной матрас в палатку", condition: "нормальное", responsibleName: "Андрей Самойлов (Ковбой)" },
-  { id: "inv7", name: "Портативная Bluetooth колонка с музлом", condition: "нормальное", responsibleName: "Андрей Самойлов (Ковбой)" }
+  { 
+    id: "inv1", 
+    name: "Казан чугунный походный (20 литров)", 
+    condition: "нормальное", 
+    responsibleName: "Андрей Самойлов (Ковбой)",
+    imageUrl: "https://images.unsplash.com/photo-1544816155-12df9643f363?w=800&auto=format&fit=crop&q=80"
+  },
+  { 
+    id: "inv2", 
+    name: "Бензогенератор барахлящий (требует свечу)", 
+    condition: "пришло в негодность", 
+    responsibleName: "Андрей Самойлов (Ковбой)" 
+  },
+  { 
+    id: "inv3", 
+    name: "Укупорный тент защитный 4x6м", 
+    condition: "нормальное", 
+    responsibleName: "Андрей Самойлов (Ковбой)",
+    imageUrl: "https://images.unsplash.com/photo-1510312305653-8ed496efae75?w=800&auto=format&fit=crop&q=80"
+  },
+  { 
+    id: "inv4", 
+    name: "Гитара походная шестиструнная (но без струны 'ми')", 
+    condition: "нормальное", 
+    responsibleName: "Андрей Самойлов (Ковбой)",
+    imageUrl: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=800&auto=format&fit=crop&q=80"
+  },
+  { 
+    id: "inv5", 
+    name: "Костровые треноги и цепи для котла", 
+    condition: "нормальное", 
+    responsibleName: "Андрей Самойлов (Ковбой)" 
+  },
+  { 
+    id: "inv6", 
+    name: "Большой надувной матрас в палатку", 
+    condition: "нормальное", 
+    responsibleName: "Андрей Самойлов (Ковбой)" 
+  },
+  { 
+    id: "inv7", 
+    name: "Портативная Bluetooth колонка с музлом", 
+    condition: "нормальное", 
+    responsibleName: "Андрей Самойлов (Ковбой)",
+    imageUrl: "https://images.unsplash.com/photo-1545454675-3531b543be5d?w=800&auto=format&fit=crop&q=80"
+  }
 ];
 
 export const ORIENTEERING_SIGNS_SVG = `data:image/svg+xml,${encodeURIComponent(`
@@ -325,6 +364,8 @@ export const initialContests: Contest[] = [
     captainName: "Андрей Самойлов (Ковбой)",
     teamMemberIds: ["cowboy_1"],
     place: "2-е место",
+    category: "Туризм",
+    excursionId: "e1",
     description: "Прохождение лесного маршрута по спортивной карте с нахождением 8 контрольных пунктов (КП). Отметка производится электронными чипами. Засчитывается наименьшее время и точность.",
     schedule: "Суббота, 14:00 - Регистрация и выдача карт; 14:30 - Старт участников по очереди каждые 2 мин; 17:00 - Финиш и подсчет результатов.",
     imageUrl: ORIENTEERING_SIGNS_SVG,
@@ -350,6 +391,8 @@ export const initialContests: Contest[] = [
     captainName: "Андрей Самойлов (Ковбой)",
     teamMemberIds: ["cowboy_1"],
     place: "1-е место",
+    category: "Туризм",
+    excursionId: "e1",
     description: "Соревнование по правильной и скоростной вязке 6 ключевых туристических узлов (Восьмёрка, Булинь, Прямой, Прусик, Ткацкий, Выбленочный) и натягиванию навесной переправы.",
     schedule: "Суббота, 17:30 - Проверка личной обвязки и карабинов; 18:00 - Скоростная вязка узлов 'вслепую' и под счет.",
     imageUrl: KNOTS_DIAGRAM_SVG,
@@ -375,6 +418,8 @@ export const initialContests: Contest[] = [
     captainName: "Андрей Самойлов (Ковбой)",
     teamMemberIds: ["cowboy_1"],
     place: "1-е место",
+    category: "Творчество",
+    excursionId: "e1",
     description: "Баттл костровых песен под гитару. Конкурсанты исполняют походные хиты, авторские частушки и лирику. Оценивается громкость, артистизм и эмоциональный отклик команды.",
     schedule: "Суббота, 21:00 - Открытие музыкального ринга у большого ночного костра.",
     attachments: []
@@ -386,6 +431,8 @@ export const initialContests: Contest[] = [
     captainName: "Андрей Самойлов (Ковбой)",
     teamMemberIds: ["cowboy_1"],
     place: "Призёр",
+    category: "Лагерь",
+    excursionId: "e1",
     description: "Приготовление ресторанного блюда на костре из ограниченного набора продуктов: банка тушенки ГОСТ, крупа, овощи и костровые специи.",
     schedule: "Воскресенье, 13:00 - Начало готовки у мангальной зоны.",
     attachments: []
@@ -662,7 +709,9 @@ export const initialCreativityIdeas: CreativityIdea[] = [
     votes: 2,
     votedUserIds: ["cowboy_1", "3"],
     comments: [],
-    createdAt: "2026-08-15"
+    createdAt: "2026-08-15",
+    captainApproval: "approved",
+    captainApprovedAt: "2026-08-16"
   },
   {
     id: "idea_1",
@@ -676,7 +725,9 @@ export const initialCreativityIdeas: CreativityIdea[] = [
     votes: 2,
     votedUserIds: ["cowboy_1", "3"],
     comments: [],
-    createdAt: "2026-08-10"
+    createdAt: "2026-08-10",
+    captainApproval: "approved",
+    captainApprovedAt: "2026-08-11"
   },
   {
     id: "idea_2",
@@ -704,7 +755,9 @@ export const initialCreativityIdeas: CreativityIdea[] = [
     votes: 1,
     votedUserIds: ["cowboy_1"],
     comments: [],
-    createdAt: "2026-08-14"
+    createdAt: "2026-08-14",
+    captainApproval: "rejected",
+    captainApprovedAt: "2026-08-15"
   },
   {
     id: "idea_4",

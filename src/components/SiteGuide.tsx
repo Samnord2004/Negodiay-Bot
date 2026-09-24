@@ -18,10 +18,10 @@ interface GuideStep {
   id: number;
   title: string;
   subtitle: string;
-  category: 'auth' | 'rally' | 'food' | 'coins' | 'fund' | 'community';
+  category: 'auth' | 'rally' | 'food' | 'coins' | 'fund' | 'community' | 'contests' | 'creativity_inventory';
   targetTab?: string;
   targetSubTab?: string;
-  illustrationType: 'auth' | 'rally' | 'menu' | 'coins' | 'fund' | 'chat';
+  illustrationType: 'auth' | 'rally' | 'menu' | 'coins' | 'fund' | 'chat' | 'contests' | 'creativity_inventory';
   description: string;
   keyPoints: string[];
   tips: string;
@@ -125,6 +125,41 @@ const GUIDE_STEPS: GuideStep[] = [
       'Документы: регламенты слёта, памятки походника и инструкции безопасности.'
     ],
     tips: 'Совет: Пользуйтесь строкой быстрого поиска вверху сайта — она ищет по людям, задачам, вещам и документам!'
+  },
+  {
+    id: 7,
+    title: 'Шаг 7. Конкурсы, Хроника мест и Архивация слёта',
+    subtitle: 'Сводная таблица с 1993 года, общее место Негодяев и закрытие слёта',
+    category: 'contests',
+    targetTab: 'home',
+    targetSubTab: 'contests',
+    illustrationType: 'contests',
+    description: 'Вкладка «Конкурсы» объединяет многолетнюю хронику всех побед команды «Негодяи» и текущую конкурсную программу слёта.',
+    keyPoints: [
+      'Таблица «История и места» отображает все победы и призовые места команды с 1993 года по всем дисциплинам.',
+      'Нижняя строка «🏆 Общее место по слёту» фиксирует итоговое кубковое место Негодяев в общем зачёте.',
+      'Капитан может редактировать названия дисциплин и быстро менять места во всплывающих окнах, привязанных к ячейкам.',
+      'При завершении слёта и отправке в архив система проверяет заполнение всех мест и переносит их в историю, очищая активную сетку.'
+    ],
+    tips: 'Совет: Если капитан забыл проставить место за конкурс, система напомнит об этом перед архивацией!'
+  },
+  {
+    id: 8,
+    title: 'Шаг 8. Творчество, Арт-Цех и Инвентарь команды',
+    subtitle: 'Идеи лагеря, карнавал, архив идей и учет снаряжения с редактированием',
+    category: 'creativity_inventory',
+    targetTab: 'home',
+    targetSubTab: 'creativity',
+    illustrationType: 'creativity_inventory',
+    description: 'Арт-Цех и учёт снаряжения обеспечивают яркий и слаженный лагерь: от карнавальных костюмов до казанов и топоров.',
+    keyPoints: [
+      'Творчество: предлагайте идеи оформления лагеря, костюмов, конкурсов и мерча, голосуйте и комментируйте.',
+      'Редактирование и Архив идей: авторы и капитан могут менять описание, смету материалов, статус и отправлять идеи в архив или восстанавливать их.',
+      'Инвентарь команды: ведите учет шатров, генераторов и казанов с указанием ответственного хранителя и количества.',
+      'Редактирование вещей: кнопка с карандашом позволяет изменить название, ответственного хранителя, количество и состояние вещи.',
+      'Статусы потерь: отслеживайте снаряжение («В строю», «Пришло в негодность», «Утонало к херам» и др.).'
+    ],
+    tips: 'Совет: Во вкладке «Творчество» переключайтесь между активными идеями и архивом слётов в один клик!'
   }
 ];
 
@@ -366,6 +401,93 @@ export default function SiteGuide({
                 <span className="text-yellow-400 font-black">🤖 Бот Негодяев:</span>
                 <p className="text-stone-300 mt-0.5">«До слёта осталось 14 дней! Не забудьте отметиться в ведомости.»</p>
               </div>
+            </div>
+          </div>
+        );
+
+      case 'contests':
+        return (
+          <div className="w-full bg-gradient-to-br from-amber-100 via-yellow-50 to-amber-200 p-4 rounded-2xl border-2 border-amber-400 shadow-md text-stone-900 space-y-3">
+            <div className="flex items-center justify-between bg-amber-900 text-yellow-300 px-3 py-1.5 rounded-xl font-black text-xs uppercase">
+              <span className="flex items-center gap-1.5">
+                <Award size={14} /> Летопись побед (1993 – 2026)
+              </span>
+              <span className="bg-red-600 px-2 py-0.5 rounded text-[10px] text-yellow-200 font-black">
+                Зачёт Негодяев
+              </span>
+            </div>
+
+            <div className="bg-white rounded-xl border border-amber-300 overflow-hidden shadow-xs text-[11px]">
+              <div className="grid grid-cols-4 bg-amber-100/80 p-2 font-black text-amber-950 border-b border-amber-200">
+                <span className="col-span-2">Конкурс</span>
+                <span className="text-center">2025</span>
+                <span className="text-center">2026</span>
+              </div>
+              <div className="divide-y divide-amber-100 font-bold">
+                <div className="grid grid-cols-4 p-2 items-center">
+                  <span className="col-span-2 text-stone-800">Визитка / Приветствие</span>
+                  <span className="text-center text-amber-600 font-black">🥇 1-е</span>
+                  <span className="text-center text-amber-600 font-black">🥇 1-е</span>
+                </div>
+                <div className="grid grid-cols-4 p-2 items-center">
+                  <span className="col-span-2 text-stone-800">КТМ (Полоса препятствий)</span>
+                  <span className="text-center text-stone-600">🥈 2-е</span>
+                  <span className="text-center text-amber-600 font-black">🥇 1-е</span>
+                </div>
+                <div className="grid grid-cols-4 p-2 items-center bg-yellow-200/90 font-black text-amber-950">
+                  <span className="col-span-2 flex items-center gap-1">🏆 Общее место</span>
+                  <span className="text-center bg-red-600 text-yellow-200 px-1.5 py-0.5 rounded">1-е</span>
+                  <span className="text-center bg-red-600 text-yellow-200 px-1.5 py-0.5 rounded">1-е</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between text-[10px] bg-amber-50 p-2 rounded-xl border border-amber-300">
+              <span className="font-bold text-amber-950">Архивация слёта:</span>
+              <span className="text-red-700 font-black">Автоперенос результатов + очистка сетки</span>
+            </div>
+          </div>
+        );
+
+      case 'creativity_inventory':
+        return (
+          <div className="w-full bg-gradient-to-br from-amber-100 via-yellow-50 to-orange-100 p-4 rounded-2xl border-2 border-amber-400 shadow-md text-stone-900 space-y-3">
+            <div className="flex items-center justify-between bg-red-600 text-yellow-300 px-3 py-1.5 rounded-xl font-black text-xs uppercase">
+              <span className="flex items-center gap-1.5">
+                <Sparkles size={14} /> Арт-Цех & Снаряжение
+              </span>
+              <span className="bg-yellow-400 text-red-800 px-2 py-0.5 rounded text-[10px] font-black">
+                Редактирование и Архив
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+              <div className="bg-white p-2.5 rounded-xl border border-amber-300 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-black uppercase text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded">
+                    Костюмы
+                  </span>
+                  <span className="text-[10px] text-stone-500 font-bold">✎ Редактировать / 📦 В архив</span>
+                </div>
+                <div className="font-black text-amber-950 text-xs">Неоновые крылья банды</div>
+                <div className="text-[10px] text-stone-600">Бюджет: 2 500 ₽ • Голосов: 12</div>
+              </div>
+
+              <div className="bg-white p-2.5 rounded-xl border border-amber-300 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-black uppercase text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded">
+                    В строю
+                  </span>
+                  <span className="text-[10px] text-stone-500 font-bold">✎ Редактировать</span>
+                </div>
+                <div className="font-black text-amber-950 text-xs">Казан 50л чугунный (1 шт.)</div>
+                <div className="text-[10px] text-stone-600">Хранитель: Саня Повар</div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between text-[10px] bg-white p-2 rounded-xl border border-amber-300">
+              <span className="font-bold text-amber-950">Управление контентом:</span>
+              <span className="text-emerald-700 font-black">✓ Полная свобода редактирования и архивации</span>
             </div>
           </div>
         );
@@ -684,9 +806,10 @@ export default function SiteGuide({
                 { tab: 'home', sub: 'overview', title: 'Слёты и Взносы', desc: 'План поездки, локации, статус «Еду/Не еду», сбор денег', icon: '⛺' },
                 { tab: 'home', sub: 'menu', title: 'Меню и Продукты', desc: 'Рацион костровой кухни, смета закупок и ответственные', icon: '🍲' },
                 { tab: 'home', sub: 'game', title: 'Скидка на слёт & Монеты', desc: 'Личный кабинет монет, Колесо Фортуны и скидки', icon: '🪙' },
+                { tab: 'home', sub: 'creativity', title: 'Творчество & Арт-Цех', desc: 'Идеи лагеря, костюмы, мерч, голосование, редактирование и архив', icon: '🎨' },
                 { tab: 'home', sub: 'tasks', title: 'Задачи слёта', desc: 'Походные поручения, дежурства по лагерю и дрова', icon: '📋' },
-                { tab: 'home', sub: 'contests', title: 'Конкурсы и Творчество', desc: 'Командные соревнования, визитки и творческие идеи', icon: '🏆' },
-                { tab: 'inventory', title: 'Инвентарь лагеря', desc: 'Шатры, котлы, генератор, топоры и учет состояния', icon: '📦' },
+                { tab: 'home', sub: 'contests', title: 'Конкурсы и Летопись (1993–2026)', desc: 'Хроника мест, редактируемые дисциплины, итоговый зачёт и архивация', icon: '🏆' },
+                { tab: 'inventory', title: 'Инвентарь лагеря', desc: 'Шатры, котлы, генератор, редактирование вещей, хранители и учет состояния', icon: '📦' },
                 { tab: 'gallery', title: 'Фотогалерея', desc: 'Архив фотографий по годам без ограничений по объему', icon: '📸' },
                 { tab: 'documents', title: 'Документы и Регламент', desc: 'Походные правила, инструкции безопасности и памятки', icon: '📄' },
                 { tab: 'fund', title: 'Фонд Негодяев', desc: 'Взносы 500 ₽/мес, таблица оплат за любой год и отчеты', icon: '💰' }
