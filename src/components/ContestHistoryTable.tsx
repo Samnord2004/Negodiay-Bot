@@ -786,19 +786,14 @@ export default function ContestHistoryTable({
         </div>
       </div>
 
-      {/* MODAL: EDIT CELL PLACE (Captain Popover - Anchored to Triggering Cell) */}
+      {/* MODAL: EDIT CELL PLACE (Captain Popover) */}
       {editingCell && (
-        <>
+        <div 
+          className="fixed inset-0 z-50 overflow-y-auto bg-stone-950/60 backdrop-blur-xs p-3 sm:p-4 flex items-center justify-center"
+          onClick={() => setEditingCell(null)}
+        >
           <div 
-            className="fixed inset-0 z-40 bg-stone-950/20 backdrop-blur-2xs"
-            onClick={() => setEditingCell(null)}
-          />
-          <div 
-            className="fixed z-50 bg-amber-50 border-4 border-red-600 rounded-3xl p-5 shadow-2xl w-[92vw] max-w-sm space-y-3.5 animate-in fade-in zoom-in-95 duration-100"
-            style={{
-              top: Math.min(window.innerHeight - 380, Math.max(12, (cellAnchorPos?.bottom || 100) + 6)),
-              left: Math.min(window.innerWidth - 350, Math.max(12, (cellAnchorPos?.left || 100) - 100))
-            }}
+            className="relative w-full max-w-sm bg-amber-50 border-4 border-red-600 rounded-3xl p-5 sm:p-6 shadow-2xl space-y-3.5 my-auto animate-in fade-in zoom-in-95 duration-150"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-amber-300 pb-2.5">
@@ -882,22 +877,17 @@ export default function ContestHistoryTable({
               </div>
             </div>
           </div>
-        </>
+        </div>
       )}
 
-      {/* MODAL: ADD CONTEST DISCIPLINE (Anchored to + Дисциплина Button) */}
+      {/* MODAL: ADD CONTEST DISCIPLINE */}
       {showAddContestModal && (
-        <>
+        <div 
+          className="fixed inset-0 z-50 overflow-y-auto bg-stone-950/60 backdrop-blur-xs p-3 sm:p-4 flex items-center justify-center"
+          onClick={() => setShowAddContestModal(false)}
+        >
           <div 
-            className="fixed inset-0 z-40 bg-stone-950/20 backdrop-blur-2xs"
-            onClick={() => setShowAddContestModal(false)}
-          />
-          <div 
-            className="fixed z-50 bg-amber-50 border-4 border-red-600 rounded-3xl p-5 shadow-2xl w-[92vw] max-w-md space-y-4 animate-in fade-in zoom-in-95 duration-100"
-            style={{
-              top: Math.min(window.innerHeight - 440, Math.max(12, (addDisciplineAnchorPos?.bottom || 100) + 6)),
-              left: Math.min(window.innerWidth - 440, Math.max(12, (addDisciplineAnchorPos?.left || 100) - 200))
-            }}
+            className="relative w-full max-w-md bg-amber-50 border-4 border-red-600 rounded-3xl p-5 sm:p-6 shadow-2xl space-y-4 my-auto animate-in fade-in zoom-in-95 duration-150"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-amber-300 pb-3">
@@ -969,22 +959,17 @@ export default function ContestHistoryTable({
               </div>
             </form>
           </div>
-        </>
+        </div>
       )}
 
-      {/* MODAL: ADD YEAR (Anchored to + Год Button) */}
+      {/* MODAL: ADD YEAR */}
       {showAddYearModal && (
-        <>
+        <div 
+          className="fixed inset-0 z-50 overflow-y-auto bg-stone-950/60 backdrop-blur-xs p-3 sm:p-4 flex items-center justify-center"
+          onClick={() => setShowAddYearModal(false)}
+        >
           <div 
-            className="fixed inset-0 z-40 bg-stone-950/20 backdrop-blur-2xs"
-            onClick={() => setShowAddYearModal(false)}
-          />
-          <div 
-            className="fixed z-50 bg-amber-50 border-4 border-red-600 rounded-3xl p-5 shadow-2xl w-[92vw] max-w-sm space-y-4 animate-in fade-in zoom-in-95 duration-100"
-            style={{
-              top: Math.min(window.innerHeight - 340, Math.max(12, (addYearAnchorPos?.bottom || 100) + 6)),
-              left: Math.min(window.innerWidth - 350, Math.max(12, (addYearAnchorPos?.left || 100) - 150))
-            }}
+            className="relative w-full max-w-sm bg-amber-50 border-4 border-red-600 rounded-3xl p-5 sm:p-6 shadow-2xl space-y-4 my-auto animate-in fade-in zoom-in-95 duration-150"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-amber-300 pb-3">
@@ -1041,7 +1026,7 @@ export default function ContestHistoryTable({
               </div>
             </form>
           </div>
-        </>
+        </div>
       )}
     </div>
   );

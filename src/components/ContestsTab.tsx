@@ -55,7 +55,6 @@ export default function ContestsTab({
 
   // Edit contest state
   const [editingContest, setEditingContest] = useState<Contest | null>(null);
-  const [editAnchorPos, setEditAnchorPos] = useState<{ top: number; right: number } | null>(null);
   const [archiveAnchorPos, setArchiveAnchorPos] = useState<{ top: number; right: number } | null>(null);
 
   const filteredContests = contests.filter(c => {
@@ -561,14 +560,7 @@ export default function ContestsTab({
                           <>
                             <button
                               type="button"
-                              onClick={(e) => {
-                                const rect = e.currentTarget.getBoundingClientRect();
-                                setEditAnchorPos({
-                                  top: rect.bottom + 8,
-                                  right: Math.max(12, window.innerWidth - rect.right)
-                                });
-                                setEditingContest(c);
-                              }}
+                              onClick={() => setEditingContest(c)}
                               className="p-2 text-stone-500 hover:text-amber-600 rounded-xl transition-colors cursor-pointer"
                               title="Редактировать конкурс"
                             >
@@ -737,26 +729,20 @@ export default function ContestsTab({
         </div>
       )}
 
-      {/* EDIT CONTEST MODAL (Anchored to Trigger Button) */}
+      {/* EDIT CONTEST MODAL */}
       {editingContest && (
-        <>
-          <div 
-            className="fixed inset-0 z-40 bg-stone-950/35 backdrop-blur-2xs" 
-            onClick={() => setEditingContest(null)} 
-          />
+        <div 
+          className="fixed inset-0 z-50 overflow-y-auto bg-stone-950/70 backdrop-blur-sm p-3 sm:p-6 flex items-center justify-center"
+          onClick={() => setEditingContest(null)}
+        >
           <div 
             role="dialog"
             aria-modal="true"
             aria-label="Редактирование конкурса"
             onClick={(e) => e.stopPropagation()}
-            style={{
-              top: `${Math.min(window.innerHeight - 560, Math.max(12, editAnchorPos?.top ?? 80))}px`,
-              right: `${Math.max(12, editAnchorPos?.right ?? 16)}px`,
-              maxHeight: 'calc(100vh - 90px)',
-            }}
-            className="fixed z-50 bg-amber-100 rounded-3xl max-w-xl w-[92vw] p-6 shadow-2xl space-y-4 border-4 border-amber-400 overflow-y-auto animate-in fade-in zoom-in-95"
+            className="relative w-full max-w-xl bg-amber-100 rounded-3xl shadow-2xl border-4 border-amber-400 flex flex-col max-h-[calc(100dvh-2rem)] overflow-hidden my-auto animate-in fade-in zoom-in-95 duration-150"
           >
-            <div className="flex items-center justify-between border-b border-amber-300 pb-3">
+            <div className="flex items-center justify-between border-b border-amber-300 p-4 sm:p-5 shrink-0 bg-amber-200/50">
               <h3 className="font-black text-lg uppercase text-red-700 flex items-center gap-2">
                 <Edit2 size={20} /> Редактирование конкурса
               </h3>
@@ -770,6 +756,7 @@ export default function ContestsTab({
             </div>
 
             <form
+              id="edit-contest-form"
               onSubmit={(e) => {
                 e.preventDefault();
                 if (!editingContest.title.trim()) return;
@@ -788,7 +775,7 @@ export default function ContestsTab({
                 onUpdateContests(contests.map(c => c.id === updatedContest.id ? updatedContest : c));
                 setEditingContest(null);
               }}
-              className="space-y-4 text-left"
+              className="flex-1 overflow-y-auto min-h-0 p-4 sm:p-6 space-y-4 text-left"
             >
               <div>
                 <label className="block text-xs uppercase font-black mb-1 text-amber-950">Название конкурса:</label>
@@ -899,7 +886,7 @@ export default function ContestsTab({
                             const updated = isSelected ? cur.filter(id => id !== p.id) : [...cur, p.id];
                             setEditingContest({ ...editingContest, teamMemberIds: updated });
                           }}
-                          className="rounded text-red-600 focus:ring-red-500"
+                          className="rounded text-red-600 focus:ring-red-500 cursor-pointer"
                         />
                         <span>{p.name}</span>
                         <span className="text-[10px] text-stone-500 font-normal">@{p.nickname}</span>
@@ -919,25 +906,26 @@ export default function ContestsTab({
                   className="w-full bg-white border border-amber-400 rounded-xl p-2.5 text-xs font-semibold text-stone-800"
                 />
               </div>
-
-              <div className="flex justify-end gap-2 pt-2 border-t border-amber-300">
-                <button
-                  type="button"
-                  onClick={() => setEditingContest(null)}
-                  className="px-4 py-2 bg-stone-200 hover:bg-stone-300 text-stone-800 rounded-xl text-xs font-bold transition-colors cursor-pointer"
-                >
-                  Отмена
-                </button>
-                <button
-                  type="submit"
-                  className="px-6 py-2 bg-red-600 hover:bg-red-700 text-yellow-300 rounded-xl text-xs font-black uppercase shadow transition-colors cursor-pointer"
-                >
-                  Сохранить изменения
-                </button>
-              </div>
             </form>
+
+            <div className="flex justify-end gap-2 p-4 shrink-0 border-t border-amber-300 bg-amber-200/50">
+              <button
+                type="button"
+                onClick={() => setEditingContest(null)}
+                className="px-4 py-2 bg-stone-200 hover:bg-stone-300 text-stone-800 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+              >
+                Отмена
+              </button>
+              <button
+                type="submit"
+                form="edit-contest-form"
+                className="px-6 py-2 bg-red-600 hover:bg-red-700 text-yellow-300 rounded-xl text-xs font-black uppercase shadow transition-colors cursor-pointer"
+              >
+                Сохранить изменения
+              </button>
+            </div>
           </div>
-        </>
+        </div>
       )}
 
       {/* ARCHIVE RALLY MODAL WITH MISSING PLACE REMINDER */}

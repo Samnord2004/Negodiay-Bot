@@ -1049,24 +1049,18 @@ export default function CreativityTab({
         </div>
       )}
 
-      {/* MODAL: ADD NEW CREATIVITY IDEA (Anchored to trigger button) */}
+      {/* MODAL: ADD NEW CREATIVITY IDEA */}
       {showAddModal && (
-        <>
-          <div 
-            className="fixed inset-0 z-40 bg-stone-950/35 backdrop-blur-2xs"
-            onClick={() => setShowAddModal(false)}
-          />
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-stone-950/60 backdrop-blur-xs overflow-y-auto"
+          onClick={() => setShowAddModal(false)}
+        >
           <div 
             role="dialog"
             aria-modal="true"
             aria-label="Новая творческая идея"
             onClick={(e) => e.stopPropagation()}
-            style={{
-              top: `${Math.min(window.innerHeight - 560, Math.max(12, addAnchorPos?.top ?? 80))}px`,
-              right: `${Math.max(12, addAnchorPos?.right ?? 16)}px`,
-              maxHeight: 'calc(100vh - 90px)',
-            }}
-            className="fixed z-50 bg-amber-50 border-4 border-red-600 rounded-3xl max-w-lg w-[92vw] shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150"
+            className="bg-amber-50 border-4 border-red-600 rounded-3xl max-w-lg w-full max-h-[90vh] shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150 my-auto"
           >
             <div className="bg-yellow-400 border-b-4 border-red-600 px-6 py-4 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
@@ -1194,27 +1188,21 @@ export default function CreativityTab({
               </div>
             </form>
           </div>
-        </>
+        </div>
       )}
 
-      {/* MODAL: EDIT CREATIVITY IDEA (Anchored to trigger button) */}
+      {/* MODAL: EDIT CREATIVITY IDEA */}
       {editingIdea && (
-        <>
-          <div 
-            className="fixed inset-0 z-40 bg-stone-950/35 backdrop-blur-2xs" 
-            onClick={() => setEditingIdea(null)} 
-          />
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-stone-950/60 backdrop-blur-xs overflow-y-auto"
+          onClick={() => setEditingIdea(null)} 
+        >
           <div 
             role="dialog"
             aria-modal="true"
             aria-label="Редактировать идею"
             onClick={(e) => e.stopPropagation()}
-            style={{
-              top: `${Math.min(window.innerHeight - 560, Math.max(12, editAnchorPos?.top ?? 80))}px`,
-              right: `${Math.max(12, editAnchorPos?.right ?? 16)}px`,
-              maxHeight: 'calc(100vh - 90px)',
-            }}
-            className="fixed z-50 bg-amber-50 border-4 border-amber-600 rounded-3xl max-w-lg w-[92vw] shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150"
+            className="bg-amber-50 border-4 border-amber-600 rounded-3xl max-w-lg w-full max-h-[90vh] shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150 my-auto"
           >
             <div className="bg-amber-400 border-b-4 border-amber-600 px-6 py-4 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
@@ -1395,7 +1383,7 @@ export default function CreativityTab({
               </div>
             </form>
           </div>
-        </>
+        </div>
       )}
 
     </div>

@@ -201,6 +201,16 @@ export interface FundExpense {
   approvedAt?: string;
 }
 
+export interface FundPaymentRequisites {
+  phoneNumber: string;
+  bankName: string;
+  cardNumber: string;
+  cardHolder: string;
+  paymentNote?: string;
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
 export type RallyParticipationStatus = 'going' | 'thinking' | 'not_going';
 
 export interface RallyParticipantEntry {

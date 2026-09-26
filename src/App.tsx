@@ -34,7 +34,7 @@ import { formatChatTimestamp, deduplicateChatMessages } from './utils/chatUtils'
 import { 
   Participant, Excursion, ChatMessage, BotConfig, 
   TaskItem, MenuItem, GroceryItem, InventoryItem, 
-  Contest, ContestHistoryEntry, GalleryPhoto, TeamDocument, FundRecord, CreativityIdea,
+  Contest, ContestHistoryEntry, GalleryPhoto, TeamDocument, FundRecord, FundPaymentRequisites, CreativityIdea,
   TeamStory, UserRole, ROLE_DEFINITIONS, ThemeConfig, DEFAULT_THEME_CONFIG,
   RallyCoin
 } from './types';
@@ -110,6 +110,7 @@ export default function App() {
   const [photos, setPhotos] = useState<GalleryPhoto[]>(initialPhotos);
   const [documents, setDocuments] = useState<TeamDocument[]>(initialDocuments);
   const [fundRecords, setFundRecords] = useState<FundRecord[]>(initialFundRecords);
+  const [fundRequisites, setFundRequisites] = useState<FundPaymentRequisites | null>(null);
   const [creativityIdeas, setCreativityIdeas] = useState<CreativityIdea[]>(initialCreativityIdeas);
   const [stories, setStories] = useState<TeamStory[]>(INITIAL_STORIES);
   const [rallyCoins, setRallyCoins] = useState<RallyCoin[]>(initialRallyCoins);
@@ -256,6 +257,7 @@ export default function App() {
         if (data.photos) setPhotos(data.photos);
         if (data.documents) setDocuments(data.documents);
         if (data.fundRecords) setFundRecords(data.fundRecords);
+        if (data.fundRequisites) setFundRequisites(data.fundRequisites);
         if (data.creativityIdeas) setCreativityIdeas(data.creativityIdeas);
         if (data.stories) setStories(data.stories);
         if (data.rallyCoins && Array.isArray(data.rallyCoins)) setRallyCoins(data.rallyCoins);
@@ -1119,10 +1121,12 @@ export default function App() {
         {activeTab === 'fund' && (
           <FundTab
             fundRecords={fundRecords}
+            fundRequisites={fundRequisites}
             participants={participants}
             currentUser={currentUser}
             isAdmin={Boolean(isCaptainUser(currentUser) || currentUser?.role === 'admin')}
             isTreasurer={Boolean(currentUser?.role === 'treasurer')}
+            onUpdateFundRequisites={(reqs) => setFundRequisites(reqs)}
             onPaymentToggled={(rec) => {
               setFundRecords(prev => {
                 const idx = prev.findIndex(r => r.id === rec.id || (r.participantId === rec.participantId && r.year === rec.year && r.month === rec.month));

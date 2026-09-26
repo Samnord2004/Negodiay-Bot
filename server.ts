@@ -2,6 +2,7 @@ import express from "express";
 import http from "http";
 import path from "path";
 import fs from "fs";
+import { fileURLToPath } from "url";
 import dotenv from "dotenv";
 import { GoogleGenAI, Type } from "@google/genai";
 import { createServer as createViteServer } from "vite";
@@ -57,6 +58,8 @@ import {
   getFundExpenses,
   addOrUpdateFundExpense,
   deleteFundExpense,
+  getFundRequisites,
+  saveFundRequisites,
   getCreativityIdeas,
   addCreativityIdea,
   updateCreativityIdea,
@@ -83,9 +86,12 @@ import { formatChatTimestamp } from "./src/utils/chatUtils";
 // Load environment variables
 dotenv.config();
 
+const currentDir = typeof __dirname !== "undefined" ? __dirname : path.dirname(fileURLToPath(import.meta.url));
+
 const app = express();
-// Support both numeric ports (Cloud Run, Docker, VPS) and Unix domain sockets (Beget Passenger)
-const rawPort = process.env.PORT || "3000";
+// Support AI Studio sandbox (port 3000 behind Nginx 8080), Docker / VPS (process.env.PORT), and Unix sockets (Beget Passenger)
+const rawPort = process.env.DEFAULT_APP_PORT || 
+  (process.env.PORT && process.env.PORT !== process.env.NGINX_PORT && process.env.PORT !== "8080" ? process.env.PORT : "3000");
 const isNumericPort = !isNaN(Number(rawPort));
 const PORT = isNumericPort ? Number(rawPort) : rawPort;
 
@@ -297,6 +303,39 @@ async function generateBotResponseInternal(body: any): Promise<any> {
       detectedPsychotype: "Весельчак-балагур",
       detectedPsychotypeExplanation: "Задорный командный боевой заряд 'Давай Негодяй'!",
       adapterStyleUsed: "Командный боевой клич"
+    };
+  }
+
+  // 8. Фирменная кричалка: "Реал - папа, Барселона - мама, Негодяи - дети, лучшие на свете!"
+  if (
+    msgLower.includes("реал - папа") || 
+    msgLower.includes("реал папа") || 
+    msgLower.includes("барселона - мама") || 
+    msgLower.includes("барселона мама") || 
+    msgLower.includes("негодяи - дети") || 
+    msgLower.includes("негодяи дети") ||
+    msgLower.includes("лучшие на свете")
+  ) {
+    return {
+      text: "⚽ Реал - папа, Барселона - мама, Негодяи - дети, лучшие на свете! 🏆🔥 Вперёд, Негодяи! Мы всех порвём! 🌲🎉",
+      detectedPsychotype: "Спортивный темп-лидер",
+      detectedPsychotypeExplanation: "Легендарная боевая кричалка Негодяев про футбольных родителей!",
+      adapterStyleUsed: "Фирменная кричалка"
+    };
+  }
+
+  // 9. Фирменная кричалка: "Барбара Стрейзанд - Уу-Уу-Ууу-Ууу-у!"
+  if (
+    msgLower.includes("барбара стрейзанд") || 
+    msgLower.includes("стрейзанд") || 
+    msgLower.includes("barbra streisand") || 
+    msgLower.includes("барбара")
+  ) {
+    return {
+      text: "🎶 Барбара Стрейзанд — Уу-Уу-Ууу-Ууу-у! 💃🕺 Уу-Уу-Ууу-Ууу-у! Зажигай, костёр, пляши, лагерь! 🔥✨",
+      detectedPsychotype: "Гитарист-романтик",
+      detectedPsychotypeExplanation: "Культовый музыкальный клич Негодяев 'Барбара Стрейзанд - Уу-Уу-Ууу-Ууу-у!'",
+      adapterStyleUsed: "Музыкальный клич лагеря"
     };
   }
 
@@ -655,6 +694,7 @@ app.get("/api/sync", (req, res) => {
     documents: getTeamDocuments(),
     fundRecords: getFundRecords(),
     fundExpenses: getFundExpenses(),
+    fundRequisites: getFundRequisites(),
     creativityIdeas: getCreativityIdeas(),
     stories: getStories(),
     rallyCoins: getRallyCoins(),
@@ -869,6 +909,7 @@ app.post("/api/sync", (req, res) => {
       contests, 
       messages,
       fundRecords,
+      fundRequisites,
       stories,
       rallyCoins,
       contestHistory
@@ -884,6 +925,7 @@ app.post("/api/sync", (req, res) => {
     if (contestHistory && Array.isArray(contestHistory)) saveContestHistory(contestHistory);
     if (messages && Array.isArray(messages) && messages.length > 0) saveMessages(messages);
     if (fundRecords) saveFundRecords(fundRecords);
+    if (fundRequisites) saveFundRequisites(fundRequisites);
     if (stories) saveStories(stories);
     if (rallyCoins && Array.isArray(rallyCoins)) saveRallyCoins(rallyCoins);
     res.json({ success: true });
@@ -1836,6 +1878,40 @@ app.post("/api/fund/update", (req, res) => {
   }
 });
 
+// Fund Payment Requisites Endpoints
+app.get("/api/fund/requisites", (req, res) => {
+  res.json(getFundRequisites());
+});
+
+app.post("/api/fund/requisites", (req, res) => {
+  try {
+    const { phoneNumber, bankName, cardNumber, cardHolder, paymentNote, operatorId, operatorName } = req.body;
+    if (operatorId && !canManageFund(operatorId)) {
+      return res.status(403).json({ 
+        success: false, 
+        error: "Только Казначей и Капитан команды имеют право вносить и изменять реквизиты фонда" 
+      });
+    }
+
+    const updated = saveFundRequisites({
+      phoneNumber: phoneNumber !== undefined ? String(phoneNumber).trim() : undefined,
+      bankName: bankName !== undefined ? String(bankName).trim() : undefined,
+      cardNumber: cardNumber !== undefined ? String(cardNumber).trim() : undefined,
+      cardHolder: cardHolder !== undefined ? String(cardHolder).trim() : undefined,
+      paymentNote: paymentNote !== undefined ? String(paymentNote).trim() : undefined
+    }, operatorName || "Казначей");
+
+    res.json({ 
+      success: true, 
+      message: "Реквизиты для оплаты взносов успешно сохранены", 
+      requisites: updated 
+    });
+  } catch (err: any) {
+    console.error("Fund requisites save error:", err);
+    res.status(500).json({ success: false, error: "Ошибка при сохранении реквизитов фонда" });
+  }
+});
+
 // Fund Expenses Endpoints
 app.get("/api/fund/expenses", (req, res) => {
   res.json(getFundExpenses());
@@ -2273,10 +2349,17 @@ app.delete("/api/mk/rooms/:code", (req, res) => {
 });
 
 // Built-in Default Mortal Kombat ROM route
-app.use("/roms", express.static(path.join(process.cwd(), "public", "roms")));
+const candidateRomsDirs = [
+  path.join(process.cwd(), "public", "roms"),
+  path.join(process.cwd(), "dist", "roms"),
+  path.join(currentDir, "roms"),
+  path.join(currentDir, "..", "public", "roms")
+];
+const resolvedRomsDir = candidateRomsDirs.find(d => fs.existsSync(path.join(d, "mortal_kombat_3.bin"))) || path.join(process.cwd(), "public", "roms");
+app.use("/roms", express.static(resolvedRomsDir));
 
 app.get("/api/mk/default-rom", (req, res) => {
-  const romPath = path.join(process.cwd(), "public", "roms", "mortal_kombat_3.bin");
+  const romPath = path.join(resolvedRomsDir, "mortal_kombat_3.bin");
   if (fs.existsSync(romPath)) {
     res.setHeader("Content-Type", "application/octet-stream");
     res.setHeader("Content-Disposition", 'attachment; filename="Ultimate_Mortal_Kombat_3.bin"');
@@ -2346,6 +2429,11 @@ app.post("/api/chat/send", async (req, res) => {
     msgLower.includes("запись дубля") || 
     msgLower.includes("кто с негодяем дрался") || 
     msgLower.includes("давай негодяй") || 
+    msgLower.includes("реал") || 
+    msgLower.includes("барселон") || 
+    msgLower.includes("лучшие на свете") || 
+    msgLower.includes("стрейзанд") || 
+    msgLower.includes("барбара") || 
     msgLower.includes("днюх") || 
     msgLower.includes("рожден") || 
     msgLower.includes("именин") || 
@@ -2595,6 +2683,39 @@ function generateMockNegodyaiResponse(
       detectedPsychotype: "Весельчак-балагур",
       detectedPsychotypeExplanation: "Задорный командный боевой заряд 'Давай Негодяй'!",
       adapterStyleUsed: "Командный боевой клич"
+    };
+  }
+
+  // Фирменная кричалка: "Реал - папа, Барселона - мама, Негодяи - дети, лучшие на свете!"
+  if (
+    msgLower.includes("реал - папа") || 
+    msgLower.includes("реал папа") || 
+    msgLower.includes("барселона - мама") || 
+    msgLower.includes("барселона мама") || 
+    msgLower.includes("негодяи - дети") || 
+    msgLower.includes("негодяи дети") ||
+    msgLower.includes("лучшие на свете")
+  ) {
+    return {
+      text: "⚽ Реал - папа, Барселона - мама, Негодяи - дети, лучшие на свете! 🏆🔥 Вперёд, Негодяи! Мы всех порвём! 🌲🎉",
+      detectedPsychotype: "Спортивный темп-лидер",
+      detectedPsychotypeExplanation: "Легендарная боевая кричалка Негодяев про футбольных родителей!",
+      adapterStyleUsed: "Фирменная кричалка"
+    };
+  }
+
+  // Фирменная кричалка: "Барбара Стрейзанд - Уу-Уу-Ууу-Ууу-у!"
+  if (
+    msgLower.includes("барбара стрейзанд") || 
+    msgLower.includes("стрейзанд") || 
+    msgLower.includes("barbra streisand") || 
+    msgLower.includes("барбара")
+  ) {
+    return {
+      text: "🎶 Барбара Стрейзанд — Уу-Уу-Ууу-Ууу-у! 💃🕺 Уу-Уу-Ууу-Ууу-у! Зажигай, костёр, пляши, лагерь! 🔥✨",
+      detectedPsychotype: "Гитарист-романтик",
+      detectedPsychotypeExplanation: "Культовый музыкальный клич Негодяев 'Барбара Стрейзанд - Уу-Уу-Ууу-Ууу-у!'",
+      adapterStyleUsed: "Музыкальный клич лагеря"
     };
   }
 
@@ -3031,10 +3152,17 @@ function generateMockNegodyaiResponse(
 async function startServer() {
   await initDb();
 
-  const distPath = path.join(process.cwd(), "dist");
+  const candidateDistPaths = [
+    path.join(process.cwd(), "dist"),
+    currentDir,
+    path.join(currentDir, "..", "dist"),
+    path.join(currentDir, "dist"),
+    process.cwd()
+  ];
+  const distPath = candidateDistPaths.find(p => fs.existsSync(path.join(p, "index.html"))) || path.join(process.cwd(), "dist");
   const hasDist = fs.existsSync(path.join(distPath, "index.html"));
 
-  if (process.env.NODE_ENV === "production" || (hasDist && process.env.NODE_ENV !== "development")) {
+  if (process.env.NODE_ENV === "production" && hasDist) {
     console.log("[Negodyai MAX Server] Running in PRODUCTION mode, serving static files from:", distPath);
     app.use(express.static(distPath));
     app.get("*", (req, res) => {

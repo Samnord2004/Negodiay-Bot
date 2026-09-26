@@ -35,7 +35,6 @@ export default function TeamHistoryTab({
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
-  const [modalAnchorPos, setModalAnchorPos] = useState<{ top: number; right: number } | null>(null);
   const [editingStory, setEditingStory] = useState<TeamStory | null>(null);
 
   // Lightbox & Video Player Modal
@@ -54,14 +53,7 @@ export default function TeamHistoryTab({
   const [newVideoUrl, setNewVideoUrl] = useState('');
 
   // Open Add modal
-  const handleOpenAdd = (e?: React.MouseEvent) => {
-    if (e) {
-      const rect = e.currentTarget.getBoundingClientRect();
-      setModalAnchorPos({
-        top: rect.bottom + 8,
-        right: Math.max(12, window.innerWidth - rect.right)
-      });
-    }
+  const handleOpenAdd = () => {
     setEditingStory(null);
     setFormCategory('custom');
     setFormCategoryTitle('История команды');
@@ -74,14 +66,7 @@ export default function TeamHistoryTab({
   };
 
   // Open Edit modal
-  const handleOpenEdit = (story: TeamStory, e?: React.MouseEvent) => {
-    if (e) {
-      const rect = e.currentTarget.getBoundingClientRect();
-      setModalAnchorPos({
-        top: rect.bottom + 8,
-        right: Math.max(12, window.innerWidth - rect.right)
-      });
-    }
+  const handleOpenEdit = (story: TeamStory) => {
     setEditingStory(story);
     setFormCategory(story.category);
     setFormCategoryTitle(story.categoryTitle);
@@ -189,7 +174,7 @@ export default function TeamHistoryTab({
           <div className="shrink-0 flex flex-col sm:flex-row gap-3">
             <button
               type="button"
-              onClick={(e) => handleOpenAdd(e)}
+              onClick={() => handleOpenAdd()}
               className="bg-red-600 hover:bg-red-700 active:scale-95 text-yellow-300 font-black uppercase text-xs sm:text-sm px-5 py-3 rounded-2xl border-2 border-amber-950 shadow-lg flex items-center justify-center gap-2 transition-all cursor-pointer"
             >
               <Plus size={18} /> Добавить блок истории
@@ -261,7 +246,7 @@ export default function TeamHistoryTab({
             </p>
             <button
               type="button"
-              onClick={(e) => handleOpenAdd(e)}
+              onClick={() => handleOpenAdd()}
               className="bg-red-600 text-yellow-300 text-xs font-black uppercase px-4 py-2 rounded-xl shadow cursor-pointer"
             >
               + Добавить историю
@@ -305,7 +290,7 @@ export default function TeamHistoryTab({
                   <div className="flex items-center gap-1.5 shrink-0">
                     <button
                       type="button"
-                      onClick={(e) => handleOpenEdit(story, e)}
+                      onClick={() => handleOpenEdit(story)}
                       title="Редактировать историю"
                       className="p-2 text-amber-700 hover:text-amber-950 hover:bg-amber-100 rounded-xl transition-all cursor-pointer"
                     >
@@ -407,40 +392,34 @@ export default function TeamHistoryTab({
         )}
       </div>
 
-      {/* MODAL: ADD / EDIT STORY BLOCK (Anchored to Trigger Button) */}
+      {/* MODAL: ADD / EDIT STORY BLOCK */}
       {showAddModal && (
-        <>
-          <div 
-            className="fixed inset-0 z-40 bg-stone-950/35 backdrop-blur-2xs"
-            onClick={() => setShowAddModal(false)}
-          />
+        <div 
+          className="fixed inset-0 z-50 overflow-y-auto bg-stone-950/70 backdrop-blur-sm p-3 sm:p-6 flex items-center justify-center"
+          onClick={() => setShowAddModal(false)}
+        >
           <div 
             role="dialog"
             aria-modal="true"
             aria-label={editingStory ? 'Редактировать блок истории' : 'Добавить блок истории команды'}
             onClick={(e) => e.stopPropagation()}
-            style={{
-              top: `${Math.min(window.innerHeight - 580, Math.max(12, modalAnchorPos?.top ?? 80))}px`,
-              right: `${Math.max(12, modalAnchorPos?.right ?? 16)}px`,
-              maxHeight: 'calc(100vh - 90px)',
-            }}
-            className="fixed z-50 bg-yellow-50 border-4 border-red-600 rounded-3xl p-5 sm:p-7 max-w-2xl w-[92vw] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+            className="relative w-full max-w-2xl bg-yellow-50 border-4 border-red-600 rounded-3xl shadow-2xl flex flex-col max-h-[calc(100dvh-2rem)] overflow-hidden my-auto animate-in fade-in zoom-in-95 duration-150"
           >
-            <div className="flex items-center justify-between border-b-2 border-amber-300 pb-3 shrink-0">
-              <h3 className="text-lg sm:text-xl font-black uppercase text-red-600 flex items-center gap-2">
-                <Sparkles size={20} />
-                {editingStory ? 'Редактировать блок истории' : 'Добавить блок истории команды'}
+            <div className="flex items-center justify-between border-b-2 border-amber-300 p-4 sm:p-5 shrink-0 bg-amber-100/60">
+              <h3 className="text-base sm:text-xl font-black uppercase text-red-600 flex items-center gap-2">
+                <Sparkles size={20} className="shrink-0" />
+                <span className="truncate">{editingStory ? 'Редактировать блок истории' : 'Добавить блок истории команды'}</span>
               </h3>
               <button
                 type="button"
                 onClick={() => setShowAddModal(false)}
-                className="p-1.5 text-amber-900 hover:text-red-600 rounded-xl cursor-pointer"
+                className="p-1.5 text-amber-900 hover:text-red-600 rounded-xl cursor-pointer hover:bg-amber-200/60 transition-colors shrink-0"
               >
                 <X size={20} />
               </button>
             </div>
 
-            <form onSubmit={handleSaveStory} className="space-y-4 text-xs font-bold text-amber-950 overflow-y-auto flex-1 pr-1 pt-4">
+            <form id="story-form" onSubmit={handleSaveStory} className="space-y-4 text-xs font-bold text-amber-950 overflow-y-auto min-h-0 flex-1 p-4 sm:p-6">
               
               {/* Category & Title */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -557,7 +536,7 @@ export default function TeamHistoryTab({
                         setNewPhotoUrl('');
                       }
                     }}
-                    className="px-3 py-1.5 bg-amber-300 text-amber-950 rounded-xl text-xs font-bold"
+                    className="px-3 py-1.5 bg-amber-300 text-amber-950 rounded-xl text-xs font-bold cursor-pointer"
                   >
                     + Добавить
                   </button>
@@ -571,7 +550,7 @@ export default function TeamHistoryTab({
                         <button
                           type="button"
                           onClick={() => setFormPhotos(formPhotos.filter((_, i) => i !== idx))}
-                          className="absolute inset-0 bg-red-600/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="absolute inset-0 bg-red-600/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
                         >
                           <Trash size={14} />
                         </button>
@@ -622,7 +601,7 @@ export default function TeamHistoryTab({
                         setNewVideoUrl('');
                       }
                     }}
-                    className="px-3 py-1.5 bg-amber-300 text-amber-950 rounded-xl text-xs font-bold"
+                    className="px-3 py-1.5 bg-amber-300 text-amber-950 rounded-xl text-xs font-bold cursor-pointer"
                   >
                     + Добавить
                   </button>
@@ -631,12 +610,12 @@ export default function TeamHistoryTab({
                 {formVideos.length > 0 && (
                   <div className="space-y-1 pt-1">
                     {formVideos.map((v, idx) => (
-                      <div key={idx} className="flex items-center justify-between bg-white px-2.5 py-1.5 rounded-lg border border-amber-300 text-[11px]">
-                        <span className="truncate max-w-sm text-stone-800">{v}</span>
+                      <div key={idx} className="flex items-center justify-between bg-white px-2.5 py-1.5 rounded-lg border border-amber-300 text-[11px] gap-2">
+                        <span className="truncate flex-1 min-w-0 text-stone-800">{v}</span>
                         <button
                           type="button"
                           onClick={() => setFormVideos(formVideos.filter((_, i) => i !== idx))}
-                          className="text-red-600 hover:text-red-800 p-1"
+                          className="text-red-600 hover:text-red-800 p-1 shrink-0 cursor-pointer"
                         >
                           <Trash size={13} />
                         </button>
@@ -646,26 +625,27 @@ export default function TeamHistoryTab({
                 )}
               </div>
 
-              {/* Submit Buttons */}
-              <div className="flex items-center justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2.5 rounded-xl border border-amber-400 bg-amber-200 text-amber-950 font-bold"
-                >
-                  Отмена
-                </button>
-                <button
-                  type="submit"
-                  className="px-6 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 active:scale-95 text-yellow-300 font-black uppercase shadow-md"
-                >
-                  Сохранить блок истории
-                </button>
-              </div>
-
             </form>
+
+            {/* Pinned Action Buttons Footer */}
+            <div className="flex items-center justify-end gap-3 p-4 shrink-0 border-t-2 border-amber-300 bg-amber-100/60">
+              <button
+                type="button"
+                onClick={() => setShowAddModal(false)}
+                className="px-4 py-2.5 rounded-xl border border-amber-400 bg-amber-200 hover:bg-amber-300 text-amber-950 font-bold transition-colors cursor-pointer"
+              >
+                Отмена
+              </button>
+              <button
+                type="submit"
+                form="story-form"
+                className="px-6 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 active:scale-95 text-yellow-300 font-black uppercase shadow-md transition-all cursor-pointer"
+              >
+                Сохранить блок истории
+              </button>
+            </div>
           </div>
-        </>
+        </div>
       )}
 
       {/* LIGHTBOX MODAL */}

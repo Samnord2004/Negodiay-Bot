@@ -3,13 +3,15 @@ import {
   PiggyBank, ShieldCheck, UserCheck, AlertCircle, 
   CheckCircle, Bell, DollarSign, Calendar, RefreshCw, Send, Award,
   Edit2, Plus, Check, X, CreditCard, ChevronRight, User, ShoppingBag,
-  TrendingUp, Wallet, Lock, Unlock, ArrowDownCircle, ArrowUpCircle, Eye, Info
+  TrendingUp, Wallet, Lock, Unlock, ArrowDownCircle, ArrowUpCircle, Eye, Info,
+  Copy, Phone, QrCode
 } from 'lucide-react';
-import { FundRecord, Participant, FundExpense } from '../types';
+import { FundRecord, Participant, FundExpense, FundPaymentRequisites } from '../types';
 import { getSafeAvatar, getParticipantAvatar } from '../utils/avatar';
 
 interface FundTabProps {
   fundRecords: FundRecord[];
+  fundRequisites?: FundPaymentRequisites | null;
   participants: Participant[];
   currentUser: Participant | null;
   isAdmin: boolean;
@@ -18,6 +20,7 @@ interface FundTabProps {
   onSetTreasurer: (participantId: string) => void;
   onSwitchUser?: (participant: Participant) => void;
   onUpdateFundRecords?: (records: FundRecord[]) => void;
+  onUpdateFundRequisites?: (reqs: FundPaymentRequisites) => void;
 }
 
 const MONTHS_NAMES = [
@@ -34,6 +37,7 @@ export const isFundMonthValid = (year: number, month: number) => {
 
 export default function FundTab({
   fundRecords,
+  fundRequisites,
   participants,
   currentUser,
   isAdmin,
@@ -41,7 +45,8 @@ export default function FundTab({
   onPaymentToggled,
   onSetTreasurer,
   onSwitchUser,
-  onUpdateFundRecords
+  onUpdateFundRecords,
+  onUpdateFundRequisites
 }: FundTabProps) {
   const currentYear = new Date().getFullYear();
   const currentMonth = new Date().getMonth() + 1; // 1 - 12
@@ -54,6 +59,44 @@ export default function FundTab({
 
   // Explicit Treasurer Edit Mode (defaults to true so fields are immediately active!)
   const [editMode, setEditMode] = useState<boolean>(true);
+
+  // Fund Payment Requisites State
+  const [requisites, setRequisites] = useState<FundPaymentRequisites>(() => {
+    return fundRequisites || {
+      phoneNumber: '+7 (912) 345-67-89',
+      bankName: 'Т-Банк (Тинькофф)',
+      cardNumber: '2200 7001 2345 6789',
+      cardHolder: 'Екатерина С. (Булочка)',
+      paymentNote: 'Членский взнос в фонд «Негодяи» (укажите ваш никнейм)',
+      updatedAt: '2026-09-01',
+      updatedBy: 'Казначей'
+    };
+  });
+
+  useEffect(() => {
+    if (fundRequisites) {
+      setRequisites(fundRequisites);
+    }
+  }, [fundRequisites]);
+
+  useEffect(() => {
+    fetch('/api/fund/requisites')
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.phoneNumber) {
+          setRequisites(data);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const [isEditingRequisites, setIsEditingRequisites] = useState(false);
+  const [formPhone, setFormPhone] = useState('');
+  const [formBank, setFormBank] = useState('');
+  const [formCardNumber, setFormCardNumber] = useState('');
+  const [formCardHolder, setFormCardHolder] = useState('');
+  const [formPaymentNote, setFormPaymentNote] = useState('');
+  const [copiedType, setCopiedType] = useState<'phone' | 'card' | null>(null);
 
   // Modal for editing a specific payment record
   const [editingRecord, setEditingRecord] = useState<{
@@ -172,6 +215,70 @@ export default function FundTab({
   // STRICT REQUIREMENT: Only Treasurer and Captain have rights to make changes to the Fund!
   // For all other users, this page is strictly read-only / informational.
   const canEdit = Boolean(isCaptain || isUserTreasurer);
+
+  const handleOpenEditRequisites = () => {
+    if (!canEdit) {
+      setNotificationToast('Только Казначей и Капитан команды имеют право редактировать реквизиты фонда.');
+      return;
+    }
+    setFormPhone(requisites.phoneNumber || '');
+    setFormBank(requisites.bankName || '');
+    setFormCardNumber(requisites.cardNumber || '');
+    setFormCardHolder(requisites.cardHolder || '');
+    setFormPaymentNote(requisites.paymentNote || '');
+    setIsEditingRequisites(true);
+  };
+
+  const handleSaveRequisites = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!canEdit) {
+      setNotificationToast('Только Казначей и Капитан команды имеют право сохранять реквизиты.');
+      return;
+    }
+
+    const operatorName = currentUser ? currentUser.name : (isCaptain ? 'Капитан' : 'Казначей');
+    const updated: FundPaymentRequisites = {
+      phoneNumber: formPhone.trim(),
+      bankName: formBank.trim() || 'Т-Банк',
+      cardNumber: formCardNumber.trim(),
+      cardHolder: formCardHolder.trim(),
+      paymentNote: formPaymentNote.trim(),
+      updatedAt: new Date().toISOString().split('T')[0],
+      updatedBy: operatorName
+    };
+
+    setRequisites(updated);
+    if (onUpdateFundRequisites) {
+      onUpdateFundRequisites(updated);
+    }
+    setIsEditingRequisites(false);
+    setNotificationToast('✅ Реквизиты для оплаты членских взносов успешно сохранены!');
+
+    try {
+      await fetch('/api/fund/requisites', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...updated,
+          operatorId: currentUser?.id,
+          operatorName
+        })
+      });
+    } catch (err) {
+      console.error('Save requisites error:', err);
+    }
+  };
+
+  const handleCopyText = (text: string, type: 'phone' | 'card') => {
+    try {
+      navigator.clipboard.writeText(text);
+      setCopiedType(type);
+      setTimeout(() => setCopiedType(null), 2500);
+      setNotificationToast(`Скопировано в буфер: ${text}`);
+    } catch {
+      setNotificationToast(`Выделите и скопируйте: ${text}`);
+    }
+  };
 
   // Helper to find or synthesize record for participant & month
   const getRecord = (pId: string, month: number): { isPaid: boolean; amount: number; id?: string; paidAt?: string; note?: string } => {
@@ -527,11 +634,38 @@ export default function FundTab({
                   <Bell size={15} />
                   <span>Должники</span>
                 </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const el = document.getElementById('fund-requisites-card');
+                    if (el) el.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                  className="px-3.5 py-2 bg-yellow-300 hover:bg-yellow-200 text-amber-950 font-black uppercase text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer border-2 border-amber-950"
+                  title="Перейти к реквизитам для оплаты взносов"
+                >
+                  <CreditCard size={15} className="text-red-700" />
+                  <span>Реквизиты</span>
+                </button>
               </>
             ) : (
-              <div className="px-3.5 py-2 bg-stone-900 text-amber-300 font-black uppercase text-xs rounded-xl shadow-xs border-2 border-amber-400 flex items-center gap-2">
-                <Eye size={15} className="text-amber-400" />
-                <span>Ознакомительный режим</span>
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="px-3.5 py-2 bg-stone-900 text-amber-300 font-black uppercase text-xs rounded-xl shadow-xs border-2 border-amber-400 flex items-center gap-2">
+                  <Eye size={15} className="text-amber-400" />
+                  <span>Ознакомительный режим</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const el = document.getElementById('fund-requisites-card');
+                    if (el) el.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                  className="px-3.5 py-2 bg-yellow-300 hover:bg-yellow-200 text-amber-950 font-black uppercase text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer border-2 border-amber-950"
+                  title="Перейти к реквизитам для оплаты взносов"
+                >
+                  <CreditCard size={15} className="text-red-700" />
+                  <span>Реквизиты</span>
+                </button>
               </div>
             )}
           </div>
@@ -761,6 +895,151 @@ export default function FundTab({
               )}
             </span>
           </div>
+        </div>
+      </div>
+
+      {/* PAYMENT REQUISITES CARD */}
+      <div id="fund-requisites-card" className="bg-amber-50/90 border-3 border-amber-400 rounded-3xl p-5 sm:p-6 shadow-md space-y-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b-2 border-amber-300 pb-3">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-2xl bg-red-600 text-yellow-300 flex items-center justify-center font-black shadow-md shrink-0">
+              <CreditCard size={24} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-base sm:text-lg font-black uppercase text-amber-950 tracking-tight">
+                  Реквизиты для оплаты членских взносов
+                </h3>
+                <span className="bg-emerald-600 text-white text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full shadow-xs">
+                  СБП / Карта
+                </span>
+              </div>
+              <p className="text-xs text-amber-900 font-medium">
+                Перевод членских взносов по номеру телефона или реквизитам карты, привязанной к номеру
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+            {canEdit ? (
+              <button
+                type="button"
+                onClick={handleOpenEditRequisites}
+                className="w-full sm:w-auto px-4 py-2 bg-red-600 hover:bg-red-700 text-yellow-300 font-black uppercase text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+              >
+                <Edit2 size={14} />
+                <span>Внести / изменить реквизиты</span>
+              </button>
+            ) : (
+              <div className="px-3 py-1.5 bg-amber-200/80 text-amber-950 text-[11px] font-bold rounded-xl border border-amber-300 flex items-center gap-1.5">
+                <Lock size={13} className="text-amber-800" />
+                <span>Только просмотр (вносит Казначей и Капитан)</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Requisites Content Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Left Block: Phone & SBP */}
+          <div className="bg-white/95 border-2 border-amber-300 rounded-2xl p-4 shadow-xs space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-black uppercase text-stone-500 tracking-wider flex items-center gap-1.5">
+                <Phone size={14} className="text-emerald-600" /> Номер телефона (СБП):
+              </span>
+              <span className="text-[10px] font-black uppercase bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md border border-emerald-300">
+                Быстрый перевод
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between gap-2 bg-amber-50/70 p-3 rounded-xl border border-amber-200">
+              <span className="text-base sm:text-xl font-black text-amber-950 tracking-wider select-all font-mono">
+                {requisites.phoneNumber || '—'}
+              </span>
+              {requisites.phoneNumber && (
+                <button
+                  type="button"
+                  onClick={() => handleCopyText(requisites.phoneNumber, 'phone')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase transition-all flex items-center gap-1.5 cursor-pointer shadow-xs ${
+                    copiedType === 'phone' 
+                      ? 'bg-emerald-600 text-white' 
+                      : 'bg-amber-200 hover:bg-amber-300 text-amber-950'
+                  }`}
+                  title="Скопировать номер телефона"
+                >
+                  {copiedType === 'phone' ? <Check size={14} /> : <Copy size={14} />}
+                  <span>{copiedType === 'phone' ? 'Скопировано!' : 'Скопировать'}</span>
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div>
+                <span className="text-[10px] font-bold text-stone-500 uppercase block">Банк получателя:</span>
+                <span className="font-black text-stone-900 block mt-0.5">
+                  {requisites.bankName || 'Не указан'}
+                </span>
+              </div>
+              <div>
+                <span className="text-[10px] font-bold text-stone-500 uppercase block">Получатель:</span>
+                <span className="font-black text-stone-900 block mt-0.5">
+                  {requisites.cardHolder || 'Казначей команды'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Block: Card Number & Note */}
+          <div className="bg-white/95 border-2 border-amber-300 rounded-2xl p-4 shadow-xs space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-black uppercase text-stone-500 tracking-wider flex items-center gap-1.5">
+                <CreditCard size={14} className="text-red-600" /> Номер карты (привязана к номеру):
+              </span>
+              <span className="text-[10px] font-black uppercase bg-amber-100 text-amber-900 px-2 py-0.5 rounded-md border border-amber-300">
+                Перевод на карту
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between gap-2 bg-amber-50/70 p-3 rounded-xl border border-amber-200">
+              <span className="text-base sm:text-xl font-black text-amber-950 tracking-wider select-all font-mono">
+                {requisites.cardNumber || '—'}
+              </span>
+              {requisites.cardNumber && (
+                <button
+                  type="button"
+                  onClick={() => handleCopyText(requisites.cardNumber, 'card')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase transition-all flex items-center gap-1.5 cursor-pointer shadow-xs ${
+                    copiedType === 'card' 
+                      ? 'bg-emerald-600 text-white' 
+                      : 'bg-amber-200 hover:bg-amber-300 text-amber-950'
+                  }`}
+                  title="Скопировать номер карты"
+                >
+                  {copiedType === 'card' ? <Check size={14} /> : <Copy size={14} />}
+                  <span>{copiedType === 'card' ? 'Скопировано!' : 'Скопировать'}</span>
+                </button>
+              )}
+            </div>
+
+            <div className="text-xs">
+              <span className="text-[10px] font-bold text-stone-500 uppercase block">Сообщение к переводу / Назначение:</span>
+              <span className="font-bold text-amber-950 block mt-0.5 bg-yellow-50 p-2 rounded-lg border border-amber-200">
+                {requisites.paymentNote || 'Членский взнос в фонд команды Негодяи (укажите ваше имя/ник)'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer info line */}
+        <div className="flex items-center justify-between text-[11px] text-stone-500 pt-2 border-t border-amber-200/80 flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <span>ℹ️ После перевода Казначей или Капитан отметят ваш взнос в ведомости ниже.</span>
+          </div>
+          {requisites.updatedAt && (
+            <div className="text-stone-400">
+              Последнее обновление: {requisites.updatedAt} ({requisites.updatedBy || 'Казначей'})
+            </div>
+          )}
         </div>
       </div>
 
@@ -1424,6 +1703,142 @@ export default function FundTab({
                 className="flex-1 py-2.5 bg-amber-800 hover:bg-amber-900 text-yellow-300 font-black text-xs uppercase rounded-xl shadow-xs"
               >
                 Записать расход
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT REQUISITES MODAL (Captain & Treasurer Only) */}
+      {isEditingRequisites && (
+        <div 
+          className="fixed inset-0 z-50 overflow-y-auto bg-stone-950/70 backdrop-blur-sm p-3 sm:p-6 flex items-center justify-center"
+          onClick={() => setIsEditingRequisites(false)}
+        >
+          <div 
+            role="dialog"
+            aria-modal="true"
+            aria-label="Реквизиты для оплаты членских взносов"
+            onClick={(e) => e.stopPropagation()}
+            className="relative w-full max-w-lg bg-amber-50 border-4 border-amber-600 rounded-3xl shadow-2xl flex flex-col max-h-[calc(100dvh-2rem)] overflow-hidden my-auto animate-in fade-in zoom-in-95 duration-150"
+          >
+            <div className="flex items-center justify-between border-b-2 border-amber-300 p-4 sm:p-5 shrink-0 bg-amber-100/70">
+              <div className="flex items-center gap-2">
+                <CreditCard className="text-red-600 w-5 h-5 shrink-0" />
+                <h3 className="font-black text-sm sm:text-base uppercase text-amber-950">
+                  Реквизиты для оплаты взносов
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEditingRequisites(false)}
+                className="p-1.5 text-stone-400 hover:text-stone-700 rounded-xl cursor-pointer hover:bg-amber-200/60"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form id="requisites-form" onSubmit={handleSaveRequisites} className="flex-1 overflow-y-auto min-h-0 p-4 sm:p-6 space-y-4 text-xs font-bold text-amber-950">
+              <div>
+                <label className="block text-[11px] uppercase font-black mb-1">
+                  Номер телефона (привязан к СБП / картам):
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formPhone}
+                  onChange={(e) => setFormPhone(e.target.value)}
+                  placeholder="+7 (999) 000-00-00"
+                  className="w-full bg-white border-2 border-amber-300 rounded-xl p-2.5 text-sm font-black text-amber-950 focus:outline-none focus:border-red-600"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] uppercase font-black mb-1">
+                  Банк получателя:
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formBank}
+                  onChange={(e) => setFormBank(e.target.value)}
+                  placeholder="Например: Т-Банк (Тинькофф), Сбербанк, Альфа-Банк"
+                  className="w-full bg-white border-2 border-amber-300 rounded-xl p-2.5 text-xs font-bold text-amber-950 focus:outline-none focus:border-red-600"
+                />
+                <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                  {['Т-Банк', 'Сбербанк', 'Альфа-Банк', 'ВТБ', 'СБП (Любой банк)'].map(b => (
+                    <button
+                      key={b}
+                      type="button"
+                      onClick={() => setFormBank(b)}
+                      className="px-2 py-0.5 bg-amber-100 hover:bg-amber-200 text-amber-900 text-[10px] font-bold rounded-lg border border-amber-300 cursor-pointer"
+                    >
+                      {b}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] uppercase font-black mb-1">
+                  Номер банковской карты (привязана к номеру телефона):
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formCardNumber}
+                  onChange={(e) => setFormCardNumber(e.target.value)}
+                  placeholder="2200 0000 0000 0000"
+                  className="w-full bg-white border-2 border-amber-300 rounded-xl p-2.5 text-sm font-black text-amber-950 font-mono focus:outline-none focus:border-red-600"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] uppercase font-black mb-1">
+                  Имя и отчество держателя / получателя:
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formCardHolder}
+                  onChange={(e) => setFormCardHolder(e.target.value)}
+                  placeholder="Например: Екатерина С. (Булочка)"
+                  className="w-full bg-white border-2 border-amber-300 rounded-xl p-2.5 text-xs font-bold text-amber-950 focus:outline-none focus:border-red-600"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] uppercase font-black mb-1">
+                  Рекомендуемое сообщение / назначение перевода:
+                </label>
+                <input
+                  type="text"
+                  value={formPaymentNote}
+                  onChange={(e) => setFormPaymentNote(e.target.value)}
+                  placeholder="Например: Членский взнос в фонд «Негодяи» (укажите ваш никнейм)"
+                  className="w-full bg-white border-2 border-amber-300 rounded-xl p-2.5 text-xs font-medium text-amber-950 focus:outline-none focus:border-red-600"
+                />
+              </div>
+
+              <div className="bg-amber-100/60 p-3 rounded-xl border border-amber-300 text-[11px] text-amber-900">
+                🔒 Реквизиты видны всем участникам команды на странице фонда. Вносить изменения могут только Казначей и Капитан.
+              </div>
+            </form>
+
+            <div className="flex items-center justify-end gap-2 p-4 shrink-0 border-t-2 border-amber-300 bg-amber-100/70">
+              <button
+                type="button"
+                onClick={() => setIsEditingRequisites(false)}
+                className="px-4 py-2 bg-stone-200 hover:bg-stone-300 text-stone-800 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+              >
+                Отмена
+              </button>
+              <button
+                type="submit"
+                form="requisites-form"
+                className="px-6 py-2 bg-red-600 hover:bg-red-700 text-yellow-300 rounded-xl text-xs font-black uppercase shadow transition-colors cursor-pointer"
+              >
+                Сохранить реквизиты
               </button>
             </div>
           </div>

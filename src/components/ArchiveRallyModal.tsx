@@ -113,22 +113,16 @@ export default function ArchiveRallyModal({
   };
 
   return (
-    <>
-      <div 
-        className="fixed inset-0 z-40 bg-stone-950/40 backdrop-blur-2xs"
-        onClick={onClose}
-      />
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-stone-950/60 backdrop-blur-xs overflow-y-auto"
+      onClick={onClose}
+    >
       <div 
         role="dialog"
         aria-modal="true"
         aria-label="Завершение слёта и перенос в архив"
         onClick={(e) => e.stopPropagation()}
-        style={{
-          top: `${Math.min(window.innerHeight - 560, Math.max(12, anchorPos?.top ?? 70))}px`,
-          right: `${Math.max(12, anchorPos?.right ?? 16)}px`,
-          maxHeight: 'calc(100vh - 85px)',
-        }}
-        className="fixed z-50 bg-amber-50 border-4 border-amber-950 rounded-3xl w-[94vw] max-w-2xl overflow-y-auto shadow-2xl animate-in fade-in zoom-in-95 duration-150"
+        className="bg-amber-50 border-4 border-amber-950 rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl animate-in fade-in zoom-in-95 duration-150 my-auto"
       >
         {/* Header */}
         <div className="bg-red-600 text-yellow-300 p-5 flex items-center justify-between border-b-4 border-amber-950">
@@ -350,6 +344,6 @@ export default function ArchiveRallyModal({
           </div>
         </form>
       </div>
-    </>
+    </div>
   );
 }

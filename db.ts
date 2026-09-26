@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 import pg from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { eq } from "drizzle-orm";
@@ -37,6 +38,7 @@ import {
   TeamDocument, 
   FundRecord, 
   FundExpense,
+  FundPaymentRequisites,
   CreativityIdea, 
   TeamStory, 
   UserRole, 
@@ -78,7 +80,19 @@ pool.on("error", (err) => {
 export const db = drizzle(pool, { schema });
 
 // Local persistent JSON storage fallback for Beget / offline deployment
-const DATA_DIR = path.join(process.cwd(), "data");
+const currentDir = typeof __dirname !== "undefined" ? __dirname : path.dirname(fileURLToPath(import.meta.url));
+const candidateDataDirs = [
+  process.env.DATA_DIR,
+  path.join(process.cwd(), "data"),
+  path.join(currentDir, "..", "data"),
+  path.join(currentDir, "data")
+].filter(Boolean) as string[];
+
+const DATA_DIR = process.env.DATA_DIR || (
+  fs.existsSync(path.join(process.cwd(), "package.json"))
+    ? path.join(process.cwd(), "data")
+    : candidateDataDirs.find(d => fs.existsSync(d)) || path.join(process.cwd(), "data")
+);
 const STORAGE_FILE = path.join(DATA_DIR, "app_storage.json");
 export let isPgConnected = false;
 
@@ -109,6 +123,7 @@ export function saveLocalFileBackup() {
       documents: cacheDocuments,
       fundRecords: cacheFundRecords,
       fundExpenses: cacheFundExpenses,
+      fundRequisites: cacheFundRequisites,
       creativityIdeas: cacheCreativityIdeas,
       stories: cacheStories,
       rallyCoins: cacheRallyCoins,
@@ -142,6 +157,7 @@ export function loadLocalFileBackup(): boolean {
       if (Array.isArray(data.documents)) cacheDocuments = data.documents;
       if (Array.isArray(data.fundRecords)) cacheFundRecords = data.fundRecords;
       if (Array.isArray(data.fundExpenses)) cacheFundExpenses = data.fundExpenses;
+      if (data.fundRequisites) cacheFundRequisites = data.fundRequisites;
       if (Array.isArray(data.creativityIdeas)) cacheCreativityIdeas = data.creativityIdeas;
       if (Array.isArray(data.stories)) cacheStories = data.stories;
       if (Array.isArray(data.rallyCoins)) cacheRallyCoins = data.rallyCoins;
@@ -157,6 +173,15 @@ export function loadLocalFileBackup(): boolean {
 }
 
 // In-memory sync state initialized with safe baseline, backed by local file & PostgreSQL
+let cacheFundRequisites: FundPaymentRequisites = {
+  phoneNumber: "+7 999 123-45-67",
+  bankName: "Т-Банк (Тинькофф)",
+  cardNumber: "2202 2000 1234 5678",
+  cardHolder: "Андрей С. (Казначей / Капитан)",
+  paymentNote: "Членский взнос в Фонд Негодяев (укажите ваш позывной)",
+  updatedAt: new Date().toISOString(),
+  updatedBy: "Казначей"
+};
 let cacheParticipants: Participant[] = [...initialParticipants].filter(p => !isBannedBotParticipant(p));
 let cacheExcursions: Excursion[] = [...initialExcursions];
 let cacheTasks: TaskItem[] = [...initialTasks];
@@ -439,6 +464,17 @@ export async function initDb() {
         category TEXT,
         is_overall BOOLEAN NOT NULL DEFAULT FALSE,
         results JSONB NOT NULL DEFAULT '{}'::jsonb
+      );
+
+      CREATE TABLE IF NOT EXISTS fund_requisites (
+        id INT PRIMARY KEY DEFAULT 1,
+        phone_number TEXT,
+        bank_name TEXT,
+        card_number TEXT,
+        card_holder TEXT,
+        payment_note TEXT,
+        updated_at TEXT,
+        updated_by TEXT
       );
     `);
 
@@ -902,6 +938,35 @@ export async function initDb() {
         awardedBy: r.awarded_by,
         year: Number(r.year) || 2026
       }));
+    }
+
+    // Load or seed Fund Requisites
+    const resReq = await pool.query("SELECT * FROM fund_requisites WHERE id = 1");
+    if (resReq.rows.length === 0) {
+      await pool.query(
+        `INSERT INTO fund_requisites (id, phone_number, bank_name, card_number, card_holder, payment_note, updated_at, updated_by)
+         VALUES (1, $1, $2, $3, $4, $5, $6, $7) ON CONFLICT (id) DO NOTHING`,
+        [
+          cacheFundRequisites.phoneNumber,
+          cacheFundRequisites.bankName,
+          cacheFundRequisites.cardNumber,
+          cacheFundRequisites.cardHolder,
+          cacheFundRequisites.paymentNote || "",
+          cacheFundRequisites.updatedAt,
+          cacheFundRequisites.updatedBy
+        ]
+      );
+    } else {
+      const row = resReq.rows[0];
+      cacheFundRequisites = {
+        phoneNumber: row.phone_number || cacheFundRequisites.phoneNumber,
+        bankName: row.bank_name || cacheFundRequisites.bankName,
+        cardNumber: row.card_number || cacheFundRequisites.cardNumber,
+        cardHolder: row.card_holder || cacheFundRequisites.cardHolder,
+        paymentNote: row.payment_note || cacheFundRequisites.paymentNote,
+        updatedAt: row.updated_at || cacheFundRequisites.updatedAt,
+        updatedBy: row.updated_by || cacheFundRequisites.updatedBy
+      };
     }
 
     isPgConnected = true;
@@ -1936,6 +2001,47 @@ export function deleteFundExpense(id: string) {
       console.error("PSQL deleteFundExpense error:", e);
     }
   })();
+}
+
+// Fund Payment Requisites (phone, bank, card number, holder, note)
+export function getFundRequisites(): FundPaymentRequisites {
+  return cacheFundRequisites;
+}
+
+export function saveFundRequisites(data: Partial<FundPaymentRequisites>, operatorName?: string): FundPaymentRequisites {
+  cacheFundRequisites = {
+    ...cacheFundRequisites,
+    ...data,
+    updatedAt: new Date().toISOString(),
+    updatedBy: operatorName || cacheFundRequisites.updatedBy || "Казначей"
+  };
+  saveLocalFileBackup();
+  if (isPgConnected) {
+    (async () => {
+      try {
+        await pool.query(
+          `INSERT INTO fund_requisites (id, phone_number, bank_name, card_number, card_holder, payment_note, updated_at, updated_by)
+           VALUES (1, $1, $2, $3, $4, $5, $6, $7)
+           ON CONFLICT (id) DO UPDATE SET
+           phone_number = EXCLUDED.phone_number, bank_name = EXCLUDED.bank_name, card_number = EXCLUDED.card_number,
+           card_holder = EXCLUDED.card_holder, payment_note = EXCLUDED.payment_note, updated_at = EXCLUDED.updated_at,
+           updated_by = EXCLUDED.updated_by`,
+          [
+            cacheFundRequisites.phoneNumber,
+            cacheFundRequisites.bankName,
+            cacheFundRequisites.cardNumber,
+            cacheFundRequisites.cardHolder,
+            cacheFundRequisites.paymentNote || "",
+            cacheFundRequisites.updatedAt,
+            cacheFundRequisites.updatedBy
+          ]
+        );
+      } catch (e) {
+        console.error("PSQL saveFundRequisites error:", e);
+      }
+    })();
+  }
+  return cacheFundRequisites;
 }
 
 // Creativity & Ideas
