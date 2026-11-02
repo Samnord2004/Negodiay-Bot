@@ -5,8 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
+    "dev:local": "tsx server.ts --port 8090",
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "start": "node dist/server.cjs",
+    "start:local": "node dist/server.cjs --port 8090",
+    "tunnel:cloudflared": "npx cloudflared tunnel --url http://localhost:8090",
+    "tunnel:localtunnel": "npx localtunnel --port 8090",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit"
   },

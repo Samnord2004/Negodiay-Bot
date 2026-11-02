@@ -89,9 +89,43 @@ dotenv.config();
 const currentDir = typeof __dirname !== "undefined" ? __dirname : path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
-// Support AI Studio sandbox (port 3000 behind Nginx 8080), Docker / VPS (process.env.PORT), and Unix sockets (Beget Passenger)
-const rawPort = process.env.DEFAULT_APP_PORT || 
-  (process.env.PORT && process.env.PORT !== process.env.NGINX_PORT && process.env.PORT !== "8080" ? process.env.PORT : "3000");
+// Flexible port configuration supporting CLI flags (--port 8090, -p 8090), env variables, and safe defaults
+function getResolvedPort(): string | number {
+  // 1. Check CLI arguments: --port=XXXX, --port XXXX, -p XXXX
+  const args = process.argv.slice(2);
+  for (let i = 0; i < args.length; i++) {
+    if (args[i].startsWith("--port=")) {
+      const val = args[i].split("=")[1];
+      if (val) return !isNaN(Number(val)) ? Number(val) : val;
+    }
+    if ((args[i] === "--port" || args[i] === "-p") && args[i + 1]) {
+      const val = args[i + 1];
+      return !isNaN(Number(val)) ? Number(val) : val;
+    }
+  }
+
+  // 2. Explicit APP_PORT
+  if (process.env.APP_PORT) {
+    const val = process.env.APP_PORT;
+    return !isNaN(Number(val)) ? Number(val) : val;
+  }
+
+  // 3. AI Studio Sandbox environment check (DEFAULT_APP_PORT is 3000 behind NGINX 8080)
+  if (process.env.DEFAULT_APP_PORT) {
+    return Number(process.env.DEFAULT_APP_PORT) || 3000;
+  }
+
+  // 4. PORT environment variable (supports Mac, Windows, Linux, Beget, Docker, Heroku, etc.)
+  if (process.env.PORT) {
+    const val = process.env.PORT;
+    return !isNaN(Number(val)) ? Number(val) : val;
+  }
+
+  // 5. Default port for local Mac / Windows runs: 8090 (avoids Mac 5000 AirPlay Receiver & common 3000 collisions)
+  return 8090;
+}
+
+const rawPort = getResolvedPort();
 const isNumericPort = !isNaN(Number(rawPort));
 const PORT = isNumericPort ? Number(rawPort) : rawPort;
 
@@ -3162,8 +3196,9 @@ async function startServer() {
   const distPath = candidateDistPaths.find(p => fs.existsSync(path.join(p, "index.html"))) || path.join(process.cwd(), "dist");
   const hasDist = fs.existsSync(path.join(distPath, "index.html"));
 
-  if (process.env.NODE_ENV === "production" && hasDist) {
-    console.log("[Negodyai MAX Server] Running in PRODUCTION mode, serving static files from:", distPath);
+  const isDev = process.env.NODE_ENV === "development";
+  if (hasDist && !isDev) {
+    console.log("[Негодяи MAX Portal] Работа в PRODUCTION режиме, раздача статики из:", distPath);
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
@@ -3181,11 +3216,23 @@ async function startServer() {
 
   if (typeof PORT === "number") {
     httpServer.listen(PORT, "0.0.0.0", () => {
-      console.log(`[Negodyai MAX Server] Running on http://0.0.0.0:${PORT}`);
+      console.log(`\n===============================================================`);
+      console.log(`🚀 [Портал Негодяев] Сервер успешно запущен!`);
+      console.log(`🏠 Локальный адрес:    http://localhost:${PORT}`);
+      console.log(`🌐 Сеть (LAN):         http://0.0.0.0:${PORT}`);
+      console.log(`🃏 Poker WebSocket:    ws://localhost:${PORT}/ws/poker`);
+      console.log(`⚡ Активный порт:      ${PORT} (порты 3000 и 5000 свободны)`);
+      console.log(`---------------------------------------------------------------`);
+      console.log(`🔗 Быстрое туннелирование в интернет (выберите любую команду):`);
+      console.log(`  • Cloudflare:  npx cloudflared tunnel --url http://localhost:${PORT}`);
+      console.log(`  • Localtunnel: npx localtunnel --port ${PORT}`);
+      console.log(`  • ngrok:       ngrok http ${PORT}`);
+      console.log(`  • Pinggy(SSH): ssh -p 443 -R0:localhost:${PORT} a.pinggy.io`);
+      console.log(`===============================================================\n`);
     });
   } else {
     httpServer.listen(PORT, () => {
-      console.log(`[Negodyai MAX Server] Running on socket ${PORT}`);
+      console.log(`[Негодяи MAX Portal] Сервер запущен на сокете ${PORT}`);
     });
   }
 }
