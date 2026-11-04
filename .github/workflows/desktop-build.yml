@@ -1,25 +1,35 @@
-name: Сборка десктопных приложений (.exe и .dmg)
+name: Desktop Build (.exe and .dmg)
 
 on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 'Платформа для сборки (all, win, mac)'
+        required: true
+        default: 'win'
+        type: choice
+        options:
+          - win
+          - mac
+          - all
   push:
     tags:
       - 'v*'
-  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
-  build:
-    name: Сборка для ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: windows-latest
-            target: win
-            artifact_name: Negodyai-Windows-Setup.exe
-          - os: macos-latest
-            target: mac
-            artifact_name: Negodyai-macOS.dmg
+  # =========================================================================
+  # 1. WINDOWS BUILD JOB (.exe) - Всегда запускается мгновенно без очередей
+  # =========================================================================
+  build-windows:
+    name: Сборка Windows (.exe)
+    runs-on: windows-latest
+    if: |
+      github.event_name != 'workflow_dispatch' ||
+      github.event.inputs.platform == 'all' ||
+      github.event.inputs.platform == 'win'
 
     steps:
       - name: Клонирование репозитория
@@ -31,25 +41,76 @@ jobs:
           node-version: 20
           cache: 'npm'
 
-      - name: Установка зависимостей
-        run: npm ci
+      - name: Установка зависимостей проекта
+        run: npm install
+
+      - name: Установка Electron и Electron-Builder
+        run: npm install --save-dev electron electron-builder
 
       - name: Сборка веб-приложения и сервера
         run: npm run build
 
-      - name: Сборка десктопного установщика (${{ matrix.target }})
-        run: npx electron-builder --${{ matrix.target }}
+      - name: Сборка установщика Windows (.exe)
+        run: npx electron-builder --win
 
-      - name: Загрузка артефактов сборки
+      - name: Загрузка готового установщика Windows (.exe)
         uses: actions/upload-artifact@v4
         with:
-          name: desktop-${{ matrix.target }}
-          path: dist-electron/*.*
+          name: Negodyai-Windows-Setup-exe
+          path: dist-electron/*.exe
 
-      - name: Создание GitHub Release (при наличии git tag)
+      - name: Создание GitHub Release (при наличии тега v*)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist-electron/*.*
+          files: dist-electron/*.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # =========================================================================
+  # 2. MACOS BUILD JOB (.dmg) - Использует стабильный пул macos-13 (x64+arm64)
+  # =========================================================================
+  build-macos:
+    name: Сборка macOS (.dmg)
+    # macos-13 использует стабильный x64-пул без перегрузок arm64-очереди
+    runs-on: macos-13
+    if: |
+      github.event_name != 'workflow_dispatch' ||
+      github.event.inputs.platform == 'all' ||
+      github.event.inputs.platform == 'mac'
+
+    steps:
+      - name: Клонирование репозитория
+        uses: actions/checkout@v4
+
+      - name: Настройка Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Установка зависимостей проекта
+        run: npm install
+
+      - name: Установка Electron и Electron-Builder
+        run: npm install --save-dev electron electron-builder
+
+      - name: Сборка веб-приложения и сервера
+        run: npm run build
+
+      - name: Сборка установщика macOS (.dmg)
+        run: npx electron-builder --mac
+
+      - name: Загрузка готового образа macOS (.dmg)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Negodyai-macOS-dmg
+          path: dist-electron/*.dmg
+
+      - name: Создание GitHub Release (при наличии тега v*)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist-electron/*.dmg
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
