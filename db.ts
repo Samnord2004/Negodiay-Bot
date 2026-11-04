@@ -79,31 +79,206 @@ pool.on("error", (err) => {
 
 export const db = drizzle(pool, { schema });
 
-// Local persistent JSON storage fallback for Beget / offline deployment
-const currentDir = typeof __dirname !== "undefined" ? __dirname : path.dirname(fileURLToPath(import.meta.url));
-const candidateDataDirs = [
-  process.env.DATA_DIR,
-  path.join(process.cwd(), "data"),
-  path.join(currentDir, "..", "data"),
-  path.join(currentDir, "data")
-].filter(Boolean) as string[];
+// Configuration file to persist user-selected disk / folder location across restarts
+const CONFIG_FILE = path.join(process.cwd(), "storage_config.json");
 
-const DATA_DIR = process.env.DATA_DIR || (
-  fs.existsSync(path.join(process.cwd(), "package.json"))
-    ? path.join(process.cwd(), "data")
-    : candidateDataDirs.find(d => fs.existsSync(d)) || path.join(process.cwd(), "data")
-);
-const STORAGE_FILE = path.join(DATA_DIR, "app_storage.json");
-export let isPgConnected = false;
+function resolveInitialDataDir(): string {
+  // 1. CLI flag: --data-dir <path> or -d <path>
+  const args = process.argv.slice(2);
+  for (let i = 0; i < args.length; i++) {
+    if (args[i].startsWith("--data-dir=")) {
+      const val = args[i].split("=")[1];
+      if (val) return path.resolve(val);
+    }
+    if ((args[i] === "--data-dir" || args[i] === "-d") && args[i + 1]) {
+      return path.resolve(args[i + 1]);
+    }
+  }
 
-function ensureDataDir() {
+  // 2. Explicit environment variable DATA_DIR
+  if (process.env.DATA_DIR && process.env.DATA_DIR.trim()) {
+    return path.resolve(process.env.DATA_DIR.trim());
+  }
+
+  // 3. Saved configuration file storage_config.json (set via Admin UI or setup)
   try {
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
+    if (fs.existsSync(CONFIG_FILE)) {
+      const parsed = JSON.parse(fs.readFileSync(CONFIG_FILE, "utf-8"));
+      if (parsed.dataDir && typeof parsed.dataDir === "string" && parsed.dataDir.trim()) {
+        return path.resolve(parsed.dataDir.trim());
+      }
     }
   } catch (e) {
-    console.error("[Storage] Failed to create data dir:", e);
+    console.error("[Storage] Could not read storage_config.json:", e);
   }
+
+  // 4. Fallback defaults
+  const currentDir = typeof __dirname !== "undefined" ? __dirname : path.dirname(fileURLToPath(import.meta.url));
+  const candidateDataDirs = [
+    path.join(process.cwd(), "data"),
+    path.join(currentDir, "..", "data"),
+    path.join(currentDir, "data")
+  ];
+
+  return fs.existsSync(path.join(process.cwd(), "package.json"))
+    ? path.join(process.cwd(), "data")
+    : candidateDataDirs.find(d => fs.existsSync(d)) || path.join(process.cwd(), "data");
+}
+
+let activeDataDir = resolveInitialDataDir();
+let activeStorageFile = path.join(activeDataDir, "app_storage.json");
+let activeMediaDir = path.join(activeDataDir, "media");
+
+export function getDataDir(): string {
+  return activeDataDir;
+}
+
+export function getMediaDir(): string {
+  return activeMediaDir;
+}
+
+export function getStorageFile(): string {
+  return activeStorageFile;
+}
+
+export let isPgConnected = false;
+
+export function ensureDataDir() {
+  try {
+    if (!fs.existsSync(activeDataDir)) {
+      fs.mkdirSync(activeDataDir, { recursive: true });
+    }
+    if (!fs.existsSync(activeMediaDir)) {
+      fs.mkdirSync(activeMediaDir, { recursive: true });
+    }
+    const backupDir = path.join(activeDataDir, "backups");
+    if (!fs.existsSync(backupDir)) {
+      fs.mkdirSync(backupDir, { recursive: true });
+    }
+  } catch (e) {
+    console.error("[Storage] Failed to create data/media dirs:", e);
+  }
+}
+
+// Allows changing data storage disk / folder at runtime from Admin panel or CLI
+export function setDataDir(newPath: string): { success: boolean; message: string; dataDir: string } {
+  try {
+    if (!newPath || !newPath.trim()) {
+      return { success: false, message: "Путь к папке не может быть пустым", dataDir: activeDataDir };
+    }
+    const resolvedPath = path.resolve(newPath.trim());
+    if (!fs.existsSync(resolvedPath)) {
+      fs.mkdirSync(resolvedPath, { recursive: true });
+    }
+
+    const newMediaDir = path.join(resolvedPath, "media");
+    if (!fs.existsSync(newMediaDir)) {
+      fs.mkdirSync(newMediaDir, { recursive: true });
+    }
+
+    // Copy existing database file if present in old directory
+    const oldStorage = activeStorageFile;
+    const newStorage = path.join(resolvedPath, "app_storage.json");
+    if (fs.existsSync(oldStorage) && !fs.existsSync(newStorage)) {
+      fs.copyFileSync(oldStorage, newStorage);
+    }
+
+    // Save choice to storage_config.json so it persists across server restarts
+    fs.writeFileSync(CONFIG_FILE, JSON.stringify({ dataDir: resolvedPath, updatedAt: new Date().toISOString() }, null, 2), "utf-8");
+
+    activeDataDir = resolvedPath;
+    activeStorageFile = newStorage;
+    activeMediaDir = newMediaDir;
+
+    // Immediately flush current in-memory cache to the new disk location
+    saveLocalFileBackup();
+
+    console.log(`[Storage] Active data directory switched to: ${resolvedPath}`);
+    return {
+      success: true,
+      message: `Хранилище успешно перемещено на: ${resolvedPath}`,
+      dataDir: resolvedPath
+    };
+  } catch (err: any) {
+    console.error("[Storage] Error changing data dir:", err);
+    return {
+      success: false,
+      message: `Не удалось изменить путь: ${err?.message || String(err)}`,
+      dataDir: activeDataDir
+    };
+  }
+}
+
+// Saves base64 photo/video/document to local server disk inside media/ folder
+export function saveBase64Media(base64Data: string, prefix: string = "media"): string | null {
+  if (!base64Data || typeof base64Data !== "string") return null;
+  if (!base64Data.startsWith("data:")) return null; // already a URL/path
+
+  try {
+    ensureDataDir();
+    const matches = base64Data.match(/^data:([A-Za-z0-9\-+\/]+);base64,(.+)$/);
+    if (!matches || matches.length !== 3) return null;
+
+    const mimeType = matches[1];
+    const buffer = Buffer.from(matches[2], "base64");
+
+    let ext = "bin";
+    if (mimeType.includes("jpeg") || mimeType.includes("jpg")) ext = "jpg";
+    else if (mimeType.includes("png")) ext = "png";
+    else if (mimeType.includes("webp")) ext = "webp";
+    else if (mimeType.includes("gif")) ext = "gif";
+    else if (mimeType.includes("mp4")) ext = "mp4";
+    else if (mimeType.includes("webm")) ext = "webm";
+    else if (mimeType.includes("quicktime")) ext = "mov";
+    else if (mimeType.includes("pdf")) ext = "pdf";
+
+    const fileName = `${prefix}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${ext}`;
+    const targetFile = path.join(activeMediaDir, fileName);
+    fs.writeFileSync(targetFile, buffer);
+
+    console.log(`[Storage] Saved media file to disk: ${targetFile} (${Math.round(buffer.length / 1024)} KB)`);
+    return `/media/${fileName}`;
+  } catch (err) {
+    console.error("[Storage] Failed to save media file to disk:", err);
+    return null;
+  }
+}
+
+// Retrieve storage metrics for the Admin Panel
+export function getStorageStats() {
+  ensureDataDir();
+  let dbSizeBytes = 0;
+  try {
+    if (fs.existsSync(activeStorageFile)) {
+      dbSizeBytes = fs.statSync(activeStorageFile).size;
+    }
+  } catch (e) {}
+
+  let mediaFilesCount = 0;
+  let mediaSizeBytes = 0;
+  try {
+    if (fs.existsSync(activeMediaDir)) {
+      const files = fs.readdirSync(activeMediaDir);
+      mediaFilesCount = files.length;
+      for (const file of files) {
+        try {
+          mediaSizeBytes += fs.statSync(path.join(activeMediaDir, file)).size;
+        } catch (e) {}
+      }
+    }
+  } catch (e) {}
+
+  return {
+    dataDir: activeDataDir,
+    mediaDir: activeMediaDir,
+    databaseFile: activeStorageFile,
+    databaseSizeBytes: dbSizeBytes,
+    databaseSizeFormatted: `${(dbSizeBytes / (1024 * 1024)).toFixed(2)} MB`,
+    mediaFilesCount,
+    mediaSizeBytes,
+    mediaSizeFormatted: `${(mediaSizeBytes / (1024 * 1024)).toFixed(2)} MB`,
+    totalStorageFormatted: `${((dbSizeBytes + mediaSizeBytes) / (1024 * 1024)).toFixed(2)} MB`
+  };
 }
 
 export function saveLocalFileBackup() {
@@ -131,7 +306,7 @@ export function saveLocalFileBackup() {
       adminPassword: cacheAdminPassword,
       savedAt: new Date().toISOString()
     };
-    fs.writeFileSync(STORAGE_FILE, JSON.stringify(data, null, 2), "utf-8");
+    fs.writeFileSync(activeStorageFile, JSON.stringify(data, null, 2), "utf-8");
   } catch (err) {
     console.error("[Storage] Error writing local file backup:", err);
   }
@@ -139,8 +314,8 @@ export function saveLocalFileBackup() {
 
 export function loadLocalFileBackup(): boolean {
   try {
-    if (fs.existsSync(STORAGE_FILE)) {
-      const raw = fs.readFileSync(STORAGE_FILE, "utf-8");
+    if (fs.existsSync(activeStorageFile)) {
+      const raw = fs.readFileSync(activeStorageFile, "utf-8");
       const data = JSON.parse(raw);
       if (Array.isArray(data.participants) && data.participants.length > 0) {
         cacheParticipants = data.participants.filter((p: any) => !isBannedBotParticipant(p));
@@ -163,7 +338,7 @@ export function loadLocalFileBackup(): boolean {
       if (Array.isArray(data.rallyCoins)) cacheRallyCoins = data.rallyCoins;
       if (Array.isArray(data.contestHistory)) cacheContestHistory = data.contestHistory;
       if (data.adminPassword) cacheAdminPassword = data.adminPassword;
-      console.log(`[Storage] Loaded persistent state from disk (${STORAGE_FILE})`);
+      console.log(`[Storage] Loaded persistent state from disk (${activeStorageFile})`);
       return true;
     }
   } catch (err) {

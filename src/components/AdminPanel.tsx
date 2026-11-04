@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Users, 
   Plus, Trash, Trash2, Edit, CheckCircle, AlertTriangle, Shield, 
-  UserCheck, UserX, Key, Calendar, MapPin, RefreshCw, Flame, Crown
+  UserCheck, UserX, Key, Calendar, MapPin, RefreshCw, Flame, Crown, HardDrive
 } from 'lucide-react';
 import { 
   Participant, TaskItem, MenuItem, GroceryItem, 
@@ -14,6 +14,7 @@ import { getSafeAvatar, getParticipantAvatar } from '../utils/avatar';
 import DeleteParticipantModal from './DeleteParticipantModal';
 import CaptainCoinPanel from './game/CaptainCoinPanel';
 import ArchiveRallyModal from './ArchiveRallyModal';
+import StorageSettingsPanel from './StorageSettingsPanel';
 
 interface AdminPanelProps {
   isAdmin: boolean;
@@ -86,7 +87,7 @@ export default function AdminPanel({
   onAwardCoin,
   onDeleteCoin
 }: AdminPanelProps) {
-  const [activeTab, setActiveTab] = useState<'pending' | 'roles' | 'excursions' | 'captain_panel'>('pending');
+  const [activeTab, setActiveTab] = useState<'pending' | 'roles' | 'excursions' | 'captain_panel' | 'storage'>('pending');
 
   // Team parameters (Captain control: founding year)
   const [foundingYear, setFoundingYear] = useState<number>(botConfig.foundingYear || 1993);
@@ -587,7 +588,8 @@ export default function AdminPanel({
               { id: 'pending', label: `Заявки (${pendingUsers.length + pendingResetCount})`, icon: UserCheck, alert: (pendingUsers.length > 0 || pendingResetCount > 0) },
               { id: 'roles', label: 'Роли & Пароли', icon: Shield },
               { id: 'excursions', label: 'Слёты и Взносы', icon: Calendar },
-              { id: 'captain_panel', label: 'Мотивация команды', icon: Crown }
+              { id: 'captain_panel', label: 'Мотивация', icon: Crown },
+              { id: 'storage', label: 'Диск & Хранилище', icon: HardDrive }
             ].map(tab => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -1402,6 +1404,11 @@ export default function AdminPanel({
             captainUser={currentUser}
           />
         </div>
+      )}
+
+      {/* TAB: STORAGE & SERVER DISK SETTINGS */}
+      {activeTab === 'storage' && (
+        <StorageSettingsPanel currentUser={currentUser} />
       )}
 
       {/* MODAL: RESET PARTICIPANT PASSWORD (CAPTAIN ONLY) */}

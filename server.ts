@@ -76,7 +76,12 @@ import {
   addRallyCoin,
   deleteRallyCoin,
   updateAllCoinsYear,
-  resetAllRallyCoins
+  resetAllRallyCoins,
+  getDataDir,
+  getMediaDir,
+  setDataDir,
+  saveBase64Media,
+  getStorageStats
 } from "./db";
 import { ORIENTEERING_SIGNS_SVG, KNOTS_DIAGRAM_SVG, CONTEST_SCHEDULE_SVG } from "./src/mockData";
 import { Participant, UserRole, RallyCoin, FundExpense, RallyParticipantEntry } from "./src/types";
@@ -141,6 +146,42 @@ app.get("/api/health", (req, res) => {
     uptime: Math.round(process.uptime()),
     timestamp: new Date().toISOString()
   });
+});
+
+// Serve uploaded binary media (photos, videos, documents) from active local server disk
+app.use("/media", (req, res, next) => {
+  express.static(getMediaDir())(req, res, next);
+});
+
+// Storage and disk configuration API for Captain / Admin
+app.get("/api/storage/info", (req, res) => {
+  res.json({
+    success: true,
+    ...getStorageStats()
+  });
+});
+
+app.post("/api/storage/set-path", (req, res) => {
+  const { path: newPath, operatorId } = req.body;
+  if (!newPath || typeof newPath !== "string") {
+    return res.status(400).json({ success: false, error: "Укажите корректный путь к папке/диску" });
+  }
+  const result = setDataDir(newPath);
+  res.json(result);
+});
+
+// Direct upload of photos, videos, or documents to the chosen server disk
+app.post("/api/upload-media", (req, res) => {
+  const { fileData, prefix } = req.body;
+  if (!fileData || typeof fileData !== "string") {
+    return res.status(400).json({ success: false, error: "fileData is required" });
+  }
+  const savedUrl = saveBase64Media(fileData, prefix || "media");
+  if (savedUrl) {
+    res.json({ success: true, url: savedUrl, storage: getStorageStats() });
+  } else {
+    res.status(500).json({ success: false, error: "Не удалось сохранить файл на диск сервера" });
+  }
 });
 
 // Lazy-initialize Gemini SDK to prevent crashes if key is initially absent
@@ -1766,12 +1807,20 @@ app.post("/api/photos", (req, res) => {
   }
   const determinedType = itemType || (cleanCloudUrl && !cleanImageUrl ? "cloud_album" : "photo");
 
+  let finalImageUrl = cleanImageUrl;
+  if (cleanImageUrl.startsWith("data:")) {
+    const diskUrl = saveBase64Media(cleanImageUrl, `photo_${year || "rally"}`);
+    if (diskUrl) {
+      finalImageUrl = diskUrl;
+    }
+  }
+
   const newPhoto = {
     id: "photo_" + Date.now(),
     year: parseInt(year, 10) || new Date().getFullYear(),
     title: title.trim(),
     description: (description || "").trim(),
-    imageUrl: cleanImageUrl,
+    imageUrl: finalImageUrl,
     cloudUrl: cleanCloudUrl,
     itemType: determinedType,
     uploadedBy: uploadedBy || "Негодяй",
@@ -2304,14 +2353,21 @@ app.post("/api/stories", (req, res) => {
   if (!title || !content) {
     return res.status(400).json({ error: "Title and content are required" });
   }
+  const processedPhotos = Array.isArray(photos)
+    ? photos.map((p: string) => (typeof p === "string" && p.startsWith("data:") ? saveBase64Media(p, "story_photo") || p : p))
+    : [];
+  const processedVideos = Array.isArray(videos)
+    ? videos.map((v: string) => (typeof v === "string" && v.startsWith("data:") ? saveBase64Media(v, "story_video") || v : v))
+    : [];
+
   const newStory = {
     id: "story_" + Date.now(),
     category: category || "custom",
     categoryTitle: categoryTitle || "История команды",
     title,
     content,
-    photos: photos || [],
-    videos: videos || [],
+    photos: processedPhotos,
+    videos: processedVideos,
     authorName: authorName || "Негодяй",
     year: year ? parseInt(year) : new Date().getFullYear(),
     createdAt: new Date().toISOString().split("T")[0]
@@ -2321,7 +2377,14 @@ app.post("/api/stories", (req, res) => {
 });
 
 app.put("/api/stories/:id", (req, res) => {
-  updateStory(req.params.id, req.body);
+  const updateData = { ...req.body };
+  if (Array.isArray(updateData.photos)) {
+    updateData.photos = updateData.photos.map((p: string) => (typeof p === "string" && p.startsWith("data:") ? saveBase64Media(p, "story_photo") || p : p));
+  }
+  if (Array.isArray(updateData.videos)) {
+    updateData.videos = updateData.videos.map((v: string) => (typeof v === "string" && v.startsWith("data:") ? saveBase64Media(v, "story_video") || v : v));
+  }
+  updateStory(req.params.id, updateData);
   res.json({ success: true, stories: getStories() });
 });
 

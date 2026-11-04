@@ -11,7 +11,11 @@
     "start:local": "node dist/server.cjs --port 8090",
     "tunnel:cloudflared": "npx cloudflared tunnel --url http://localhost:8090",
     "tunnel:localtunnel": "npx localtunnel --port 8090",
-    "clean": "rm -rf dist",
+    "electron:start": "electron electron/main.cjs",
+    "dist:win": "npm run build && npx electron-builder --win",
+    "dist:mac": "npm run build && npx electron-builder --mac",
+    "dist:all": "npm run build && npx electron-builder -mw",
+    "clean": "rm -rf dist dist-electron",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
