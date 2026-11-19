@@ -2,6 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
   "appId": "com.negodyai.portal",
   "productName": "Негодяи",
+  "asar": false,
   "directories": {
     "output": "dist-electron"
   },
@@ -10,7 +11,7 @@
     "electron/**/*",
     "package.json",
     "public/**/*",
-    "data/**/*"
+    "!node_modules/{vite,esbuild,@esbuild,rollup,@rollup,@tailwindcss,lightningcss,tsx,typescript,@types}/**/*"
   ],
   "extraMetadata": {
     "main": "electron/main.cjs"
@@ -39,14 +40,16 @@
     "target": [
       {
         "target": "dmg",
-        "arch": ["x64", "arm64"]
+        "arch": ["universal"]
       },
       {
         "target": "zip",
-        "arch": ["x64", "arm64"]
+        "arch": ["universal"]
       }
     ],
-    "category": "public.app-category.entertainment"
+    "category": "public.app-category.social-networking",
+    "hardenedRuntime": false,
+    "gatekeeperAssess": false
   },
   "dmg": {
     "title": "Установка Портала Негодяев",
@@ -62,6 +65,6 @@
         "arch": ["x64"]
       }
     ],
-    "category": "Game"
+    "category": "Network"
   }
 }

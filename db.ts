@@ -1,4 +1,5 @@
 import fs from "fs";
+import os from "os";
 import path from "path";
 import { fileURLToPath } from "url";
 import pg from "pg";
@@ -79,8 +80,22 @@ pool.on("error", (err) => {
 
 export const db = drizzle(pool, { schema });
 
-// Configuration file to persist user-selected disk / folder location across restarts
-const CONFIG_FILE = path.join(process.cwd(), "storage_config.json");
+// Configuration directory for persistent settings (uses Electron userData when packaged, or cwd)
+const CONFIG_DIR = process.env.APP_CONFIG_DIR
+  ? path.resolve(process.env.APP_CONFIG_DIR)
+  : process.cwd();
+const CONFIG_FILE = path.join(CONFIG_DIR, "storage_config.json");
+
+export function getConfigDir(): string {
+  try {
+    if (!fs.existsSync(CONFIG_DIR)) {
+      fs.mkdirSync(CONFIG_DIR, { recursive: true });
+    }
+  } catch (e) {
+    // ignore
+  }
+  return CONFIG_DIR;
+}
 
 function resolveInitialDataDir(): string {
   // 1. CLI flag: --data-dir <path> or -d <path>
@@ -112,7 +127,12 @@ function resolveInitialDataDir(): string {
     console.error("[Storage] Could not read storage_config.json:", e);
   }
 
-  // 4. Fallback defaults
+  // 4. Desktop app default writable userData/data directory
+  if (process.env.DEFAULT_DATA_DIR && process.env.DEFAULT_DATA_DIR.trim()) {
+    return path.resolve(process.env.DEFAULT_DATA_DIR.trim());
+  }
+
+  // 5. Fallback defaults
   const currentDir = typeof __dirname !== "undefined" ? __dirname : path.dirname(fileURLToPath(import.meta.url));
   const candidateDataDirs = [
     path.join(process.cwd(), "data"),
@@ -161,7 +181,7 @@ export function ensureDataDir() {
 }
 
 // Allows changing data storage disk / folder at runtime from Admin panel or CLI
-export function setDataDir(newPath: string): { success: boolean; message: string; dataDir: string } {
+export function setDataDir(newPath: string): { success: boolean; message: string; dataDir: string; migratedMediaCount?: number } {
   try {
     if (!newPath || !newPath.trim()) {
       return { success: false, message: "Путь к папке не может быть пустым", dataDir: activeDataDir };
@@ -171,6 +191,11 @@ export function setDataDir(newPath: string): { success: boolean; message: string
       fs.mkdirSync(resolvedPath, { recursive: true });
     }
 
+    // Verify write permission on target disk before switching
+    const testProbe = path.join(resolvedPath, `.write_test_${Date.now()}`);
+    fs.writeFileSync(testProbe, "ok");
+    fs.unlinkSync(testProbe);
+
     const newMediaDir = path.join(resolvedPath, "media");
     if (!fs.existsSync(newMediaDir)) {
       fs.mkdirSync(newMediaDir, { recursive: true });
@@ -179,11 +204,30 @@ export function setDataDir(newPath: string): { success: boolean; message: string
     // Copy existing database file if present in old directory
     const oldStorage = activeStorageFile;
     const newStorage = path.join(resolvedPath, "app_storage.json");
-    if (fs.existsSync(oldStorage) && !fs.existsSync(newStorage)) {
+    if (fs.existsSync(oldStorage) && path.resolve(oldStorage) !== path.resolve(newStorage) && !fs.existsSync(newStorage)) {
       fs.copyFileSync(oldStorage, newStorage);
     }
 
+    // Migrate existing media files (photos, videos, documents) to the newly selected disk
+    let migratedMediaCount = 0;
+    if (fs.existsSync(activeMediaDir) && path.resolve(activeMediaDir) !== path.resolve(newMediaDir)) {
+      try {
+        const files = fs.readdirSync(activeMediaDir);
+        for (const file of files) {
+          const srcFile = path.join(activeMediaDir, file);
+          const dstFile = path.join(newMediaDir, file);
+          if (fs.statSync(srcFile).isFile() && !fs.existsSync(dstFile)) {
+            fs.copyFileSync(srcFile, dstFile);
+            migratedMediaCount++;
+          }
+        }
+      } catch (mediaErr) {
+        console.warn("[Storage] Partial media migration warning:", mediaErr);
+      }
+    }
+
     // Save choice to storage_config.json so it persists across server restarts
+    getConfigDir();
     fs.writeFileSync(CONFIG_FILE, JSON.stringify({ dataDir: resolvedPath, updatedAt: new Date().toISOString() }, null, 2), "utf-8");
 
     activeDataDir = resolvedPath;
@@ -193,19 +237,214 @@ export function setDataDir(newPath: string): { success: boolean; message: string
     // Immediately flush current in-memory cache to the new disk location
     saveLocalFileBackup();
 
-    console.log(`[Storage] Active data directory switched to: ${resolvedPath}`);
+    console.log(`[Storage] Active data directory switched to: ${resolvedPath} (migrated media: ${migratedMediaCount})`);
     return {
       success: true,
-      message: `Хранилище успешно перемещено на: ${resolvedPath}`,
-      dataDir: resolvedPath
+      message: `Хранилище перенесено на диск: ${resolvedPath}${migratedMediaCount > 0 ? ` (перенесено файлов: ${migratedMediaCount})` : ""}`,
+      dataDir: resolvedPath,
+      migratedMediaCount
     };
   } catch (err: any) {
     console.error("[Storage] Error changing data dir:", err);
     return {
       success: false,
-      message: `Не удалось изменить путь: ${err?.message || String(err)}`,
+      message: `Не удалось выбрать диск/папку (проверьте права записи): ${err?.message || String(err)}`,
       dataDir: activeDataDir
     };
+  }
+}
+
+export interface LocalDiskInfo {
+  name: string;
+  path: string;
+  suggestedDataPath: string;
+  kind: "system" | "external" | "home" | "default";
+  freeBytes: number;
+  totalBytes: number;
+  freeFormatted: string;
+  totalFormatted: string;
+  usedPercent: number;
+  writable: boolean;
+}
+
+function formatBytes(bytes: number): string {
+  if (!bytes || bytes <= 0) return "0 ГБ";
+  const gb = bytes / (1024 * 1024 * 1024);
+  if (gb >= 1) return `${gb.toFixed(1)} ГБ`;
+  const mb = bytes / (1024 * 1024);
+  return `${mb.toFixed(0)} МБ`;
+}
+
+function inspectPathStats(targetPath: string): { freeBytes: number; totalBytes: number; writable: boolean } {
+  let freeBytes = 0;
+  let totalBytes = 0;
+  let writable = false;
+  try {
+    if (typeof (fs as any).statfsSync === "function") {
+      const stat = (fs as any).statfsSync(targetPath);
+      const bsize = Number(stat.bsize || 4096);
+      freeBytes = Number(stat.bavail || stat.bfree || 0) * bsize;
+      totalBytes = Number(stat.blocks || 0) * bsize;
+    }
+  } catch (e) {
+    // ignore
+  }
+  try {
+    fs.accessSync(targetPath, fs.constants.W_OK);
+    writable = true;
+  } catch (e) {
+    writable = false;
+  }
+  return { freeBytes, totalBytes, writable };
+}
+
+// Discover mounted local drives & volumes on macOS, Windows, and Linux
+export function getLocalDisks(): { platform: string; disks: LocalDiskInfo[] } {
+  const platform = os.platform();
+  const disks: LocalDiskInfo[] = [];
+  const seenPaths = new Set<string>();
+
+  const addCandidate = (name: string, targetPath: string, suggestedDataPath: string, kind: LocalDiskInfo["kind"]) => {
+    try {
+      const resolved = path.resolve(targetPath);
+      if (seenPaths.has(resolved)) return;
+      if (!fs.existsSync(resolved)) return;
+      seenPaths.add(resolved);
+
+      const { freeBytes, totalBytes, writable } = inspectPathStats(resolved);
+      const usedPercent = totalBytes > 0 ? Math.round(((totalBytes - freeBytes) / totalBytes) * 100) : 0;
+      disks.push({
+        name,
+        path: resolved,
+        suggestedDataPath: path.resolve(suggestedDataPath),
+        kind,
+        freeBytes,
+        totalBytes,
+        freeFormatted: formatBytes(freeBytes),
+        totalFormatted: formatBytes(totalBytes),
+        usedPercent,
+        writable
+      });
+    } catch (e) {
+      // ignore inaccessible drives
+    }
+  };
+
+  if (platform === "darwin") {
+    // macOS Volumes (External SSDs, USB drives, Macintosh HD, etc.)
+    try {
+      if (fs.existsSync("/Volumes")) {
+        const volumes = fs.readdirSync("/Volumes");
+        for (const vol of volumes) {
+          const volPath = path.join("/Volumes", vol);
+          const isRoot = vol === "Macintosh HD" || vol === "Macintosh HD - Data";
+          const suggested = isRoot
+            ? path.join(os.homedir(), "Documents", "Negodyai_Data")
+            : path.join(volPath, "Negodyai_Data");
+          addCandidate(
+            isRoot ? `Системный диск (${vol})` : `Том / Диск: ${vol}`,
+            isRoot ? os.homedir() : volPath,
+            suggested,
+            isRoot ? "system" : "external"
+          );
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+    addCandidate("Документы пользователя", path.join(os.homedir(), "Documents"), path.join(os.homedir(), "Documents", "Negodyai_Data"), "home");
+    addCandidate("Рабочий стол", path.join(os.homedir(), "Desktop"), path.join(os.homedir(), "Desktop", "Negodyai_Data"), "home");
+  } else if (platform === "win32") {
+    // Windows Drive Letters C:\ through Z:\
+    const letters = "CDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+    for (const letter of letters) {
+      const driveRoot = `${letter}:\\`;
+      if (fs.existsSync(driveRoot)) {
+        addCandidate(
+          letter === "C" ? `Локальный диск (${letter}:)` : `Диск (${letter}:)`,
+          driveRoot,
+          path.join(driveRoot, "Negodyai_Data"),
+          letter === "C" ? "system" : "external"
+        );
+      }
+    }
+    addCandidate("Документы пользователя", path.join(os.homedir(), "Documents"), path.join(os.homedir(), "Documents", "Negodyai_Data"), "home");
+  } else {
+    // Linux / Server mounts
+    addCandidate("Домашняя директория", os.homedir(), path.join(os.homedir(), "Negodyai_Data"), "home");
+    for (const baseMount of ["/mnt", "/media"]) {
+      try {
+        if (fs.existsSync(baseMount)) {
+          for (const entry of fs.readdirSync(baseMount)) {
+            const full = path.join(baseMount, entry);
+            if (fs.statSync(full).isDirectory()) {
+              addCandidate(`Диск: ${entry}`, full, path.join(full, "Negodyai_Data"), "external");
+            }
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+    addCandidate("Корневой раздел (/)", "/", path.join(os.homedir(), "Negodyai_Data"), "system");
+  }
+
+  // Always include current active directory
+  addCandidate("Текущее хранилище", activeDataDir, activeDataDir, "default");
+
+  return { platform, disks };
+}
+
+export function browseDirectory(dirPath?: string): {
+  success: boolean;
+  currentPath: string;
+  parentPath: string | null;
+  folders: { name: string; path: string }[];
+  error?: string;
+} {
+  try {
+    const target = dirPath && dirPath.trim() ? path.resolve(dirPath.trim()) : activeDataDir;
+    if (!fs.existsSync(target)) {
+      return { success: false, currentPath: target, parentPath: path.dirname(target), folders: [], error: "Директория не существует" };
+    }
+    const entries = fs.readdirSync(target, { withFileTypes: true });
+    const folders = entries
+      .filter((entry) => entry.isDirectory() && !entry.name.startsWith(".") && !entry.name.startsWith("$"))
+      .map((entry) => ({
+        name: entry.name,
+        path: path.join(target, entry.name)
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, "ru"));
+
+    const parent = path.dirname(target);
+    return {
+      success: true,
+      currentPath: target,
+      parentPath: parent !== target ? parent : null,
+      folders
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      currentPath: dirPath || activeDataDir,
+      parentPath: null,
+      folders: [],
+      error: err?.message || "Нет доступа к папке"
+    };
+  }
+}
+
+export function createSubfolder(parentPath: string, folderName: string): { success: boolean; path?: string; error?: string } {
+  try {
+    const cleanName = (folderName || "").trim().replace(/[<>:"/\\|?*]+/g, "_");
+    if (!cleanName) return { success: false, error: "Укажите имя папки" };
+    const fullPath = path.join(path.resolve(parentPath), cleanName);
+    if (!fs.existsSync(fullPath)) {
+      fs.mkdirSync(fullPath, { recursive: true });
+    }
+    return { success: true, path: fullPath };
+  } catch (err: any) {
+    return { success: false, error: err?.message || "Не удалось создать папку" };
   }
 }
 
@@ -216,10 +455,10 @@ export function saveBase64Media(base64Data: string, prefix: string = "media"): s
 
   try {
     ensureDataDir();
-    const matches = base64Data.match(/^data:([A-Za-z0-9\-+\/]+);base64,(.+)$/);
+    const matches = base64Data.match(/^data:([A-Za-z0-9\-+\/.]+);base64,(.+)$/);
     if (!matches || matches.length !== 3) return null;
 
-    const mimeType = matches[1];
+    const mimeType = matches[1].toLowerCase();
     const buffer = Buffer.from(matches[2], "base64");
 
     let ext = "bin";
@@ -227,10 +466,15 @@ export function saveBase64Media(base64Data: string, prefix: string = "media"): s
     else if (mimeType.includes("png")) ext = "png";
     else if (mimeType.includes("webp")) ext = "webp";
     else if (mimeType.includes("gif")) ext = "gif";
+    else if (mimeType.includes("svg")) ext = "svg";
     else if (mimeType.includes("mp4")) ext = "mp4";
     else if (mimeType.includes("webm")) ext = "webm";
     else if (mimeType.includes("quicktime")) ext = "mov";
+    else if (mimeType.includes("mpeg") || mimeType.includes("mp3")) ext = "mp3";
     else if (mimeType.includes("pdf")) ext = "pdf";
+    else if (mimeType.includes("wordprocessingml")) ext = "docx";
+    else if (mimeType.includes("spreadsheetml")) ext = "xlsx";
+    else if (mimeType.includes("text/plain")) ext = "txt";
 
     const fileName = `${prefix}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${ext}`;
     const targetFile = path.join(activeMediaDir, fileName);
@@ -268,7 +512,10 @@ export function getStorageStats() {
     }
   } catch (e) {}
 
+  const { freeBytes, totalBytes } = inspectPathStats(activeDataDir);
+
   return {
+    platform: os.platform(),
     dataDir: activeDataDir,
     mediaDir: activeMediaDir,
     databaseFile: activeStorageFile,
@@ -277,7 +524,9 @@ export function getStorageStats() {
     mediaFilesCount,
     mediaSizeBytes,
     mediaSizeFormatted: `${(mediaSizeBytes / (1024 * 1024)).toFixed(2)} MB`,
-    totalStorageFormatted: `${((dbSizeBytes + mediaSizeBytes) / (1024 * 1024)).toFixed(2)} MB`
+    totalStorageFormatted: `${((dbSizeBytes + mediaSizeBytes) / (1024 * 1024)).toFixed(2)} MB`,
+    diskFreeFormatted: formatBytes(freeBytes),
+    diskTotalFormatted: formatBytes(totalBytes)
   };
 }
 

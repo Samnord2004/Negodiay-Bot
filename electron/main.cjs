@@ -5,6 +5,7 @@ const http = require('http');
 const { spawn } = require('child_process');
 
 let mainWindow = null;
+let connectModal = null;
 let serverProcess = null;
 const PORT = process.env.PORT || 8092;
 
@@ -27,6 +28,10 @@ function loadConfig() {
 
 function saveConfig(config) {
   try {
+    const dir = app.getPath('userData');
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
     const file = getConfigPath();
     fs.writeFileSync(file, JSON.stringify(config, null, 2), 'utf-8');
   } catch (e) {
@@ -48,7 +53,30 @@ function checkServerHealthy(port) {
   });
 }
 
-// Start embedded Node.js backend
+// Fetch active storage dir from running backend
+function fetchActiveStorageDir(port) {
+  return new Promise((resolve) => {
+    const req = http.get(`http://127.0.0.1:${port}/api/storage/info`, (res) => {
+      let body = '';
+      res.on('data', (chunk) => (body += chunk));
+      res.on('end', () => {
+        try {
+          const data = JSON.parse(body);
+          resolve(data.dataDir || path.join(app.getPath('userData'), 'data'));
+        } catch (e) {
+          resolve(path.join(app.getPath('userData'), 'data'));
+        }
+      });
+    });
+    req.on('error', () => resolve(path.join(app.getPath('userData'), 'data')));
+    req.setTimeout(1000, () => {
+      req.destroy();
+      resolve(path.join(app.getPath('userData'), 'data'));
+    });
+  });
+}
+
+// Start embedded Node.js backend using Electron's embedded Node runtime (ELECTRON_RUN_AS_NODE=1)
 async function startBackend() {
   const isHealthy = await checkServerHealthy(PORT);
   if (isHealthy) {
@@ -56,14 +84,24 @@ async function startBackend() {
     return;
   }
 
+  const userDataDir = app.getPath('userData');
+  const defaultDataDir = path.join(userDataDir, 'data');
+  if (!fs.existsSync(userDataDir)) {
+    fs.mkdirSync(userDataDir, { recursive: true });
+  }
+
   const serverScript = path.join(__dirname, '..', 'dist', 'server.cjs');
   console.log(`[Electron] Starting embedded server: ${serverScript} on port ${PORT}`);
 
-  serverProcess = spawn(process.execPath || 'node', [serverScript, '--port', String(PORT)], {
+  serverProcess = spawn(process.execPath, [serverScript, '--port', String(PORT)], {
+    cwd: userDataDir,
     env: {
       ...process.env,
+      ELECTRON_RUN_AS_NODE: '1',
       NODE_ENV: 'production',
-      PORT: String(PORT)
+      PORT: String(PORT),
+      APP_CONFIG_DIR: userDataDir,
+      DEFAULT_DATA_DIR: defaultDataDir
     },
     stdio: 'inherit'
   });
@@ -76,8 +114,8 @@ async function startBackend() {
     console.log(`[Electron] Server exited with code ${code}, signal ${signal}`);
   });
 
-  // Wait for server to become healthy (up to 15 seconds)
-  const maxAttempts = 30;
+  // Wait for server to become healthy (up to 20 seconds)
+  const maxAttempts = 40;
   for (let i = 0; i < maxAttempts; i++) {
     await new Promise((r) => setTimeout(r, 500));
     const healthy = await checkServerHealthy(PORT);
@@ -87,6 +125,111 @@ async function startBackend() {
     }
   }
   console.warn('[Electron] Backend startup timeout, attempting to open window anyway');
+}
+
+// Interactive modal window for connecting to an external Cloudflare / Team domain
+function openDomainConnectDialog() {
+  if (connectModal) {
+    connectModal.focus();
+    return;
+  }
+
+  const currentConfig = loadConfig();
+  const currentUrl = currentConfig.serverUrl || '';
+
+  connectModal = new BrowserWindow({
+    width: 520,
+    height: 360,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    parent: mainWindow || undefined,
+    modal: Boolean(mainWindow),
+    title: 'Подключение к внешнему домену / туннелю',
+    backgroundColor: '#fef3c7',
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false
+    },
+    autoHideMenuBar: true
+  });
+
+  const html = `
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #fffbeb;
+      color: #451a03;
+      margin: 0;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+    h2 { margin: 0 0 6px; font-size: 17px; color: #991b1b; }
+    p { margin: 0 0 14px; font-size: 12.5px; line-height: 1.45; color: #78350f; }
+    label { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; margin-bottom: 6px; }
+    input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 10px 12px;
+      font-size: 13.5px;
+      border: 2px solid #d97706;
+      border-radius: 10px;
+      outline: none;
+      font-family: monospace;
+    }
+    input:focus { border-color: #dc2626; }
+    .hint { font-size: 11px; color: #92400e; margin-top: 6px; }
+    .actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+      margin-top: 20px;
+    }
+    button {
+      padding: 9px 14px;
+      border-radius: 10px;
+      border: none;
+      font-weight: 700;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .btn-local { background: #fde68a; color: #78350f; }
+    .btn-cancel { background: #e7e5e4; color: #44403c; }
+    .btn-save { background: #dc2626; color: #fde047; }
+  </style>
+</head>
+<body>
+  <h2>Подключение к внешнему домену команды</h2>
+  <p>Если на главном сервере запущен Cloudflare-туннель, введите его HTTPS-адрес. Приложение подключится к общей базе команды, чату и покеру.</p>
+  <label for="url">Адрес сервера (HTTPS или домен):</label>
+  <input id="url" type="text" placeholder="https://portal.negodyai.ru или https://xxxx.trycloudflare.com" value="${currentUrl.replace(/"/g, '&quot;')}" />
+  <div class="hint">Оставьте пустым или нажмите «Локальный сервер», чтобы работать со своей автономной базой на этом ПК/Mac.</div>
+  <div class="actions">
+    <button class="btn-local" onclick="useLocal()">Локальный сервер</button>
+    <button class="btn-cancel" onclick="window.close()">Отмена</button>
+    <button class="btn-save" onclick="connectDomain()">Подключиться</button>
+  </div>
+  <script>
+    const { ipcRenderer } = require('electron');
+    function connectDomain() {
+      const val = document.getElementById('url').value.trim();
+      ipcRenderer.send('electron:set-server-url', val || null);
+    }
+    function useLocal() {
+      ipcRenderer.send('electron:set-server-url', null);
+    }
+  </script>
+</body>
+</html>`;
+
+  connectModal.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+  connectModal.on('closed', () => {
+    connectModal = null;
+  });
 }
 
 function createApplicationMenu(targetUrl, isCustomDomain) {
@@ -101,7 +244,7 @@ function createApplicationMenu(targetUrl, isCustomDomain) {
               type: 'info',
               title: 'О портале Негодяев',
               message: 'Портал туристической команды Негодяи (v1.0.0)',
-              detail: `Режим: ${isCustomDomain ? 'Подключение к удалённому домену' : 'Локальный автономный сервер'}\nАктивный адрес: ${targetUrl}\n\nБаза данных, чат, взносы фонда, история, квесты и игры.`
+              detail: `Режим: ${isCustomDomain ? 'Подключение к удалённому домену' : 'Локальный автономный сервер'}\nАктивный адрес: ${targetUrl}\nАрхитектура: ${process.arch} (${process.platform})\n\nБаза данных, медиатека на диске, Cloudflare туннель, чат, взносы фонда и игры.`
             });
           }
         },
@@ -117,27 +260,13 @@ function createApplicationMenu(targetUrl, isCustomDomain) {
       label: 'Сервер и Домен',
       submenu: [
         {
-          label: 'Указать домен / туннель сервера...',
-          click: async () => {
-            const currentConfig = loadConfig();
-            const { response, checkboxChecked } = await dialog.showMessageBox(mainWindow, {
-              type: 'question',
-              buttons: ['Оставить текущий', 'Сбросить на локальный сервер'],
-              title: 'Настройка подключения к серверу команды',
-              message: 'Подключение к общему серверу Негодяев',
-              detail: currentConfig.serverUrl
-                ? `Текущий активный домен: ${currentConfig.serverUrl}\n\nЧтобы сменить домен, выберите сброс на локальный сервер или укажите флаг --server-url при запуске.`
-                : `Приложение сейчас работает в режиме автономного локального сервера на порту ${PORT}.\n\nЕсли капитан команды поднял туннель Cloudflare или домен, запустите приложение с параметром:\n--server-url=https://ваш-домен.ru`
-            });
-            if (response === 1) {
-              saveConfig({ serverUrl: null });
-              app.relaunch();
-              app.exit(0);
-            }
+          label: 'Указать внешний домен / Cloudflare туннель...',
+          click: () => {
+            openDomainConnectDialog();
           }
         },
         {
-          label: 'Переключиться на локальный сервер (Офлайн)',
+          label: 'Переключиться на локальный сервер (Этот ПК / Mac)',
           click: () => {
             saveConfig({ serverUrl: null });
             app.relaunch();
@@ -147,19 +276,31 @@ function createApplicationMenu(targetUrl, isCustomDomain) {
         { type: 'separator' },
         {
           label: 'Открыть папку с данными на диске',
-          click: () => {
-            const dataDir = path.join(process.cwd(), 'data');
-            if (fs.existsSync(dataDir)) {
-              shell.openPath(dataDir);
+          click: async () => {
+            const activeDir = await fetchActiveStorageDir(PORT);
+            if (fs.existsSync(activeDir)) {
+              shell.openPath(activeDir);
             } else {
               dialog.showMessageBox(mainWindow, {
                 type: 'info',
                 message: 'Папка данных:',
-                detail: dataDir
+                detail: activeDir
               });
             }
           }
         }
+      ]
+    },
+    {
+      label: 'Редактирование',
+      submenu: [
+        { label: 'Отменить', role: 'undo' },
+        { label: 'Повторить', role: 'redo' },
+        { type: 'separator' },
+        { label: 'Вырезать', role: 'cut' },
+        { label: 'Копировать', role: 'copy' },
+        { label: 'Вставить', role: 'paste' },
+        { label: 'Выделить всё', role: 'selectAll' }
       ]
     },
     {
@@ -214,6 +355,43 @@ function createWindow(targetUrl, isCustomDomain) {
   });
 }
 
+// Native OS Folder Picker IPC handler for Admin Storage Settings
+ipcMain.handle('dialog:select-folder', async (_event, defaultPath) => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Выберите диск или папку для хранения данных портала',
+    defaultPath: defaultPath && fs.existsSync(defaultPath) ? defaultPath : app.getPath('documents'),
+    properties: ['openDirectory', 'createDirectory']
+  });
+  if (result.canceled || !result.filePaths || result.filePaths.length === 0) {
+    return null;
+  }
+  return result.filePaths[0];
+});
+
+ipcMain.handle('shell:open-path', async (_event, targetPath) => {
+  if (targetPath && fs.existsSync(targetPath)) {
+    await shell.openPath(targetPath);
+    return true;
+  }
+  return false;
+});
+
+ipcMain.on('electron:set-server-url', (_event, rawUrl) => {
+  let cleanUrl = null;
+  if (rawUrl && typeof rawUrl === 'string' && rawUrl.trim()) {
+    cleanUrl = rawUrl.trim().replace(/\/+$/, '');
+    if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
+      cleanUrl = `https://${cleanUrl}`;
+    }
+  }
+  saveConfig({ serverUrl: cleanUrl });
+  if (connectModal) {
+    connectModal.close();
+  }
+  app.relaunch();
+  app.exit(0);
+});
+
 // Single instance lock
 const gotTheLock = app.requestSingleInstanceLock();
 
@@ -266,9 +444,11 @@ if (!gotTheLock) {
   app.on('before-quit', () => {
     if (serverProcess) {
       try {
-        serverProcess.kill();
+        serverProcess.kill('SIGTERM');
       } catch (e) {
-        // ignore
+        try {
+          serverProcess.kill();
+        } catch (e2) {}
       }
     }
   });

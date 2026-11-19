@@ -5,9 +5,9 @@ import fs from "fs";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
 import { GoogleGenAI, Type } from "@google/genai";
-import { createServer as createViteServer } from "vite";
 import { pokerRoomServer } from "./server/pokerRoomServer";
 import { mkNetplayManager } from "./server/mkNetplayRooms";
+import { cloudflareTunnelManager } from "./server/cloudflareTunnel";
 import { 
   initDb,
   getParticipants,
@@ -79,9 +79,13 @@ import {
   resetAllRallyCoins,
   getDataDir,
   getMediaDir,
+  getStorageFile,
   setDataDir,
   saveBase64Media,
-  getStorageStats
+  getStorageStats,
+  getLocalDisks,
+  browseDirectory,
+  createSubfolder
 } from "./db";
 import { ORIENTEERING_SIGNS_SVG, KNOTS_DIAGRAM_SVG, CONTEST_SCHEDULE_SVG } from "./src/mockData";
 import { Participant, UserRole, RallyCoin, FundExpense, RallyParticipantEntry } from "./src/types";
@@ -161,13 +165,42 @@ app.get("/api/storage/info", (req, res) => {
   });
 });
 
+app.get("/api/storage/disks", (req, res) => {
+  res.json({
+    success: true,
+    ...getLocalDisks()
+  });
+});
+
+app.get("/api/storage/browse", (req, res) => {
+  const dirPath = typeof req.query.path === "string" ? req.query.path : undefined;
+  res.json(browseDirectory(dirPath));
+});
+
+app.post("/api/storage/mkdir", (req, res) => {
+  const { parentPath, folderName } = req.body;
+  if (!parentPath || !folderName) {
+    return res.status(400).json({ success: false, error: "Укажите родительскую папку и имя новой папки" });
+  }
+  res.json(createSubfolder(parentPath, folderName));
+});
+
 app.post("/api/storage/set-path", (req, res) => {
-  const { path: newPath, operatorId } = req.body;
+  const { path: newPath } = req.body;
   if (!newPath || typeof newPath !== "string") {
     return res.status(400).json({ success: false, error: "Укажите корректный путь к папке/диску" });
   }
   const result = setDataDir(newPath);
   res.json(result);
+});
+
+app.get("/api/admin/export-database", (req, res) => {
+  const storageFile = getStorageFile();
+  if (fs.existsSync(storageFile)) {
+    res.download(storageFile, `negodyai_backup_${new Date().toISOString().split("T")[0]}.json`);
+  } else {
+    res.status(404).json({ success: false, error: "Файл базы данных пока не создан" });
+  }
 });
 
 // Direct upload of photos, videos, or documents to the chosen server disk
@@ -182,6 +215,56 @@ app.post("/api/upload-media", (req, res) => {
   } else {
     res.status(500).json({ success: false, error: "Не удалось сохранить файл на диск сервера" });
   }
+});
+
+// Cloudflare External HTTPS Tunnel Management API
+app.get("/api/tunnel/status", (req, res) => {
+  res.json({
+    success: true,
+    ...cloudflareTunnelManager.getStatus()
+  });
+});
+
+app.post("/api/tunnel/install", async (req, res) => {
+  const result = await cloudflareTunnelManager.installBinary();
+  res.json({
+    ...result,
+    status: cloudflareTunnelManager.getStatus()
+  });
+});
+
+app.post("/api/tunnel/config", (req, res) => {
+  const { mode, customDomain, tunnelToken, autoStart } = req.body;
+  cloudflareTunnelManager.saveConfig({
+    ...(mode ? { mode } : {}),
+    ...(customDomain !== undefined ? { customDomain } : {}),
+    ...(tunnelToken !== undefined && tunnelToken !== "" ? { tunnelToken } : {}),
+    ...(autoStart !== undefined ? { autoStart: Boolean(autoStart) } : {})
+  });
+  res.json({
+    success: true,
+    status: cloudflareTunnelManager.getStatus()
+  });
+});
+
+app.post("/api/tunnel/start", async (req, res) => {
+  const { mode, customDomain, tunnelToken, autoStart } = req.body || {};
+  const numericPort = typeof PORT === "number" ? PORT : 8090;
+  const result = await cloudflareTunnelManager.start(numericPort, {
+    ...(mode ? { mode } : {}),
+    ...(customDomain !== undefined ? { customDomain } : {}),
+    ...(tunnelToken !== undefined ? { tunnelToken } : {}),
+    ...(autoStart !== undefined ? { autoStart: Boolean(autoStart) } : {})
+  });
+  res.json(result);
+});
+
+app.post("/api/tunnel/stop", (req, res) => {
+  const status = cloudflareTunnelManager.stop();
+  res.json({
+    success: true,
+    status
+  });
 });
 
 // Lazy-initialize Gemini SDK to prevent crashes if key is initially absent
@@ -1854,12 +1937,19 @@ app.post("/api/documents", (req, res) => {
   if (!title || !category) {
     return res.status(400).json({ success: false, error: "Заполните название и раздел" });
   }
+  let finalFileUrl = fileUrl || undefined;
+  if (typeof finalFileUrl === "string" && finalFileUrl.startsWith("data:")) {
+    const diskUrl = saveBase64Media(finalFileUrl, "doc");
+    if (diskUrl) {
+      finalFileUrl = diskUrl;
+    }
+  }
   const newDoc = {
     id: "doc_" + Date.now(),
     category,
     title,
     description: description || "",
-    fileUrl: fileUrl || undefined,
+    fileUrl: finalFileUrl,
     fileName: fileName || title + ".pdf",
     fileType: fileType || "pdf",
     content: content || undefined,
@@ -2496,9 +2586,25 @@ app.post("/api/chat/nudge", async (req, res) => {
 // Participant internal chat message (Supports Bot Maximka responses)
 app.post("/api/chat/send", async (req, res) => {
   const { id, senderName, senderNickname, senderPsychotype, text, timestamp, imageUrl, attachments } = req.body;
-  if (!text && !imageUrl) {
+  if (!text && !imageUrl && (!Array.isArray(attachments) || attachments.length === 0)) {
     return res.status(400).json({ error: "Message cannot be empty" });
   }
+
+  let savedImageUrl = imageUrl || undefined;
+  if (typeof savedImageUrl === "string" && savedImageUrl.startsWith("data:")) {
+    savedImageUrl = saveBase64Media(savedImageUrl, "chat_img") || savedImageUrl;
+  }
+
+  let savedAttachments = attachments || undefined;
+  if (Array.isArray(attachments)) {
+    savedAttachments = attachments.map((att: any) => {
+      if (att && typeof att.url === "string" && att.url.startsWith("data:")) {
+        return { ...att, url: saveBase64Media(att.url, "chat_file") || att.url };
+      }
+      return att;
+    });
+  }
+
   const newMsg = {
     id: id || ("msg_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6)),
     senderName: senderName || "Участник",
@@ -2507,8 +2613,8 @@ app.post("/api/chat/send", async (req, res) => {
     text: text || "",
     timestamp: formatChatTimestamp(timestamp),
     isBot: false,
-    imageUrl: imageUrl || undefined,
-    attachments: attachments || undefined
+    imageUrl: savedImageUrl,
+    attachments: savedAttachments
   };
   addMessage(newMsg);
 
@@ -3267,6 +3373,7 @@ async function startServer() {
       res.sendFile(path.join(distPath, "index.html"));
     });
   } else {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
@@ -3285,6 +3392,7 @@ async function startServer() {
       console.log(`🌐 Сеть (LAN):         http://0.0.0.0:${PORT}`);
       console.log(`🃏 Poker WebSocket:    ws://localhost:${PORT}/ws/poker`);
       console.log(`⚡ Активный порт:      ${PORT} (порты 3000 и 5000 свободны)`);
+      console.log(`💾 Хранилище данных:   ${getDataDir()}`);
       console.log(`---------------------------------------------------------------`);
       console.log(`🔗 Быстрое туннелирование в интернет (выберите любую команду):`);
       console.log(`  • Cloudflare:  npx cloudflared tunnel --url http://localhost:${PORT}`);
@@ -3292,6 +3400,9 @@ async function startServer() {
       console.log(`  • ngrok:       ngrok http ${PORT}`);
       console.log(`  • Pinggy(SSH): ssh -p 443 -R0:localhost:${PORT} a.pinggy.io`);
       console.log(`===============================================================\n`);
+
+      // Auto-start Cloudflare tunnel if enabled in tunnel_config.json
+      cloudflareTunnelManager.autoStartIfEnabled(PORT);
     });
   } else {
     httpServer.listen(PORT, () => {
@@ -3299,5 +3410,12 @@ async function startServer() {
     });
   }
 }
+
+const shutdownGracefully = () => {
+  cloudflareTunnelManager.stop();
+  process.exit(0);
+};
+process.on("SIGINT", shutdownGracefully);
+process.on("SIGTERM", shutdownGracefully);
 
 startServer();
