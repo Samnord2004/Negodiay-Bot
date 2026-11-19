@@ -51,11 +51,8 @@ jobs:
           node-version: 20
           cache: 'npm'
 
-      - name: Установка зависимостей проекта
+      - name: Установка зависимостей проекта (включая Electron)
         run: npm install
-
-      - name: Установка Electron и Electron-Builder
-        run: npm install --save-dev electron electron-builder
 
       - name: Сборка веб-приложения и сервера
         run: npm run build
@@ -100,11 +97,8 @@ jobs:
           node-version: 20
           cache: 'npm'
 
-      - name: Установка зависимостей проекта
+      - name: Установка зависимостей проекта (включая Electron)
         run: npm install
-
-      - name: Установка Electron и Electron-Builder
-        run: npm install --save-dev electron electron-builder
 
       - name: Сборка веб-приложения и сервера
         run: npm run build

@@ -1,7 +1,9 @@
 {
-  "name": "react-example",
+  "name": "negodyai-team-portal",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
+  "description": "Портал туристической команды Негодяи",
+  "author": "Команда Негодяи",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
@@ -42,6 +44,8 @@
     "@types/ws": "^8.18.1",
     "autoprefixer": "^10.4.21",
     "drizzle-kit": "^0.31.10",
+    "electron": "^45.4.1",
+    "electron-builder": "^26.18.0",
     "esbuild": "^0.25.0",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
